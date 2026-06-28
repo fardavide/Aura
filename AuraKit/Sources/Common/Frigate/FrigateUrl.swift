@@ -55,6 +55,65 @@ public enum FrigateLiveUrl {
     }
 }
 
+/// Builders for the day-timeline overlays. `after`/`before` are Unix epoch seconds — the Data
+/// layer converts its `Date`s at the boundary. `cameras` defaults to all cameras server-side.
+public enum FrigateReviewUrl {
+
+    /// Activity markers (alerts + detections) in the window.
+    public static func review(base: URL, after: Double, before: Double) -> URL {
+        makeUrl(base: base, path: "api/review", queryItems: window(after: after, before: before))
+    }
+
+    /// Normalized motion-intensity buckets for the activity strip.
+    public static func motionActivity(base: URL, after: Double, before: Double, scale: Int) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/review/activity/motion",
+            queryItems: window(after: after, before: before) + [URLQueryItem(name: "scale", value: String(scale))]
+        )
+    }
+
+    /// The spans that have no recording (drawn as gaps).
+    public static func recordingsUnavailable(base: URL, after: Double, before: Double, scale: Int) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/recordings/unavailable",
+            queryItems: window(after: after, before: before) + [URLQueryItem(name: "scale", value: String(scale))]
+        )
+    }
+
+    private static func window(after: Double, before: Double) -> [URLQueryItem] {
+        [
+            URLQueryItem(name: "after", value: epochSeconds(after.rounded())),
+            URLQueryItem(name: "before", value: epochSeconds(before.rounded())),
+        ]
+    }
+}
+
+/// Builders for the per-camera preview (scrub-grid) endpoints. `camera` may be `"all"`.
+public enum FrigatePreviewUrl {
+
+    /// The past-hour preview clip list. Range bounds are rounded, matching the web UI.
+    public static func clipList(base: URL, camera: String, after: Double, before: Double) -> URL {
+        makeUrl(base: base, path: "api/preview/\(camera)/start/\(epochSeconds(after.rounded()))/end/\(epochSeconds(before.rounded()))")
+    }
+
+    /// The current-hour preview frame list. Bounds are floored/ceiled, matching the web UI.
+    public static func frameList(base: URL, camera: String, after: Double, before: Double) -> URL {
+        makeUrl(base: base, path: "api/preview/\(camera)/start/\(epochSeconds(after.rounded(.down)))/end/\(epochSeconds(before.rounded(.up)))/frames")
+    }
+
+    /// One preview frame image.
+    public static func frameThumbnail(base: URL, fileName: String) -> URL {
+        makeUrl(base: base, path: "api/preview/\(fileName)/thumbnail.webp")
+    }
+
+    /// Resolves a clip's leading-slash `src` path to a playable URL (`<base>/<src>`).
+    public static func clipMedia(base: URL, path: String) -> URL {
+        makeUrl(base: base, path: String(path.drop(while: { $0 == "/" })))
+    }
+}
+
 /// Appends a path (and optional query) to a base URL. The inputs come from validated
 /// config, so a nil here is an impossible state rather than a runtime failure path.
 func makeUrl(base: URL, path: String, queryItems: [URLQueryItem] = []) -> URL {
@@ -70,4 +129,9 @@ func makeUrl(base: URL, path: String, queryItems: [URLQueryItem] = []) -> URL {
         preconditionFailure("Cannot build URL from \(components)")
     }
     return url
+}
+
+/// Renders an epoch-seconds value as an integer string for a URL path or query (no decimals).
+private func epochSeconds(_ value: Double) -> String {
+    String(Int(value))
 }
