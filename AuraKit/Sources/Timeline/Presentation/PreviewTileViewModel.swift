@@ -50,7 +50,7 @@ public final class PreviewTileViewModel {
 
 extension PreviewTileViewModel: PreviewScrubber {
     func scrub(to time: Date, completion: @escaping @MainActor () -> Void) {
-        guard let clip = clips.first(where: { $0.contains(time) }) else {
+        guard let clip = clip(for: time) else {
             activeClip = nil
             display = .unavailable
             completion()
@@ -65,13 +65,26 @@ extension PreviewTileViewModel: PreviewScrubber {
             completion()
             return
         }
-        let offset = Swift.max(0, time.timeIntervalSince(clip.range.start))
+        // Clamp into the clip so the live edge (no finished clip yet) shows the latest footage.
+        let target = Swift.min(Swift.max(time, clip.range.start), clip.range.end)
         player.seek(
-            to: CMTime(seconds: offset, preferredTimescale: 600),
+            to: CMTime(seconds: target.timeIntervalSince(clip.range.start), preferredTimescale: 600),
             toleranceBefore: CMTime(seconds: 0.5, preferredTimescale: 600),
             toleranceAfter: CMTime(seconds: 0.5, preferredTimescale: 600)
         ) { _ in
             Task { @MainActor in completion() }
         }
+    }
+
+    /// The clip covering `time`; or, at/after the live edge, the most recent clip so tiles show
+    /// the latest recorded footage instead of an empty placeholder.
+    private func clip(for time: Date) -> PreviewClip? {
+        if let covering = clips.first(where: { $0.contains(time) }) {
+            return covering
+        }
+        if let latest = clips.max(by: { $0.range.start < $1.range.start }), time >= latest.range.end {
+            return latest
+        }
+        return nil
     }
 }

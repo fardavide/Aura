@@ -13,22 +13,25 @@
 - **Slice 4 — Events.** Event list (thumbnail, label, camera, time) + detail with recorded-clip
   playback (SwiftUI `VideoPlayer`, auth headers). App is now a **TabView (Cameras | Events)**,
   Settings reachable from each. **MVP feature-complete.**
-- **Slice 5 — Timeline (multi-cam scrub), v0.1.4.** New `Timeline` feature vertical: a draggable
-  day timeline (review markers + motion strip + no-footage gaps + day picker) driving a synced
-  all-camera **preview-scrub grid**. Past-hour low-res `preview.mp4` tiles seek **locally**; one
-  shared scrub clock fans out to a per-tile **coalescing** controller (latest-target-wins, no
-  debounce). 3rd tab (Cameras | Timeline | Events). The cross-platform video/image wrapper was
-  extracted into a shared **`CommonPlayer`** target (also de-duped `PlatformImage`).
+- **Slice 5 — Timeline (multi-cam scrub).** New `Timeline` feature vertical: a synced all-camera
+  **preview-scrub grid** (Cameras-sized tiles) over a single **continuous scrollable timeline**
+  (scroll/pan = scrub; fixed center playhead; ~7-day span; review markers + soft motion strip +
+  gaps; live time readout). Past-hour low-res `preview.mp4` tiles seek **locally**; one shared
+  scrub clock fans out to a per-tile **coalescing** controller (latest-target-wins, no debounce);
+  at the live edge tiles fall back to the latest footage. 3rd tab (Cameras | Timeline | Events).
+  The cross-platform video/image wrapper was extracted into a shared **`CommonPlayer`** target.
+  **(v0.1.4 grid → v0.1.5 scrollable timeline UX.)**
 
 Package logic is covered by Swift Testing (~104 tests). SwiftUI views are built, not unit-tested.
 
 ## Next
-- **0.1.5 — single-cam recordings scrubber.** Tap a Timeline tile → that camera's full-res
-  recordings scrubber via the VOD HLS URL (`/vod/{camera}/start/{s}/end/{e}/master.m3u8`).
-  **Start with an on-device spike**: AVPlayer scrubbing Frigate's VOD HLS is unproven (the web UI
-  uses hls.js on every platform, never native). Bound playback windows to ~1h (nginx-vod segment cap).
-- **Timeline follow-up**: the current-hour `.webp` preview-frame path (tiles show a placeholder for
-  the live hour now); the `camera=all` batch clip-list optimization; richer day badges.
+- **Single-cam recordings scrubber.** Tap a Timeline tile → that camera's full-res recordings
+  scrubber via the VOD HLS URL (`/vod/{camera}/start/{s}/end/{e}/master.m3u8`). **Start with an
+  on-device spike**: AVPlayer scrubbing Frigate's VOD HLS is unproven (the web UI uses hls.js on
+  every platform, never native). Bound playback windows to ~1h (nginx-vod segment cap).
+- **Timeline follow-ups**: auto-load ranges older than the current ~7-day span as you scroll; the
+  current-hour `.webp` preview-frame path (tiles use the latest-footage fallback at the live edge
+  for now); the `camera=all` batch clip-list optimization; richer markers.
 - A real **app icon** (current is a placeholder).
 - **Refactor**: extract a shared `FrigateApiClient` in `CommonFrigate` — the authed-GET +
   status→error mapping is now duplicated across the Cameras, Events, **and Timeline** repositories.

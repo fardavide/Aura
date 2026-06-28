@@ -89,10 +89,10 @@ struct TimelineScreenViewModelTests {
         #expect(sut.state == .failed(.serverUnavailable))
     }
 
-    @Test func `given a scrub before the day starts then it is clamped into the day`() {
+    @Test func `given a scrub before the span starts then it is clamped into the span`() {
         let sut = makeViewModel(cameras: .success([camera]), timeline: .success(emptyTimeline))
-        sut.scrub(to: sut.day.start.addingTimeInterval(-100))
-        #expect(sut.clock.instant == sut.day.start)
+        sut.scrub(to: sut.span.start.addingTimeInterval(-100))
+        #expect(sut.clock.instant == sut.span.start)
     }
 }
 
@@ -108,13 +108,11 @@ private func makeViewModel(
     cameras: Result<[Camera], CamerasError>,
     timeline: Result<DayTimeline, TimelineError>
 ) -> TimelineScreenViewModel {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = TimeZone(identifier: "UTC")!
-    return TimelineScreenViewModel(
+    TimelineScreenViewModel(
         getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
         getDayTimeline: GetDayTimeline(repository: FakeTimelineRepository(timeline)),
-        calendar: calendar,
-        now: at(1_000_000)
+        now: at(1_000_000),
+        days: 2
     )
 }
 

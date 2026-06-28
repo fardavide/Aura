@@ -96,8 +96,8 @@ final class AppComposition {
             getDayTimeline: GetDayTimeline(
                 repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),
-            calendar: .current,
-            now: Date()
+            now: Date(),
+            days: 7
         )
     }
 

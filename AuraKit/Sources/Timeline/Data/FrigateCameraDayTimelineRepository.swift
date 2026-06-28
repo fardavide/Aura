@@ -11,7 +11,6 @@ import TimelineDomain
 public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
     private let config: ServerConfig
     private let httpClient: any HttpClient
-    private let bucketScale = 60
 
     public init(config: ServerConfig, httpClient: any HttpClient) {
         self.config = config
@@ -22,10 +21,12 @@ public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
         let base = config.baseUrl
         let after = range.start.timeIntervalSince1970
         let before = Swift.min(range.end.timeIntervalSince1970, Date().timeIntervalSince1970)
+        // Coarser buckets for wider spans so the motion strip stays light (~2000 points max).
+        let scale = Swift.max(60, Int((before - after) / 2000))
 
         async let markers = fetch(FrigateReviewUrl.review(base: base, after: after, before: before), as: ReviewMarkerDto.self)
-        async let motion = fetch(FrigateReviewUrl.motionActivity(base: base, after: after, before: before, scale: bucketScale), as: MotionActivityDto.self)
-        async let gaps = fetch(FrigateReviewUrl.recordingsUnavailable(base: base, after: after, before: before, scale: bucketScale), as: RecordingGapDto.self)
+        async let motion = fetch(FrigateReviewUrl.motionActivity(base: base, after: after, before: before, scale: scale), as: MotionActivityDto.self)
+        async let gaps = fetch(FrigateReviewUrl.recordingsUnavailable(base: base, after: after, before: before, scale: scale), as: RecordingGapDto.self)
 
         return DayTimeline(
             markers: await markers.toMarkers(),

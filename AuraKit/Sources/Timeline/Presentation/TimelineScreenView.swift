@@ -49,28 +49,40 @@ public struct TimelineScreenView: View {
     }
 
     private func ready(cameras: [Camera], timeline: DayTimeline) -> some View {
-        VStack(spacing: 12) {
-            DayPickerView(day: viewModel.day) { date in
-                Task { await viewModel.selectDay(date) }
-            }
-            DayTimelineView(day: viewModel.day, timeline: timeline, clock: viewModel.clock) { time in
-                viewModel.scrub(to: time)
-            }
-            .padding(.horizontal)
+        VStack(spacing: 0) {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
                     ForEach(cameras) { camera in
                         PreviewTileView(
                             viewModel: tiles.tile(for: camera, make: makeTileViewModel),
                             clock: viewModel.clock,
-                            range: viewModel.day
+                            range: viewModel.span
                         )
                         .onTapGesture { onOpenRecording(camera, viewModel.clock.instant) }
                     }
                 }
-                .padding(.horizontal)
+                .padding()
             }
+            VStack(spacing: 6) {
+                ScrubTimeLabel(clock: viewModel.clock)
+                ScrollableTimelineView(span: viewModel.span, timeline: timeline) { time in
+                    viewModel.scrub(to: time)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
         }
+    }
+}
+
+/// Shows the current scrub instant; isolated so only this label re-renders as the clock moves.
+private struct ScrubTimeLabel: View {
+    let clock: ScrubClock
+
+    var body: some View {
+        Text(clock.instant, format: .dateTime.weekday().day().month().hour().minute().second())
+            .font(.callout.monospacedDigit())
+            .foregroundStyle(.secondary)
     }
 }
 

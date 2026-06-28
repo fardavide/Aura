@@ -16,17 +16,16 @@ public final class TimelineScreenViewModel {
 
     public private(set) var state: State = .loading
     public let clock: ScrubClock
-    public private(set) var day: TimeRange
+    /// The continuous window the timeline scrolls over: `[now - days, now]`.
+    public let span: TimeRange
 
     private let getCameras: GetCameras
     private let getDayTimeline: GetDayTimeline
-    private let calendar: Calendar
 
-    public init(getCameras: GetCameras, getDayTimeline: GetDayTimeline, calendar: Calendar, now: Date) {
+    public init(getCameras: GetCameras, getDayTimeline: GetDayTimeline, now: Date, days: Int) {
         self.getCameras = getCameras
         self.getDayTimeline = getDayTimeline
-        self.calendar = calendar
-        day = TimeRange.day(containing: now, in: calendar)
+        span = TimeRange(start: now.addingTimeInterval(-Double(days) * 86_400), end: now)
         clock = ScrubClock(instant: now)
     }
 
@@ -47,21 +46,15 @@ public final class TimelineScreenViewModel {
         }
 
         do {
-            let timeline = try await getDayTimeline.execute(in: day)
+            let timeline = try await getDayTimeline.execute(in: span)
             state = .ready(cameras: cameras, timeline: timeline)
         } catch {
             state = .failed(error)
         }
     }
 
-    public func selectDay(_ date: Date) async {
-        day = TimeRange.day(containing: date, in: calendar)
-        clock.scrub(to: day.clamp(clock.instant))
-        await load()
-    }
-
     public func scrub(to time: Date) {
-        clock.scrub(to: day.clamp(time))
+        clock.scrub(to: span.clamp(time))
     }
 }
 
