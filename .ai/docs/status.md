@@ -6,13 +6,17 @@
 - **Slice 2 — Settings + camera grid.** Settings feature (connection config + theme; UserDefaults +
   Keychain); Cameras presentation (grid + tiles); composition root + root view. App runs: no
   connection → Settings; save → grid.
+- **Slice 3 — live camera detail.** Tap a tile → fullscreen live go2rtc HLS via AVFoundation
+  (`AVPlayerViewController` + PiP on iOS, `AVPlayerView` on macOS) behind a cross-platform wrapper;
+  audio session at launch. Stream URL is the Frigate-proxied go2rtc path. Live playback to be
+  verified on-device against a real Frigate.
 
-Package logic is covered by Swift Testing (~45 tests). SwiftUI views are built, not unit-tested.
+Package logic is covered by Swift Testing (~51 tests). SwiftUI views are built, not unit-tested.
 
 ## Next
-- **Camera detail + live video** — tap a tile → fullscreen go2rtc HLS via AVFoundation, PiP on iOS.
-- **Events** feature — list + detail with clip playback.
-- Recordings, push notifications — out of MVP scope.
+- **Events** feature — list (thumbnail, label, camera, time) + detail with recorded-clip playback.
+- A real app icon (current is a placeholder); a stream picker when a camera exposes multiple sources.
+- Recordings browser, push notifications — out of MVP scope.
 
 ## Runtime config still needed (before the grid loads a real server)
 Code is done; these are OS-policy settings, not code:

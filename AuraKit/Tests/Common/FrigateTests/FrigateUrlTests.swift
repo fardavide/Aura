@@ -51,4 +51,11 @@ struct FrigateUrlTests {
         // then
         #expect(url == URL(string: "http://frigate.local:5000/api/driveway/latest.jpg?height=320")!)
     }
+
+    @Test func `when building the live stream url then it proxies go2rtc through Frigate`() {
+        #expect(
+            FrigateLiveUrl.stream(base: base, src: "driveway")
+                == URL(string: "http://frigate.local:5000/api/go2rtc/api/stream.m3u8?src=driveway")!
+        )
+    }
 }

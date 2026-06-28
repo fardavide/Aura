@@ -5,16 +5,25 @@ import CamerasDomain
 public struct CameraGridView: View {
     @State private var viewModel: CameraGridViewModel
     private let onOpenSettings: () -> Void
+    private let makeDetailViewModel: (Camera) -> CameraDetailViewModel
 
-    public init(viewModel: CameraGridViewModel, onOpenSettings: @escaping () -> Void) {
+    public init(
+        viewModel: CameraGridViewModel,
+        onOpenSettings: @escaping () -> Void,
+        makeDetailViewModel: @escaping (Camera) -> CameraDetailViewModel
+    ) {
         _viewModel = State(initialValue: viewModel)
         self.onOpenSettings = onOpenSettings
+        self.makeDetailViewModel = makeDetailViewModel
     }
 
     public var body: some View {
         NavigationStack {
             content
                 .navigationTitle("Cameras")
+                .navigationDestination(for: Camera.self) { camera in
+                    CameraDetailView(viewModel: makeDetailViewModel(camera))
+                }
                 .toolbar {
                     Button(action: onOpenSettings) {
                         Image(systemName: "gearshape")
@@ -35,7 +44,10 @@ public struct CameraGridView: View {
                     spacing: 12
                 ) {
                     ForEach(cameras) { camera in
-                        CameraTileView(camera: camera) { await viewModel.previewImage(for: $0) }
+                        NavigationLink(value: camera) {
+                            CameraTileView(camera: camera) { await viewModel.previewImage(for: $0) }
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding()

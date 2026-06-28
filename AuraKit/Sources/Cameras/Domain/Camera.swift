@@ -1,5 +1,5 @@
 /// A camera exposed by the server.
-public struct Camera: Equatable, Sendable, Identifiable {
+public struct Camera: Equatable, Hashable, Sendable, Identifiable {
     public let name: CameraName
     public let friendlyName: String?
     public let isEnabled: Bool

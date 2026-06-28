@@ -46,3 +46,11 @@ Presentation never imports Frigate infra and the auth header still reaches image
 ## Agent config layout
 Behavioral rules → `.claude/skills` (flat, plain names). Commands → `.claude/commands`. Narrative
 findings/decisions/status → `.ai/docs/` (tool-agnostic). No `.ai` symlink scheme for skills.
+
+## Live stream via the Frigate-proxied go2rtc path
+The live view plays go2rtc HLS through Frigate's `…/api/go2rtc/api/stream.m3u8?src=` route, reusing
+the configured base URL + auth (no separate go2rtc port to expose over Tailscale). It's an
+undocumented proxy route (verified in 0.16/0.17); the alternative is exposing go2rtc :1984 directly.
+The URL builder is isolated in `CommonFrigate` so switching is a one-liner. The player sits behind a
+cross-platform wrapper (AVPlayerViewController iOS / AVPlayerView macOS); auth reaches the
+`AVURLAsset` via `AVURLAssetHTTPHeaderFieldsKey`. First stream name is used; a picker comes later.

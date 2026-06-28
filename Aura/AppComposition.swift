@@ -49,6 +49,16 @@ final class AppComposition {
         )
     }
 
+    func cameraDetailViewModel(
+        for camera: Camera,
+        connection: ConnectionSettings
+    ) -> CameraDetailViewModel {
+        CameraDetailViewModel(
+            camera: camera,
+            streamProvider: FrigateCameraStreamProvider(config: serverConfig(from: connection))
+        )
+    }
+
     private func serverConfig(from connection: ConnectionSettings) -> ServerConfig {
         let scheme: ServerConfig.Scheme = switch connection.scheme {
         case .http: .http

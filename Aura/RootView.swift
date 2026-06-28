@@ -18,7 +18,8 @@ struct RootView: View {
             if let connection {
                 CameraGridView(
                     viewModel: composition.cameraGridViewModel(for: connection),
-                    onOpenSettings: { showingSettings = true }
+                    onOpenSettings: { showingSettings = true },
+                    makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, connection: connection) }
                 )
                 .id(identity(of: connection))
             } else {

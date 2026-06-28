@@ -29,6 +29,18 @@ public enum FrigateMediaUrl {
     }
 }
 
+/// The live go2rtc HLS stream, proxied through Frigate so it reuses the base URL + its auth
+/// (no separate go2rtc port to expose). `src` is the go2rtc stream name.
+public enum FrigateLiveUrl {
+    public static func stream(base: URL, src: String) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/go2rtc/api/stream.m3u8",
+            queryItems: [URLQueryItem(name: "src", value: src)]
+        )
+    }
+}
+
 /// Appends a path (and optional query) to a base URL. The inputs come from validated
 /// config, so a nil here is an impossible state rather than a runtime failure path.
 func makeUrl(base: URL, path: String, queryItems: [URLQueryItem] = []) -> URL {
