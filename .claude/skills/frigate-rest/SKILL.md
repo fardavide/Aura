@@ -16,9 +16,11 @@ Help work with the Frigate 0.17 HTTP API. This skill maps the endpoints, query
 params, JSON shapes, and auth model the Aura client depends on, so you can build
 and modify the networking/service layer without guessing.
 
-Everything here is **stable REST** and was verified against the Frigate v0.17.1
+Everything here is **stable REST** and was verified against the Frigate v0.17.2
 source (`frigate/api/*.py`, `frigate/models.py`, `frigate/config/camera/camera.py`).
-The one version-dependent piece — the live stream — lives in `frigate-live`.
+The 0.17.1 → 0.17.2 step left this surface contract-identical (a security/maintenance
+patch); the event/review handlers are byte-identical across 0.17.0 → 0.17.2. The one
+version-dependent piece — the live stream — lives in `frigate-live`.
 
 ---
 
@@ -42,6 +44,9 @@ Frigate 0.17's **native** auth is **JWT**, not HTTP basic auth:
   `Set-Cookie: frigate_token=<jwt>`; the token is also accepted as
   `Authorization: Bearer <jwt>`.
 - Port `8971` enforces it; port `5000` skips it.
+- ⚠️ The cookie name `frigate_token` is **configurable** via `auth.cookie_name` in
+  the Frigate config — don't hard-code it if/when the JWT seam is implemented; read
+  it (or accept the `Authorization: Bearer` form, which is name-independent).
 
 The Aura brief specifies **optional HTTP basic auth** + default port `5000`. That
 is coherent **only** if Frigate is reached either (a) on `5000` with no auth over
@@ -134,7 +139,7 @@ at the mapper boundary).
 ## Recordings, review & VOD playback (the timeline)
 
 For the **timeline** feature (multi-cam scrub + per-camera recordings scrubber). Verified
-against v0.17.1 source. Same base + auth as above; **all timestamps are Unix epoch seconds**
+against v0.17.2 source. Same base + auth as above; **all timestamps are Unix epoch seconds**
 (decode `Double`, map to `Date` at the boundary).
 
 ### Review — cross-camera activity segments
@@ -210,7 +215,7 @@ Never fabricate query-param names, paths, body shapes, or response fields. If an
 endpoint or param isn't mapped here:
 
 1. Verify against the running instance or the v0.17 source
-   (`github.com/blakeblackshear/frigate` at tag `v0.17.1`), **or** stop and ask.
+   (`github.com/blakeblackshear/frigate` at tag `v0.17.2`), **or** stop and ask.
 2. Then **update this skill** — add the endpoint/param with its exact name and a
    one-line description, so the map stays accurate and grows.
 
