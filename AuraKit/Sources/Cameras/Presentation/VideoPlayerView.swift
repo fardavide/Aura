@@ -11,8 +11,11 @@ struct VideoPlayerView {
 
 #if os(iOS)
 extension VideoPlayerView: UIViewControllerRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
+        controller.delegate = context.coordinator
         controller.allowsPictureInPicturePlayback = true
         controller.canStartPictureInPictureAutomaticallyFromInline = true
         controller.player = makePlayer(source)
@@ -21,6 +24,17 @@ extension VideoPlayerView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
+        /// "Return to app" from the PiP window: the detail view is still in the navigation
+        /// stack, so report the UI as already restored for a seamless hand-back.
+        func playerViewController(
+            _ playerViewController: AVPlayerViewController,
+            restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+        ) {
+            completionHandler(true)
+        }
+    }
 }
 #elseif os(macOS)
 extension VideoPlayerView: NSViewRepresentable {
