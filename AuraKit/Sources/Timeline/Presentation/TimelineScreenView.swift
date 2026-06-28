@@ -9,6 +9,7 @@ public struct TimelineScreenView: View {
     private let onOpenRecording: (Camera, Date) -> Void
 
     @State private var tiles = TileStore()
+    @State private var cardHeight: CGFloat = 180
 
     public init(
         viewModel: TimelineScreenViewModel,
@@ -49,7 +50,7 @@ public struct TimelineScreenView: View {
     }
 
     private func ready(cameras: [Camera], timeline: DayTimeline) -> some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
                     ForEach(cameras) { camera in
@@ -62,27 +63,14 @@ public struct TimelineScreenView: View {
                     }
                 }
                 .padding()
+                .padding(.bottom, cardHeight)
             }
-            VStack(spacing: 6) {
-                ScrubTimeLabel(clock: viewModel.clock)
-                ScrollableTimelineView(span: viewModel.span, timeline: timeline) { time in
-                    viewModel.scrub(to: time)
-                }
+            // Float the glass card over the grid so tiles scroll behind it (the glass refracts them).
+            ScrollableTimelineView(span: viewModel.span, timeline: timeline, clock: viewModel.clock) { time in
+                viewModel.scrub(to: time)
             }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
+            .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { cardHeight = $0 }
         }
-    }
-}
-
-/// Shows the current scrub instant; isolated so only this label re-renders as the clock moves.
-private struct ScrubTimeLabel: View {
-    let clock: ScrubClock
-
-    var body: some View {
-        Text(clock.instant, format: .dateTime.weekday().day().month().hour().minute().second())
-            .font(.callout.monospacedDigit())
-            .foregroundStyle(.secondary)
     }
 }
 

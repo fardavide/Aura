@@ -15,12 +15,14 @@
   Settings reachable from each. **MVP feature-complete.**
 - **Slice 5 — Timeline (multi-cam scrub).** New `Timeline` feature vertical: a synced all-camera
   **preview-scrub grid** (Cameras-sized tiles) over a single **continuous scrollable timeline**
-  (scroll/pan = scrub; fixed center playhead; ~7-day span; review markers + soft motion strip +
-  gaps; live time readout). Past-hour low-res `preview.mp4` tiles seek **locally**; one shared
-  scrub clock fans out to a per-tile **coalescing** controller (latest-target-wins, no debounce);
-  at the live edge tiles fall back to the latest footage. 3rd tab (Cameras | Timeline | Events).
-  The cross-platform video/image wrapper was extracted into a shared **`CommonPlayer`** target.
-  **(v0.1.4 grid → v0.1.5 scrollable timeline UX.)**
+  (scroll/pan = scrub; fixed center playhead; ~7-day span). The scrubber is a **Liquid-Glass card**
+  (`glassEffect`) floating over the grid so tiles refract through it: an activity **histogram**
+  (motion height, colored by severity), dimmed gaps, a date/time readout, and an Hour/Day/Week
+  **zoom** (glass button). Past-hour low-res `preview.mp4` tiles seek **locally**; one shared scrub
+  clock fans out to a per-tile **coalescing** controller (latest-target-wins, no debounce); at the
+  live edge tiles fall back to the latest footage. 3rd tab (Cameras | Timeline | Events). The
+  cross-platform video/image wrapper was extracted into a shared **`CommonPlayer`** target.
+  **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber.)**
 
 Package logic is covered by Swift Testing (~104 tests). SwiftUI views are built, not unit-tested.
 
