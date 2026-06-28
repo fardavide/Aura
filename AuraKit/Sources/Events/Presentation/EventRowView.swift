@@ -1,6 +1,7 @@
 import SwiftUI
 
 import EventsDomain
+import CommonPlayer
 
 struct EventRowView: View {
     let event: Event

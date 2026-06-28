@@ -7,7 +7,7 @@ import AppKit
 #endif
 
 /// Builds a SwiftUI `Image` from raw bytes across iOS (UIKit) and macOS (AppKit).
-func platformImage(from data: Data) -> Image? {
+public func platformImage(from data: Data) -> Image? {
     #if canImport(UIKit)
     UIImage(data: data).map(Image.init(uiImage:))
     #elseif canImport(AppKit)

@@ -1,6 +1,7 @@
 import SwiftUI
 
 import CamerasDomain
+import CommonPlayer
 
 struct CameraTileView: View {
     let camera: Camera

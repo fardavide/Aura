@@ -9,7 +9,7 @@ let package = Package(
             name: "AuraKit",
             targets: [
                 "CamerasDomain", "CamerasData",
-                "CommonNetwork", "CommonFrigate", "CommonKeychain",
+                "CommonNetwork", "CommonFrigate", "CommonKeychain", "CommonPlayer",
                 "SettingsDomain", "SettingsData",
                 "CamerasPresentation", "SettingsPresentation",
                 "EventsDomain", "EventsData", "EventsPresentation",
@@ -58,6 +58,8 @@ let package = Package(
 
         .target(name: "CommonKeychain", path: "Sources/Common/Keychain"),
 
+        .target(name: "CommonPlayer", path: "Sources/Common/Player"),
+
         .target(
             name: "SettingsData",
             dependencies: ["SettingsDomain", "CommonKeychain"],
@@ -71,7 +73,7 @@ let package = Package(
 
         .target(
             name: "CamerasPresentation",
-            dependencies: ["CamerasDomain"],
+            dependencies: ["CamerasDomain", "CommonPlayer"],
             path: "Sources/Cameras/Presentation"
         ),
         .testTarget(
@@ -115,7 +117,7 @@ let package = Package(
 
         .target(
             name: "EventsPresentation",
-            dependencies: ["EventsDomain", "CamerasDomain"],
+            dependencies: ["EventsDomain", "CamerasDomain", "CommonPlayer"],
             path: "Sources/Events/Presentation"
         ),
         .testTarget(
