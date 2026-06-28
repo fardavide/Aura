@@ -58,4 +58,22 @@ struct FrigateUrlTests {
                 == URL(string: "http://frigate.local:5000/api/go2rtc/api/stream.m3u8?src=driveway")!
         )
     }
+
+    @Test func `when building the events endpoint then it includes the limit`() {
+        #expect(
+            FrigateEndpoint.events(limit: 50).url(base: base)
+                == URL(string: "http://frigate.local:5000/api/events?limit=50")!
+        )
+    }
+
+    @Test func `when building event media urls then they target the event`() {
+        #expect(
+            FrigateMediaUrl.thumbnail(base: base, eventId: "ev1")
+                == URL(string: "http://frigate.local:5000/api/events/ev1/thumbnail.jpg")!
+        )
+        #expect(
+            FrigateMediaUrl.clip(base: base, eventId: "ev1")
+                == URL(string: "http://frigate.local:5000/api/events/ev1/clip.mp4")!
+        )
+    }
 }

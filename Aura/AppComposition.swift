@@ -4,6 +4,9 @@ import CamerasPresentation
 import CommonFrigate
 import CommonKeychain
 import CommonNetwork
+import EventsData
+import EventsDomain
+import EventsPresentation
 import SettingsData
 import SettingsDomain
 import SettingsPresentation
@@ -56,6 +59,26 @@ final class AppComposition {
         CameraDetailViewModel(
             camera: camera,
             streamProvider: FrigateCameraStreamProvider(config: serverConfig(from: connection))
+        )
+    }
+
+    func eventsListViewModel(for connection: ConnectionSettings) -> EventsListViewModel {
+        let config = serverConfig(from: connection)
+        return EventsListViewModel(
+            getEvents: GetEvents(
+                repository: FrigateEventsRepository(config: config, httpClient: httpClient)
+            ),
+            thumbnailLoader: FrigateEventThumbnailLoader(config: config, httpClient: httpClient)
+        )
+    }
+
+    func eventDetailViewModel(
+        for event: Event,
+        connection: ConnectionSettings
+    ) -> EventDetailViewModel {
+        EventDetailViewModel(
+            event: event,
+            clipLoader: FrigateEventClipLoader(config: serverConfig(from: connection), httpClient: httpClient)
         )
     }
 

@@ -12,6 +12,7 @@ public struct CameraDetailView: View {
             .navigationTitle(viewModel.title)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
             #endif
     }
 

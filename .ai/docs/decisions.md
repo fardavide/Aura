@@ -54,3 +54,11 @@ undocumented proxy route (verified in 0.16/0.17); the alternative is exposing go
 The URL builder is isolated in `CommonFrigate` so switching is a one-liner. The player sits behind a
 cross-platform wrapper (AVPlayerViewController iOS / AVPlayerView macOS); auth reaches the
 `AVURLAsset` via `AVURLAssetHTTPHeaderFieldsKey`. First stream name is used; a picker comes later.
+
+## Events: navigation + camera reuse
+The app is a **TabView** (Cameras | Events); Settings opens from a gear in each tab. `EventsDomain`
+reuses `CameraName` from `CamerasDomain` (a pure domain→domain dependency) rather than a raw String
+or a duplicated type — keeps strong typing without introducing a shared kernel. Event clips play via
+SwiftUI's built-in `VideoPlayer` (no PiP needed for a recorded clip), so Events doesn't depend on the
+live-player wrapper. Known duplication to revisit: the authed-GET + status→error mapping now repeats
+across the Cameras and Events repositories — extract a `FrigateApiClient` (rule of three).

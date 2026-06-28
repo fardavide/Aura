@@ -3,15 +3,19 @@ import Foundation
 /// Frigate JSON endpoints the client reads.
 public enum FrigateEndpoint: Sendable {
     case config
-
-    private var path: String {
-        switch self {
-        case .config: "api/config"
-        }
-    }
+    case events(limit: Int)
 
     public func url(base: URL) -> URL {
-        makeUrl(base: base, path: path)
+        switch self {
+        case .config:
+            makeUrl(base: base, path: "api/config")
+        case .events(let limit):
+            makeUrl(
+                base: base,
+                path: "api/events",
+                queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+            )
+        }
     }
 }
 
@@ -26,6 +30,16 @@ public enum FrigateMediaUrl {
             path: "api/\(camera)/latest.jpg",
             queryItems: [URLQueryItem(name: "height", value: String(height))]
         )
+    }
+
+    /// An event's thumbnail image.
+    public static func thumbnail(base: URL, eventId: String) -> URL {
+        makeUrl(base: base, path: "api/events/\(eventId)/thumbnail.jpg")
+    }
+
+    /// An event's recorded clip.
+    public static func clip(base: URL, eventId: String) -> URL {
+        makeUrl(base: base, path: "api/events/\(eventId)/clip.mp4")
     }
 }
 

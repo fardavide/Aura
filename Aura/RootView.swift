@@ -1,6 +1,8 @@
 import SwiftUI
 
 import CamerasPresentation
+import EventsDomain
+import EventsPresentation
 import SettingsDomain
 import SettingsPresentation
 
@@ -16,11 +18,21 @@ struct RootView: View {
     var body: some View {
         Group {
             if let connection {
-                CameraGridView(
-                    viewModel: composition.cameraGridViewModel(for: connection),
-                    onOpenSettings: { showingSettings = true },
-                    makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, connection: connection) }
-                )
+                TabView {
+                    CameraGridView(
+                        viewModel: composition.cameraGridViewModel(for: connection),
+                        onOpenSettings: { showingSettings = true },
+                        makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, connection: connection) }
+                    )
+                    .tabItem { Label("Cameras", systemImage: "video") }
+
+                    EventsListView(
+                        viewModel: composition.eventsListViewModel(for: connection),
+                        onOpenSettings: { showingSettings = true },
+                        makeDetailViewModel: { composition.eventDetailViewModel(for: $0, connection: connection) }
+                    )
+                    .tabItem { Label("Events", systemImage: "bell") }
+                }
                 .id(identity(of: connection))
             } else {
                 SettingsView(viewModel: composition.settingsViewModel(), onDone: reload)

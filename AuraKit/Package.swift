@@ -12,6 +12,7 @@ let package = Package(
                 "CommonNetwork", "CommonFrigate", "CommonKeychain",
                 "SettingsDomain", "SettingsData",
                 "CamerasPresentation", "SettingsPresentation",
+                "EventsDomain", "EventsData", "EventsPresentation",
             ]
         ),
     ],
@@ -88,6 +89,39 @@ let package = Package(
             name: "SettingsPresentationTests",
             dependencies: ["SettingsPresentation", "SettingsDomain"],
             path: "Tests/Settings/PresentationTests"
+        ),
+
+        .target(
+            name: "EventsDomain",
+            dependencies: ["CamerasDomain"],
+            path: "Sources/Events/Domain"
+        ),
+        .testTarget(
+            name: "EventsDomainTests",
+            dependencies: ["EventsDomain", "CamerasDomain"],
+            path: "Tests/Events/DomainTests"
+        ),
+
+        .target(
+            name: "EventsData",
+            dependencies: ["EventsDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            path: "Sources/Events/Data"
+        ),
+        .testTarget(
+            name: "EventsDataTests",
+            dependencies: ["EventsData", "EventsDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            path: "Tests/Events/DataTests"
+        ),
+
+        .target(
+            name: "EventsPresentation",
+            dependencies: ["EventsDomain", "CamerasDomain"],
+            path: "Sources/Events/Presentation"
+        ),
+        .testTarget(
+            name: "EventsPresentationTests",
+            dependencies: ["EventsPresentation", "EventsDomain", "CamerasDomain"],
+            path: "Tests/Events/PresentationTests"
         ),
     ],
     swiftLanguageModes: [.v6]
