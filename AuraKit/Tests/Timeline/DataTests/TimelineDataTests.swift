@@ -50,9 +50,18 @@ struct FrigateCameraDayTimelineRepositoryTests {
         #expect(timeline.gaps.count == 1)
     }
 
-    @Test func `given a 500 when fetching the day then it throws serverUnavailable`() async {
-        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: PathRoutingHttpClient([("", 500, Data())]))
-        await #expect(throws: TimelineError.serverUnavailable) { try await sut.dayTimeline(in: window) }
+    @Test func `given a failing overlay endpoint when fetching the day then that overlay degrades to empty`() async throws {
+        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: PathRoutingHttpClient([
+            ("review/activity/motion", 200, Data(motionJson.utf8)),
+            ("recordings/unavailable", 500, Data()),
+            ("api/review", 200, Data(reviewJson.utf8)),
+        ]))
+
+        let timeline = try await sut.dayTimeline(in: window)
+
+        #expect(timeline.markers.count == 2)
+        #expect(timeline.motion.count == 3)
+        #expect(timeline.gaps.isEmpty)
     }
 }
 

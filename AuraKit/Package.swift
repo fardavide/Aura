@@ -13,7 +13,7 @@ let package = Package(
                 "SettingsDomain", "SettingsData",
                 "CamerasPresentation", "SettingsPresentation",
                 "EventsDomain", "EventsData", "EventsPresentation",
-                "TimelineDomain", "TimelineData",
+                "TimelineDomain", "TimelineData", "TimelinePresentation",
             ]
         ),
     ],
@@ -147,6 +147,17 @@ let package = Package(
             name: "TimelineDataTests",
             dependencies: ["TimelineData", "TimelineDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
             path: "Tests/Timeline/DataTests"
+        ),
+
+        .target(
+            name: "TimelinePresentation",
+            dependencies: ["TimelineDomain", "CamerasDomain", "CommonPlayer"],
+            path: "Sources/Timeline/Presentation"
+        ),
+        .testTarget(
+            name: "TimelinePresentationTests",
+            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain"],
+            path: "Tests/Timeline/PresentationTests"
         ),
     ],
     swiftLanguageModes: [.v6]

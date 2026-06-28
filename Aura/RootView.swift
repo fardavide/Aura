@@ -1,10 +1,12 @@
 import SwiftUI
 
+import CamerasDomain
 import CamerasPresentation
 import EventsDomain
 import EventsPresentation
 import SettingsDomain
 import SettingsPresentation
+import TimelinePresentation
 
 /// Routes between the camera grid (when a connection is configured) and Settings, and applies
 /// the chosen theme. Reloads its config whenever Settings reports a save.
@@ -25,6 +27,13 @@ struct RootView: View {
                         makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, connection: connection) }
                     )
                     .tabItem { Label("Cameras", systemImage: "video") }
+
+                    TimelineScreenView(
+                        viewModel: composition.timelineScreenViewModel(for: connection),
+                        makeTileViewModel: { composition.previewTileViewModel(for: $0, connection: connection) },
+                        onOpenRecording: { _, _ in }
+                    )
+                    .tabItem { Label("Timeline", systemImage: "calendar.day.timeline.left") }
 
                     EventsListView(
                         viewModel: composition.eventsListViewModel(for: connection),

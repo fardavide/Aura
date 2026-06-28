@@ -62,3 +62,25 @@ or a duplicated type — keeps strong typing without introducing a shared kernel
 SwiftUI's built-in `VideoPlayer` (no PiP needed for a recorded clip), so Events doesn't depend on the
 live-player wrapper. Known duplication to revisit: the authed-GET + status→error mapping now repeats
 across the Cameras and Events repositories — extract a `FrigateApiClient` (rule of three).
+
+## CommonPlayer: shared cross-platform video/image wrapper
+The cross-platform player wrapper (`AVPlayerViewController` iOS / `AVPlayerView` macOS) + the
+`platformImage(Data)->Image` helper moved out of `CamerasPresentation` into a shared `CommonPlayer`
+target when the Timeline tiles needed the same bridge. Chosen over duplicating the `#if os` player
+(a third `PlatformImage` copy was about to appear). `CommonPlayer` holds `VideoPlayerView` (live,
+autoplay + PiP), `ScrubbingPlayerView` (externally-owned player, no PiP/controls, for scrub tiles),
+`makeAuthedPlayer`, and `platformImage`. It's infra-free — `VideoPlayerView` takes `url + headers`,
+not a domain type. Cameras/Events/Timeline presentation all depend on it.
+
+## Timeline: synced multi-cam preview-scrub grid (v0.1.4)
+A new `Timeline` feature vertical mirroring Frigate's Review "Motion" view. **One shared scrub clock**
+(`ScrubClock`, a `Date`) is written by the day-timeline drag and read by every tile. Tiles seek
+**locally** through a low-res `preview.mp4` (Frigate's preview system; `+faststart` so AVPlayer
+range-seeks) — zero network per scrub once buffered. The rate-limit is a per-tile **in-flight
+coalescing guard** (`PreviewTileController` behind a `PreviewScrubber` seam so the latest-wins logic
+is unit-tested without AVFoundation), **not** a debounce timer — matching Frigate's client. Day
+overlays (review markers, motion strip, gaps) come from `/api/review`, `/api/review/activity/motion`,
+`/api/recordings/unavailable`, fetched concurrently. Endpoints + scrub rules are mapped in the
+`frigate-rest` skill. **Deferred to 0.1.5**: tap → single-cam full-res VOD HLS scrubber (needs an
+on-device AVPlayer-vs-hls.js spike first; bound windows to ~1h for the nginx-vod segment cap). The
+current-hour `.webp` frame path is a follow-up (tiles show a placeholder for the live hour for now).

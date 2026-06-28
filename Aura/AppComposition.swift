@@ -1,3 +1,5 @@
+import Foundation
+
 import CamerasData
 import CamerasDomain
 import CamerasPresentation
@@ -10,6 +12,9 @@ import EventsPresentation
 import SettingsData
 import SettingsDomain
 import SettingsPresentation
+import TimelineData
+import TimelineDomain
+import TimelinePresentation
 
 /// The composition root: the one place the object graph is wired with explicit initializer
 /// injection, and where the domain `ConnectionSettings` is mapped to the infra `ServerConfig`.
@@ -79,6 +84,29 @@ final class AppComposition {
         EventDetailViewModel(
             event: event,
             clipLoader: FrigateEventClipLoader(config: serverConfig(from: connection), httpClient: httpClient)
+        )
+    }
+
+    func timelineScreenViewModel(for connection: ConnectionSettings) -> TimelineScreenViewModel {
+        let config = serverConfig(from: connection)
+        return TimelineScreenViewModel(
+            getCameras: GetCameras(
+                repository: FrigateCamerasRepository(config: config, httpClient: httpClient)
+            ),
+            getDayTimeline: GetDayTimeline(
+                repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
+            ),
+            calendar: .current,
+            now: Date()
+        )
+    }
+
+    func previewTileViewModel(for camera: Camera, connection: ConnectionSettings) -> PreviewTileViewModel {
+        PreviewTileViewModel(
+            camera: camera,
+            previews: GetCameraPreviews(
+                provider: FrigatePreviewSourceProvider(config: serverConfig(from: connection), httpClient: httpClient)
+            )
         )
     }
 
