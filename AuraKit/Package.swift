@@ -7,7 +7,12 @@ let package = Package(
     products: [
         .library(
             name: "AuraKit",
-            targets: ["CamerasDomain", "CamerasData", "CommonNetwork", "CommonFrigate"]
+            targets: [
+                "CamerasDomain", "CamerasData",
+                "CommonNetwork", "CommonFrigate", "CommonKeychain",
+                "SettingsDomain", "SettingsData",
+                "CamerasPresentation", "SettingsPresentation",
+            ]
         ),
     ],
     targets: [
@@ -41,6 +46,48 @@ let package = Package(
             name: "CamerasDataTests",
             dependencies: ["CamerasData", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
             path: "Tests/Cameras/DataTests"
+        ),
+
+        .target(name: "SettingsDomain", path: "Sources/Settings/Domain"),
+        .testTarget(
+            name: "SettingsDomainTests",
+            dependencies: ["SettingsDomain"],
+            path: "Tests/Settings/DomainTests"
+        ),
+
+        .target(name: "CommonKeychain", path: "Sources/Common/Keychain"),
+
+        .target(
+            name: "SettingsData",
+            dependencies: ["SettingsDomain", "CommonKeychain"],
+            path: "Sources/Settings/Data"
+        ),
+        .testTarget(
+            name: "SettingsDataTests",
+            dependencies: ["SettingsData", "SettingsDomain", "CommonKeychain"],
+            path: "Tests/Settings/DataTests"
+        ),
+
+        .target(
+            name: "CamerasPresentation",
+            dependencies: ["CamerasDomain"],
+            path: "Sources/Cameras/Presentation"
+        ),
+        .testTarget(
+            name: "CamerasPresentationTests",
+            dependencies: ["CamerasPresentation", "CamerasDomain"],
+            path: "Tests/Cameras/PresentationTests"
+        ),
+
+        .target(
+            name: "SettingsPresentation",
+            dependencies: ["SettingsDomain"],
+            path: "Sources/Settings/Presentation"
+        ),
+        .testTarget(
+            name: "SettingsPresentationTests",
+            dependencies: ["SettingsPresentation", "SettingsDomain"],
+            path: "Tests/Settings/PresentationTests"
         ),
     ],
     swiftLanguageModes: [.v6]
