@@ -57,3 +57,5 @@ Code is done; these are OS-policy settings, not code:
 - App: `xcodebuild build -scheme Aura -destination 'generic/platform=iOS Simulator'` (and `…/macOS`).
 - Build **one platform at a time with `-jobs` capped** — back-to-back parallel `xcodebuild` runs
   once exhausted the macOS per-user process limit (`fork: resource temporarily unavailable`).
+- **CI:** `.github/workflows/ci.yml` runs on `macos-26` for every push/PR to `main` — unit tests
+  (`swift test`), iOS + macOS app builds, and an isolated gating snapshot job. See `decisions.md`.

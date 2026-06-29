@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push to the same ref cancels an in-flight run (saves the 10x-billed macOS minutes).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Deterministic TDD suite — the AuraKit SPM package's unit tests. Runs on the macOS host
+  # via `swift test` (no simulator), matching the documented local workflow (.ai/docs/status.md).
+  unit-tests:
+    name: Unit tests (AuraKit)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/select-xcode
+      - name: Run package tests
+        working-directory: AuraKit
+        run: swift test
+
+  # Compile-check the app on BOTH platforms — Aura is multiplatform, so a change can build on
+  # one and break the other. Separate jobs (separate runners) also sidestep the macOS per-user
+  # process limit that back-to-back local xcodebuild runs hit (.ai/docs/status.md).
+  build:
+    name: Build app (${{ matrix.platform.name }})
+    runs-on: macos-26
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: iOS, destination: 'generic/platform=iOS Simulator' }
+          - { name: macOS, destination: 'generic/platform=macOS' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/select-xcode
+      - name: Build
+        run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -quiet
+
+  # Liquid-Glass screenshot tests (app-hosted AuraTests target, iOS-only). Isolated on purpose:
+  # the 42 reference PNGs are recorded locally and their rendering is environment-sensitive
+  # (precision 0.98 / perceptualPrecision 0.95) — keeping them in their own job means a snapshot
+  # diff never masks a real unit/build failure. If the runner's rendering drifts past tolerance,
+  # re-record baselines locally (see /build-test) and commit. This job GATES the PR.
+  snapshot-tests:
+    name: Snapshot tests (iOS)
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/select-xcode
+      # snapshot-testing pulls swift-syntax (a heavy macro dependency); cache the resolved
+      # source clones keyed on the committed pins. The app/unit jobs need no cache — AuraKit
+      # has zero external dependencies; only AuraTests links snapshot-testing.
+      - name: Cache SwiftPM source packages
+        uses: actions/cache@v4
+        with:
+          path: SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages
+      # Fail early with a readable message if the expected simulator is missing on this image
+      # release (iOS 26 devices have had transient per-release gaps on the hosted runner).
+      - name: Verify an iOS 26 iPhone 17 simulator is available
+        run: |
+          runtimes="$(xcrun simctl list runtimes available)"
+          devices="$(xcrun simctl list devices available)"
+          grep -E 'iPhone|iPad' <<< "$devices" || true
+          if ! grep -q 'iOS 26' <<< "$runtimes"; then
+            echo "::error::No iOS 26 simulator runtime available on this runner image"
+            exit 1
+          fi
+          if ! grep -q 'iPhone 17' <<< "$devices"; then
+            echo "::error::iPhone 17 simulator not available on this runner image"
+            exit 1
+          fi
+      - name: Run snapshot tests
+        run: |
+          xcodebuild test \
+            -scheme Aura \
+            -only-testing:AuraTests \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -clonedSourcePackagesDirPath SourcePackages \
+            -resultBundlePath TestResults.xcresult
+      # The .xcresult holds the reference/failure/diff images swift-snapshot-testing attaches,
+      # so a red is debuggable from the artifact without re-running locally.
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-test-results
+          path: TestResults.xcresult
+          retention-days: 7
+          if-no-files-found: warn

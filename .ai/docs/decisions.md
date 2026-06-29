@@ -109,3 +109,24 @@ light-mode/blank images, so a faithful macOS baseline isn't achievable here. (It
 the app sandbox disabled for the test host to write references.) Don't retry macOS snapshots without a
 fundamentally different renderer. Known iOS limit: camera tiles can't show live video in a snapshot, so
 they render the `unavailable` placeholder.
+
+## CI: GitHub Actions, jobs split by determinism
+CI runs on **GitHub-hosted `macos-26`** (Apple Silicon; ships the Xcode 26.x line). Each job selects
+the newest installed Xcode 26 explicitly (`xcode-select` on the highest-versioned `Xcode_26*.app`) —
+the image's default Xcode drifts release-to-release, and the macOS deployment target needs a 26.5+ SDK.
+The workflow is **four jobs split by how deterministic each check is**, so a fragile check can't mask a
+solid one and the failing signal is precise:
+- **Unit tests** — the package suite via `swift test` on the macOS host. Fast, simulator-free, the
+  documented local path. The `Aura` scheme deliberately does **not** list the package's test targets as
+  testables, so the package tests are driven through SwiftPM, not the app scheme.
+- **Build (×2)** — `xcodebuild build` for `generic/platform=iOS Simulator` and `…/macOS`. Multiplatform
+  must compile both ways; these also cover the iOS-only `#if os(iOS)` slice that the host-only unit run
+  can't. Separate runners sidestep the per-user process limit that back-to-back local builds hit.
+- **Snapshot tests** — the app-hosted iOS screenshot suite, isolated in its own gating job on a concrete
+  simulator. Kept apart because its rendering is environment-sensitive (the committed PNGs were recorded
+  locally; glass/font rasterization can drift past the perceptual tolerance on a different runtime). It
+  **gates** by choice; on failure the `.xcresult` (with reference/diff images) is uploaded as an
+  artifact, and the fix is to inspect the diff and re-record baselines locally — never record on CI.
+
+This required **sharing the `Aura` scheme** (`xcshareddata/xcschemes/Aura.xcscheme`, committed): it
+previously lived only in gitignored `xcuserdata/`, so a fresh CI checkout couldn't resolve `-scheme Aura`.
