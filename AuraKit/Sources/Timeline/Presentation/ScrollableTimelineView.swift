@@ -118,12 +118,17 @@ private struct TimelineClockLabel: View {
 }
 
 private struct HistogramTrack: View {
+    // The calendar/time zone the hour labels are computed in. Resolves to the user's current
+    // calendar in the app; tests pin it so snapshots render identically on any machine.
+    @Environment(\.calendar) private var calendar
     let span: TimeRange
     let timeline: DayTimeline
     let width: CGFloat
 
     var body: some View {
-        Canvas { context, size in
+        // Capture the environment value here — the Canvas draw closure runs after `body` returns.
+        let calendar = calendar
+        return Canvas { context, size in
             let duration = span.end.timeIntervalSince(span.start)
             guard duration > 0 else { return }
             let topLabelArea: CGFloat = 13
@@ -132,7 +137,7 @@ private struct HistogramTrack: View {
             }
 
             drawGaps(in: context, size: size, x: x)
-            drawHourLabels(in: context, size: size, x: x)
+            drawHourLabels(in: context, size: size, x: x, calendar: calendar)
 
             let barWidth: CGFloat = 3
             let maxBarHeight = size.height - topLabelArea
@@ -168,8 +173,7 @@ private struct HistogramTrack: View {
     }
 
     /// Faint time labels every 6h at the top, leaving the bars flush to the bottom.
-    private func drawHourLabels(in context: GraphicsContext, size: CGSize, x: (Date) -> CGFloat) {
-        let calendar = Calendar.current
+    private func drawHourLabels(in context: GraphicsContext, size: CGSize, x: (Date) -> CGFloat, calendar: Calendar) {
         guard var tick = calendar.nextDate(
             after: span.start, matching: DateComponents(minute: 0), matchingPolicy: .nextTime
         ) else { return }

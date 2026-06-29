@@ -53,6 +53,13 @@ public final class TimelineScreenViewModel {
         }
     }
 
+    /// Loads on first appearance only. A re-appearance (e.g. returning to the tab) keeps the
+    /// already-loaded content instead of flashing the full-screen spinner and refetching.
+    public func loadIfNeeded() async {
+        guard case .loading = state else { return }
+        await load()
+    }
+
     public func scrub(to time: Date) {
         clock.scrub(to: span.clamp(time))
     }

@@ -1,0 +1,232 @@
+import Foundation
+import SwiftUI
+
+import SnapshotTesting
+
+import CamerasDomain
+import TimelineDomain
+import TimelinePresentation
+
+// Scaffolding for the timeline screenshot tests. These live in the app-hosted `AuraTests`
+// target (not the AuraKit package) on purpose: only an app-hosted target gives the tests a real
+// host window, so the full `NavigationStack` screen lays out and the Liquid-Glass scrubber card
+// renders via `drawHierarchyInKeyWindow`. The package test targets are hostless and render the
+// screen blank without glass. See `.ai/docs/decisions.md`.
+//
+// Inputs are fixed (instant, calendar, time zone, color scheme) so the same pixels render on any
+// machine. Reference images live in `__Snapshots__/` beside the test file. To (re)generate them,
+// run the suite once — missing references are written and the run fails; commit them, then a
+// second run compares. Each logical view is captured across the device + orientation matrix on
+// iOS and a fixed window on macOS.
+
+// MARK: - Fixed inputs
+
+/// The instant every snapshot is taken at — a fixed epoch so the clock and labels never drift.
+let snapshotNow = Date(timeIntervalSince1970: 1_000_000)
+let snapshotDays = 2
+
+func snapshotCameras() -> [Camera] {
+    [
+        Camera(name: CameraName("driveway"), friendlyName: "Driveway", isEnabled: true, streamNames: ["driveway"]),
+        Camera(name: CameraName("front_door"), friendlyName: "Front Door", isEnabled: true, streamNames: ["front_door"]),
+        Camera(name: CameraName("backyard"), friendlyName: "Backyard", isEnabled: true, streamNames: ["backyard"]),
+        Camera(name: CameraName("garage"), friendlyName: "Garage", isEnabled: true, streamNames: ["garage"]),
+    ]
+}
+
+private let snapshotSpanStart = Date(timeIntervalSince1970: 1_000_000 - Double(2 * 86_400))
+
+/// A busy day: a swelling motion profile with night lulls, alert/detection markers (one still
+/// in progress), and a footage gap.
+func richTimelineFixture() -> DayTimeline {
+    func at(hour: Double) -> Date { snapshotSpanStart.addingTimeInterval(hour * 3600) }
+
+    let motion: [MotionBucket] = stride(from: 0.0, to: 48.0, by: 0.5).map { hour in
+        let swell = sin(hour / 2.0) * 35 + 45
+        let burst = hour.truncatingRemainder(dividingBy: 6) < 0.5 ? 40.0 : 0
+        let lull = (hour > 2 && hour < 6) || (hour > 26 && hour < 30) ? 0.0 : 1.0
+        let value = max(0, min(100, (swell + burst) * lull))
+        return MotionBucket(time: at(hour: hour), intensity: Int(value))
+    }
+    let markers: [ReviewMarker] = [
+        ReviewMarker(start: at(hour: 9), end: at(hour: 9.6), severity: .alert),
+        ReviewMarker(start: at(hour: 15.5), end: at(hour: 16.2), severity: .detection),
+        ReviewMarker(start: at(hour: 33), end: at(hour: 34), severity: .alert),
+        ReviewMarker(start: at(hour: 46.5), end: nil, severity: .detection),
+    ]
+    let gaps = [FootageGap(range: TimeRange(start: at(hour: 19), end: at(hour: 21)))]
+    return DayTimeline(markers: markers, motion: motion, gaps: gaps)
+}
+
+/// Footage but no detected activity — exercises the empty histogram with cameras present.
+func quietTimelineFixture() -> DayTimeline {
+    DayTimeline(markers: [], motion: [], gaps: [])
+}
+
+/// Sparse motion broken up by several large no-footage gaps (hatched).
+func gappyTimelineFixture() -> DayTimeline {
+    func at(hour: Double) -> Date { snapshotSpanStart.addingTimeInterval(hour * 3600) }
+
+    let motion: [MotionBucket] = stride(from: 0.0, to: 48.0, by: 1.0).map { hour in
+        MotionBucket(time: at(hour: hour), intensity: Int(hour) % 7 == 0 ? 70 : 15)
+    }
+    let gaps = [
+        FootageGap(range: TimeRange(start: at(hour: 3), end: at(hour: 8))),
+        FootageGap(range: TimeRange(start: at(hour: 13), end: at(hour: 14.5))),
+        FootageGap(range: TimeRange(start: at(hour: 28), end: at(hour: 36))),
+    ]
+    return DayTimeline(markers: [], motion: motion, gaps: gaps)
+}
+
+// MARK: - View builder
+
+/// The full timeline screen, driven to a terminal state. Camera tiles are pre-settled to the
+/// `.unavailable` placeholder (no live video, no animated spinner) so the grid is stable.
+@MainActor
+func timelineScreen(
+    cameras: Result<[Camera], CamerasError>,
+    timeline: Result<DayTimeline, TimelineError>
+) async -> some View {
+    let viewModel = TimelineScreenViewModel(
+        getCameras: GetCameras(repository: FakeCameras(cameras)),
+        getDayTimeline: GetDayTimeline(repository: FakeDayTimeline(timeline)),
+        now: snapshotNow,
+        days: snapshotDays
+    )
+    await viewModel.load()
+
+    let previews = GetCameraPreviews(provider: EmptyPreviews())
+    var tiles: [CameraName: PreviewTileViewModel] = [:]
+    if case let .success(all) = cameras {
+        for camera in all where camera.isEnabled {
+            let tile = PreviewTileViewModel(camera: camera, previews: previews)
+            await tile.prepare(range: viewModel.span, at: viewModel.clock.instant)
+            tiles[camera.name] = tile
+        }
+    }
+
+    return TimelineScreenView(
+        viewModel: viewModel,
+        makeTileViewModel: { tiles[$0.name] ?? PreviewTileViewModel(camera: $0, previews: previews) },
+        onOpenRecording: { _, _ in }
+    )
+}
+
+// MARK: - Rendering
+
+extension View {
+    /// Pins the locale, calendar, and time zone so date/time rendering is identical on every machine
+    /// the snapshots run on. The color scheme is applied per-snapshot (both light and dark).
+    func snapshotEnvironment() -> some View {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        return self
+            .environment(\.locale, Locale(identifier: "en_US_POSIX"))
+            .environment(\.calendar, calendar)
+            .environment(\.timeZone, .gmt)
+    }
+}
+
+// A small perceptual tolerance for Liquid Glass / blur, which isn't pixel-identical run-to-run; the
+// view is also warmed up once before each capture (see `warmUpRender`) to avoid cold-render variance.
+private let snapshotPrecision: Float = 0.98
+private let snapshotPerceptualPrecision: Float = 0.95
+
+#if os(iOS)
+import UIKit
+
+private struct SnapshotConfig {
+    let name: String
+    let device: ViewImageConfig
+}
+
+/// Renders `view` once in a real key window (at the snapshot's size + style) to warm up the Liquid
+/// Glass shader and glyph caches before capture — a cold first render in a fresh process can differ
+/// slightly from later ones, which would otherwise show up as a flaky diff.
+@MainActor
+private func warmUpRender(_ view: some View, size: CGSize, style: UIUserInterfaceStyle) {
+    let host = UIHostingController(rootView: view)
+    host.overrideUserInterfaceStyle = style
+    host.view.frame = CGRect(origin: .zero, size: size)
+    let window = UIWindow(frame: host.view.frame)
+    window.overrideUserInterfaceStyle = style
+    window.rootViewController = host
+    window.makeKeyAndVisible()
+    host.view.layoutIfNeeded()
+    RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.2))
+    window.isHidden = true
+    window.rootViewController = nil
+}
+#endif
+
+/// Renders `view` across the platform's snapshot matrix and compares each against its reference.
+@MainActor
+func assertTimelineSnapshot(
+    _ view: some View,
+    named name: String,
+    fileID: StaticString = #fileID,
+    file filePath: StaticString = #filePath,
+    testName: String = #function,
+    line: UInt = #line,
+    column: UInt = #column
+) {
+    // iOS-only: macOS AppKit offscreen rendering (cacheDisplay) can't faithfully capture Liquid
+    // Glass, materials, or ContentUnavailableView — it renders light-mode/blank. See decisions.md.
+    #if os(iOS)
+    let base = view.snapshotEnvironment()
+    let configs: [SnapshotConfig] = [
+        SnapshotConfig(name: "iPhone-portrait", device: .iPhone13),
+        SnapshotConfig(name: "iPhone-landscape", device: .iPhone13(.landscape)),
+        SnapshotConfig(name: "iPad-portrait", device: .iPadPro11(.portrait)),
+        SnapshotConfig(name: "iPad-landscape", device: .iPadPro11(.landscape)),
+    ]
+    let schemes: [(name: String, scheme: ColorScheme, style: UIUserInterfaceStyle)] = [
+        ("light", .light, .light),
+        ("dark", .dark, .dark),
+    ]
+    for scheme in schemes {
+        let scene = base.environment(\.colorScheme, scheme.scheme)
+        let traits = UITraitCollection(userInterfaceStyle: scheme.style)
+        for config in configs {
+            // Warm up the render (glass shader / glyph caches) at this size so the capture is stable.
+            warmUpRender(scene, size: config.device.size ?? CGSize(width: 400, height: 800), style: scheme.style)
+            assertSnapshot(
+                of: scene,
+                as: .image(
+                    drawHierarchyInKeyWindow: true,
+                    precision: snapshotPrecision,
+                    perceptualPrecision: snapshotPerceptualPrecision,
+                    layout: .device(config: config.device),
+                    traits: traits
+                ),
+                named: "\(name).\(config.name).\(scheme.name)",
+                fileID: fileID, file: filePath, testName: testName, line: line, column: column
+            )
+        }
+    }
+    #endif
+}
+
+// MARK: - Fakes
+
+private struct FakeCameras: CamerasRepository {
+    let result: Result<[Camera], CamerasError>
+    init(_ result: Result<[Camera], CamerasError>) { self.result = result }
+    func cameras() async throws(CamerasError) -> [Camera] { try result.get() }
+}
+
+private struct FakeDayTimeline: CameraDayTimelineRepository {
+    let result: Result<DayTimeline, TimelineError>
+    init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
+    func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline { try result.get() }
+}
+
+/// No preview material — every tile resolves to the `.unavailable` placeholder.
+private struct EmptyPreviews: CameraPreviewProviding {
+    func clips(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewClip] { [] }
+    func frames(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewFrame] { [] }
+    func clipSource(_ clip: PreviewClip) -> CameraStreamSource {
+        // Unused: clips() is empty, so a tile never asks for a playable source.
+        CameraStreamSource(url: URL(filePath: "/unused"), headers: [:])
+    }
+}

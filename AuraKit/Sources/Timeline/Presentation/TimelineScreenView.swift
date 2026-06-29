@@ -29,7 +29,7 @@ public struct TimelineScreenView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
         }
-        .task { await viewModel.load() }
+        .task { await viewModel.loadIfNeeded() }
     }
 
     @ViewBuilder private var content: some View {

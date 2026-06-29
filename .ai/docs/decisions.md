@@ -84,3 +84,28 @@ overlays (review markers, motion strip, gaps) come from `/api/review`, `/api/rev
 `frigate-rest` skill. **Deferred to 0.1.5**: tap → single-cam full-res VOD HLS scrubber (needs an
 on-device AVPlayer-vs-hls.js spike first; bound windows to ~1h for the nginx-vod segment cap). The
 current-hour `.webp` frame path is a follow-up (tiles show a placeholder for the live hour for now).
+
+## Screenshot tests: app-hosted, `swift-snapshot-testing` (test-only)
+SwiftUI screenshot tests for the Timeline screen live in the **app-hosted `AuraTests` target**, not
+the `AuraKit` package. Reason (verified, not assumed): only an app-hosted target gives the tests a
+real host window, so the full screen lays out and the Liquid-Glass scrubber renders via the key
+window. The hostless package test targets render the screen **blank** and never show glass, and they
+don't even run on the simulator (they're macOS-host-only via `swift test`). Trade-offs accepted:
+(1) a deliberate exception to "all tests in the SPM package" — the UI snapshot tests sit in the app
+project; (2) `swift-snapshot-testing` is the **one** external dependency, added to the Xcode project's
+`AuraTests` target only (not `Package.swift`), and is **test-only** — it never links into the app, so
+shipped code stays dependency-free. Determinism is pinned: a fixed instant, GMT calendar/time zone,
+and POSIX locale; every screen is captured in **both light and dark** (theme is a first-class app
+feature), with a small perceptual tolerance because glass material is not pixel-identical across
+OS/Xcode versions. Two production tweaks were made to support this and are
+genuine improvements: the histogram reads the calendar from the SwiftUI environment (was a hidden
+`Calendar.current` global), and the screen view-model's self-load is now idempotent so a re-appearance
+keeps loaded content instead of flashing the spinner (which also lets the snapshot capture the settled
+state). The matrix is **iPhone + iPad (portrait + landscape) × light + dark on the simulator**; reference PNGs
+are committed beside the tests. **macOS is intentionally excluded** (verified, not assumed): the macOS
+snapshot strategy renders via AppKit's offscreen `cacheDisplay`, which can't capture Liquid Glass,
+materials, or `ContentUnavailableView` and ignores the forced dark appearance — it produces
+light-mode/blank images, so a faithful macOS baseline isn't achievable here. (It would also have needed
+the app sandbox disabled for the test host to write references.) Don't retry macOS snapshots without a
+fundamentally different renderer. Known iOS limit: camera tiles can't show live video in a snapshot, so
+they render the `unavailable` placeholder.

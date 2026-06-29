@@ -25,7 +25,12 @@
   **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber → v0.1.7
   track polish: white inset + border, blue playhead, hatched no-footage, bars flush to bottom.)**
 
-Package logic is covered by Swift Testing (~104 tests). SwiftUI views are built, not unit-tested.
+Package logic is covered by Swift Testing (~104 tests). The **Timeline screen** is covered by
+**screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across iPhone +
+iPad (portrait + landscape) × light + dark on the simulator — ready (busy / gappy / quiet), empty,
+and failed states.
+Reference PNGs are committed beside the tests. macOS is excluded (AppKit offscreen rendering can't
+capture glass faithfully — see `decisions.md`). Other SwiftUI views are built, not yet snapshot-tested.
 
 ## Next
 - **Single-cam recordings scrubber.** Tap a Timeline tile → that camera's full-res recordings

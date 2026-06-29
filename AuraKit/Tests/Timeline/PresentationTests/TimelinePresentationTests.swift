@@ -94,6 +94,25 @@ struct TimelineScreenViewModelTests {
         sut.scrub(to: sut.span.start.addingTimeInterval(-100))
         #expect(sut.clock.instant == sut.span.start)
     }
+
+    @Test func `given a loaded state when loadIfNeeded then it does not fetch again`() async {
+        // given
+        let cameras = CountingCamerasRepository(.success([camera]))
+        let sut = TimelineScreenViewModel(
+            getCameras: GetCameras(repository: cameras),
+            getDayTimeline: GetDayTimeline(repository: FakeTimelineRepository(.success(emptyTimeline))),
+            now: at(1_000_000),
+            days: 2
+        )
+        await sut.load()
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(cameras.fetchCount == 1)
+        #expect(sut.state == .ready(cameras: [camera], timeline: emptyTimeline))
+    }
 }
 
 // MARK: - Helpers
@@ -126,6 +145,17 @@ private struct FakeTimelineRepository: CameraDayTimelineRepository {
     let result: Result<DayTimeline, TimelineError>
     init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
     func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline { try result.get() }
+}
+
+@MainActor
+private final class CountingCamerasRepository: CamerasRepository {
+    private let result: Result<[Camera], CamerasError>
+    private(set) var fetchCount = 0
+    init(_ result: Result<[Camera], CamerasError>) { self.result = result }
+    func cameras() async throws(CamerasError) -> [Camera] {
+        fetchCount += 1
+        return try result.get()
+    }
 }
 
 @MainActor

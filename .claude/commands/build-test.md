@@ -26,6 +26,23 @@ xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17
 xcodebuild test -scheme Aura -destination 'platform=macOS'
 ```
 
+### Screenshot tests
+
+SwiftUI screen rendering is covered by **screenshot tests** in the app-hosted **`AuraTests`**
+target (they need a real host window — see `.ai/docs/decisions.md`). They run via the same
+`Aura` scheme and cover iPhone + iPad (both orientations) × **light + dark** on the **simulator** —
+one sim run renders every config. macOS is intentionally excluded (AppKit can't capture glass faithfully).
+
+```bash
+xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:AuraTests/TimelineScreenSnapshotTests
+```
+
+- **Reference images** live in `AuraTests/__Snapshots__/` and are committed.
+- **(Re)recording a baseline:** delete the stale `.png` (or the whole folder) and run — the
+  first pass writes the missing reference and fails; xcodebuild's retry-on-failure then
+  compares and passes in the same invocation. Inspect the new PNGs before committing.
+
 ### Notes
 
 - Append `| tail -n 30` (with `set -o pipefail`) to keep output readable; the line you

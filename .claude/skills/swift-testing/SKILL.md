@@ -115,4 +115,32 @@ Package tests run on the macOS host — fast, no simulator:
 cd AuraKit && swift test
 ```
 
-The app target's own tests (later, for Presentation/UI) run via `/build-test`.
+The app target's own tests (incl. screenshot tests) run via `/build-test`.
+
+## Screenshot (snapshot) tests
+
+SwiftUI screen rendering is covered by **screenshot tests** using `swift-snapshot-testing` — the
+**one** external dependency, **test-only** (linked to the `AuraTests` target in the Xcode project,
+never `Package.swift`, so the app stays dependency-free).
+
+- **They live in the app-hosted `AuraTests` target, not the package.** Only an app-hosted target has
+  a real host window, so the full screen lays out and Liquid Glass renders (`drawHierarchyInKeyWindow:
+  true`). Package test targets are hostless → blank screen, no glass. Don't move them back.
+- **Pin every nondeterministic input** so the same pixels render on any machine: a fixed instant
+  injected into the view-model, plus `.environment` for locale (`en_US_POSIX`) and calendar + time
+  zone (GMT). A view that reads `Calendar.current`/`Date()` directly isn't snapshottable — thread the
+  value through the SwiftUI environment instead.
+- **Cover both light and dark.** Theme is a first-class app feature, so every screen is captured in
+  both — loop the color scheme (`.environment(\.colorScheme,…)` + matching `UITraitCollection`
+  userInterfaceStyle) and suffix the snapshot name with the scheme.
+- **No async mid-flight in the captured frame.** A self-loading view (`.task { load() }`) must settle
+  before capture, or you snapshot a spinner. Pre-drive the view-model to its terminal state and make
+  the load idempotent so the view's `.task` doesn't reset it. Force data-dependent tiles/players into a
+  stable placeholder — live video never renders in a snapshot.
+- **Capture across the device matrix** (iPhone + iPad, both orientations) × light + dark on the
+  simulator; use a perceptual-precision tolerance (glass isn't pixel-identical across OS versions). **macOS is excluded** —
+  AppKit's offscreen `cacheDisplay` can't capture glass/materials/`ContentUnavailableView` (renders
+  light/blank), so faithful macOS snapshots aren't achievable; don't retry without a different renderer.
+- **Recording baselines:** delete the stale reference and run the suite — the first run writes the
+  missing PNG and fails, a re-run compares (xcodebuild's retry-on-failure does both in one invocation).
+  Commit the reference PNGs. Reference images live in `__Snapshots__/` beside the test file.
