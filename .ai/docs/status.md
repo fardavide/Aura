@@ -22,7 +22,8 @@
   clock fans out to a per-tile **coalescing** controller (latest-target-wins, no debounce); at the
   live edge tiles fall back to the latest footage. 3rd tab (Cameras | Timeline | Events). The
   cross-platform video/image wrapper was extracted into a shared **`CommonPlayer`** target.
-  **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber.)**
+  **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber → v0.1.7
+  track polish: white inset + border, blue playhead, hatched no-footage, bars flush to bottom.)**
 
 Package logic is covered by Swift Testing (~104 tests). SwiftUI views are built, not unit-tested.
 
