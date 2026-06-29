@@ -42,8 +42,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
+      # Build unsigned — a compile-check needs no signed binary, and the runner has no signing
+      # identity (the native macOS build otherwise fails resolving a "Mac Development" cert; the
+      # iOS Simulator build never signs, so these settings are a harmless no-op there).
       - name: Build
-        run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -quiet
+        run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -quiet CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
   # Liquid-Glass screenshot tests (app-hosted AuraTests target, iOS-only). Isolated on purpose:
   # the 42 reference PNGs are recorded locally and their rendering is environment-sensitive

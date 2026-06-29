@@ -121,7 +121,9 @@ solid one and the failing signal is precise:
   testables, so the package tests are driven through SwiftPM, not the app scheme.
 - **Build (×2)** — `xcodebuild build` for `generic/platform=iOS Simulator` and `…/macOS`. Multiplatform
   must compile both ways; these also cover the iOS-only `#if os(iOS)` slice that the host-only unit run
-  can't. Separate runners sidestep the per-user process limit that back-to-back local builds hit.
+  can't. Separate runners sidestep the per-user process limit that back-to-back local builds hit. Built
+  **unsigned** (`CODE_SIGNING_ALLOWED=NO`) — a compile-check needs no signed binary and the runner has no
+  signing identity, which the native macOS build otherwise demands ("Mac Development" cert).
 - **Snapshot tests** — the app-hosted iOS screenshot suite, isolated in its own gating job on a concrete
   simulator. Kept apart because its rendering is environment-sensitive (the committed PNGs were recorded
   locally; glass/font rasterization can drift past the perceptual tolerance on a different runtime). It
