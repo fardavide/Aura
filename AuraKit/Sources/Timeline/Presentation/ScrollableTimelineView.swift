@@ -60,6 +60,8 @@ struct ScrollableTimelineView: View {
             .onScrollPhaseChange { _, phase in
                 if phase == .idle { clock.endScrub() } else { clock.beginScrub() }
             }
+            // Guard against isScrubbing getting stuck if the view disappears mid-deceleration.
+            .onDisappear { clock.endScrub() }
             .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
