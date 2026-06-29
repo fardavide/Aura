@@ -1,120 +1,87 @@
 # Aura — agent guide
 
-Aura is a native **iOS + macOS** client for **Frigate NVR** (self-hosted security
-cameras with AI object detection). Personal-use, single-user, and a portfolio piece.
-It's a third-party Frigate client. The MVP: a live camera grid, fullscreen single
-camera with Picture-in-Picture, a minimal event list, and event-clip playback.
+Aura is a native **iOS + macOS (Multiplatform)** SwiftUI client for **Frigate NVR** — a
+personal, single-user, third-party client and portfolio piece.
 
-## Agent config
+## Read first
 
-Project agent config is split by purpose (all committed):
+- **Before any non-trivial change**, read `.ai/docs/architecture.md` and `.ai/docs/decisions.md`
+  so you don't break a layer boundary or re-litigate a settled decision (`.ai/docs/README.md`
+  indexes them). **Keep them current**: record decisions in `decisions.md`, current state in
+  `status.md`, Frigate findings in `frigate-integration.md`. Docs = the *why* and *where we are*;
+  skills = actionable rules.
+- **Invoke applicable skills before acting** on a non-trivial task; if none apply, say so.
 
-```
-.claude/
-  skills/<name>/SKILL.md   ← behavioral rules, invoked as /<name>
-  commands/<name>.md       ← commands, invoked as /<name>
-.ai/docs/*.md              ← narrative findings, decisions, status (tool-agnostic)
-CLAUDE.md                  ← this file
-```
-
-`.claude/` holds tool-specific config (no symlink abstraction); `.ai/docs/` is
-agent-agnostic documentation any agent (Claude, Gemini, …) can read.
-
-Skills are **flat**: each lives at `.claude/skills/<name>/SKILL.md` and is invoked by
-its directory name (Claude Code only discovers skills as direct children of the skills
-root — no folder grouping). This is a personal project, so names stay plain — no team
-namespacing prefix. Related skills may share a topical prefix where it helps (e.g. the
-`frigate-` integration skills).
-
-The user's **global** skills also apply and are not duplicated here — notably `tdd`,
-`typing`, `test-doubles`, `scenario-pattern`, `refactor`, `architecture-review`, and
-`skill-expert`. Prefer a global skill for language-general rules; add a project skill
-only for Aura/Swift/Frigate-specific guidance.
-
-### Project skills
+Project skills (`.claude/skills/<name>`, invoked `/<name>`):
 
 | Skill | Use it for |
 |-------|-----------|
-| `/architecture` | Layering (Clean Architecture + MVVM), service layer, typed IDs, the cross-platform video/PiP wrapper, storage |
-| `/swift-style` | Swift 6 / SwiftUI conventions — concurrency, optionality, exhaustive switch, init defaults, SwiftUI styling |
-| `/swift-testing` | Swift Testing, the Scenario fixture, fakes, decoding tests |
-| `/frigate-rest` | Frigate HTTP API — `/api/config`, `/api/events`, media URLs, JSON shapes, auth |
-| `/frigate-live` | The go2rtc live stream URL for AVFoundation, src naming, codec/auth caveats |
+| `/architecture` | Layering (feature-vertical Clean Architecture + MVVM), composition root, typed IDs, the cross-platform video/PiP wrapper, storage |
+| `/swift-style` | Swift 6 / SwiftUI conventions — concurrency, optionality, exhaustive switch, init defaults, styling |
+| `/swift-testing` | Swift Testing, fakes, decoding tests, the screenshot tests |
+| `/frigate-rest` | Frigate HTTP API — config, events, recordings/review/VOD timeline, media URLs, JSON, auth |
+| `/frigate-live` | go2rtc live-stream URL for AVFoundation, src naming, codec/auth caveats |
 
-### Project commands
-
-| Command | Does |
-|---------|------|
-| `/build-test` | Build/test Aura for iOS Simulator + native macOS via `xcodebuild` |
-
-### Project docs (`.ai/docs/`)
-
-Narrative knowledge — the *why* and *where we are*, separate from the actionable rules in
-skills. **Read `.ai/docs/architecture.md` and `.ai/docs/decisions.md` before any non-trivial
-change** so you don't break a layer boundary or re-litigate a settled decision; see
-`.ai/docs/README.md` for the index. **Keep them current** — record new architectural
-decisions in `decisions.md`, update `status.md` when a slice lands, and add Frigate findings
-to `frigate-integration.md`. Skills = rules; docs = explanation and state.
+Global skills also apply (e.g. `tdd`, `typing`, `test-doubles`, `refactor`, `skill-expert`) —
+prefer a global skill for language-general rules; add a project skill only for Aura/Swift/Frigate
+specifics. `/build-test` is the build/test command. `.claude/` is Claude-specific config; `.ai/docs/`
+is agent-agnostic.
 
 ## Tech stack (decided — do not substitute)
 
-- Swift 6, strict concurrency = complete; `@MainActor` default isolation.
-- SwiftUI + `@Observable` (modern Observation).
-- Deployment target iOS 26.0 / macOS 26; **Multiplatform** (iPhone, iPad, native macOS).
-- Video: AVFoundation / AVKit (`AVPlayerViewController` → free PiP on iOS).
-- Networking: `URLSession` + async/await — **no Alamofire**. JSON: `Codable`.
-- Storage: `UserDefaults` (server config + theme) + Keychain (password). No SwiftData,
-  no CloudKit, no sync.
-- Architecture: MVVM + a separate networking/service layer — see `/architecture`.
-- Testing: **Swift Testing** (not XCTest). TDD.
-- **Zero external dependencies.** SPM only.
+- Swift 6, strict concurrency = complete, `@MainActor` default isolation.
+- SwiftUI + `@Observable`; deployment target iOS 26 / macOS 26.
+- Video: AVFoundation / AVKit (`AVPlayerViewController` → free PiP on iOS); Liquid Glass (`glassEffect`).
+- Networking: `URLSession` + async/await (**no Alamofire**); JSON via `Codable`.
+- Storage: `UserDefaults` (config + theme) + Keychain (password). No SwiftData/CloudKit/sync.
+- Testing: **Swift Testing** (not XCTest), TDD, plus app-hosted screenshot tests.
+- **Shipped code has zero dependencies.** The only dependency is `swift-snapshot-testing`, and it
+  is **test-only** (the `AuraTests` app target). Don't add runtime/SPM deps.
+
+## Architecture (see `/architecture` + `decisions.md` for detail)
+
+- One local package `AuraKit`: each feature is `Sources/<Feature>/{Domain,Data,Presentation}` as
+  separate SwiftPM targets, on shared `Common/*` infra. The app target wires it via a hand-written
+  composition root (`AppComposition`).
+- **Domain is pure** — no Frigate, no networking; enforced by target dependencies. "Frigate" lives
+  only in Data/infra (e.g. `FrigateCamerasRepository`).
+- **Constructor injection, no service locator.** Tests build types directly with fakes.
+- **Typed throws**: `async throws(<Feature>Error)`. Typed ID wrappers over primitives.
+
+## Conventions that differ from defaults
+
+- **No consecutive uppercase** in our identifiers: `Dto`, `Url`, `Http`, `Id` (Apple's `URL`,
+  `HTTPURLResponse`, etc. keep their spelling).
+- `execute()`, never `callAsFunction`. Test names read `` `given X when Y then Z` `` (backtick raw
+  identifiers).
+- No default values in data-class primary inits (defaults belong in factories). No tiny rename-only
+  helpers. In `.claude`/`.ai/docs`, describe concepts/contracts, not type/function names.
 
 ## Platforms
 
-Multiplatform target (`SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx"`,
-device family `1,2`). `AVPlayerViewController` and `UIBackgroundModes` are iOS-only —
-keep the player + PiP behind the platform wrapper in `/architecture`; don't
-scatter `#if os(...)` through feature code. Do not re-narrow to iOS-only.
+Multiplatform (`SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx"`, device family `1,2`).
+iOS-only APIs (`AVPlayerViewController`, `UIBackgroundModes`) stay behind the platform wrapper —
+don't scatter `#if os(...)` through feature code, and **don't re-narrow to iOS-only**.
 
 ## Engineering principles
 
-**When in doubt, ask.** Never guess an API, pattern, or convention. Reading code (or the
-verified `/frigate-rest` / `/frigate-live` maps) is cheap; wrong guesses compound. This
-applies especially to Frigate endpoint/param names and AVFoundation/Keychain APIs.
-
-**Skill invocation discipline.** Before a non-trivial task, identify which skills apply
-and invoke them **before** acting. If none apply, say so explicitly.
-
-**TDD.** Failing test first, minimum to pass, then refactor. The build order per the
-brief: networking/service layer + models (with decoding tests) → Settings → Live grid →
-camera detail → Events list → event detail. (See the global `tdd` skill.)
-
-**Strong typing & abstraction granularity.** Typed ID wrappers over primitives; no tiny
-rename-only helpers. Details in `/swift-style`.
-
-**Docs avoid rotting code refs.** When writing under `.claude/` or `.ai/docs/`, describe
-concepts and contracts, not specific type/function names, unless a name is a genuine
-canonical anchor.
-
-## Code search tooling
-
-Prefer the `ast-index` skill for structured symbol / usage / hierarchy lookups in Swift
-(initialize with `/ast-index:initialize-ios` if not yet configured). Fall back to
-`rg`/`grep`/`find` via Bash. Reserve Bash for git, `xcodebuild`, and non-source work.
+- **When in doubt, ask.** Never guess an API/param — especially Frigate endpoints and
+  AVFoundation/Keychain. Reading code or the verified `/frigate-*` maps is cheap; wrong guesses compound.
+- **TDD**: failing test first, minimum to pass, then refactor.
+- **Verify before "done"**: builds + tests must pass, and show the evidence.
 
 ## Build & test
 
-Use `/build-test`. Quick reference:
-
 ```bash
-xcodebuild build -scheme Aura -destination 'generic/platform=iOS Simulator' -quiet
-xcodebuild build -scheme Aura -destination 'generic/platform=macOS' -quiet
-xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17'
+cd AuraKit && swift test                                                      # package logic tests (host)
+xcodebuild build -scheme Aura -destination 'generic/platform=iOS Simulator' -quiet   # + 'generic/platform=macOS'
+xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17 Pro'  # app + screenshot tests
 ```
 
-## Out of scope for the MVP (do not build)
-
-Push notifications, continuous-recordings scrubbing, multi-server, health/stats
-dashboard, PTZ, Frigate YAML config editor, Cloudflare Zero Trust / advanced auth.
-Remote access is handled externally by Tailscale — the app treats the server as a
-plain local-style HTTP endpoint (host, port default 5000, http/https, optional auth).
+- Build **one platform at a time with `-jobs` capped** — back-to-back parallel `xcodebuild` once
+  exhausted the macOS per-user process limit (`fork: resource temporarily unavailable`).
+- **CI** (`.github/workflows/ci.yml`, GitHub-hosted `macos-26`) runs on push/PR to `main`. Snapshot
+  baselines are re-recorded **locally**, never on CI (see `decisions.md`).
+- Prefer the `ast-index` skill for Swift symbol/usage lookups; fall back to `rg`/`grep`. Reserve Bash
+  for git, `xcodebuild`, and non-source work.
+</content>
