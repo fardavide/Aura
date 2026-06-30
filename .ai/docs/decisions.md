@@ -146,3 +146,35 @@ solid one and the failing signal is precise:
 
 This required **sharing the `Aura` scheme** (`xcshareddata/xcschemes/Aura.xcscheme`, committed): it
 previously lived only in gitignored `xcuserdata/`, so a fresh CI checkout couldn't resolve `-scheme Aura`.
+
+## Timeline: vertical scrubber on iPhone landscape (compact height)
+On iPhone landscape the bottom-floating glass scrubber ate the scarce vertical height and squeezed
+the camera grid. There, and only there, the screen splits side-by-side and **hides the nav bar** to
+reclaim the title-bar height (the Timeline tab has no toolbar items): a single-column scroll of camera
+tiles — each sized to the column's 16:9 height so one fills and the next peeks — on the left, and a
+**full-height vertical glass card** (~160pt wide) on the right. The trigger is the real
+`verticalSizeClass == .compact`, read directly in `TimelineScreenView` under `#if os(iOS)` (a derived
+`EnvironmentValues` accessor was rejected — a computed env property doesn't reliably re-invalidate on
+rotation). Compact height means iPhone landscape in practice: iPad reports a regular height in every
+orientation and multitasking mode (Split View / Stage Manager make only the *width* compact) and macOS
+has no size class, so iPhone portrait, iPad, and macOS all keep the bottom card unchanged.
+
+`ScrollableTimelineView` gained an `axis` parameter so one view serves both orientations, and the
+vertical card is kept **visually identical to the horizontal one**: a centered blue-line playhead (no
+thumb), the same severity-colored histogram, and the same `Day/Hour/Week` zoom at the **same scale**
+(an earlier denser vertical scale smeared the bars into a block). The one deliberate difference is
+direction — vertical reads top→bottom as **now→past**, so scrolling **up** moves into the past, with
+the live edge under the centered playhead. Motion bars grow rightward from a left-edge time-label
+gutter; gaps become hatched horizontal bands.
+
+Two layout gotchas, both verified **on-device** (the snapshot didn't reproduce them): (1) `maxHeight:
+.infinity` does not survive `glassEffect` — the glass hugs its content and the histogram collapses — so
+the card is sized with a **definite frame measured by a GeometryReader**; (2) the split is driven by
+**one outer GeometryReader** with explicit child sizes, because a flexible GeometryReader *sibling* in
+the `HStack` collapses both panes.
+
+The `.horizontal` path is byte-identical, so only the **iPhone-landscape** snapshot baselines change —
+re-record them locally before merging to `main` (the snapshot CI job gates). The iPhone-landscape
+snapshot config also **zeroes the safe area**, because the stock `iPhone13(.landscape)` config applies
+portrait-style notch/indicator insets that crush the usable height to a sliver — so the baseline now
+matches the on-device height.

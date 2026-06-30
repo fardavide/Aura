@@ -176,7 +176,14 @@ func assertTimelineSnapshot(
     let base = view.snapshotEnvironment()
     let configs: [SnapshotConfig] = [
         SnapshotConfig(name: "iPhone-portrait", device: .iPhone13),
-        SnapshotConfig(name: "iPhone-landscape", device: .iPhone13(.landscape)),
+        // Landscape zeroes the safe area: the stock `iPhone13(.landscape)` config applies a
+        // portrait-style notch/indicator inset that crushes the usable height to a sliver (and the
+        // vertical scrubber with it), so the snapshot stops matching the real on-device height.
+        SnapshotConfig(name: "iPhone-landscape", device: {
+            var c = ViewImageConfig.iPhone13(.landscape)
+            c.safeArea = .zero
+            return c
+        }()),
         SnapshotConfig(name: "iPad-portrait", device: .iPadPro11(.portrait)),
         SnapshotConfig(name: "iPad-landscape", device: .iPadPro11(.landscape)),
     ]
