@@ -11,6 +11,23 @@ public struct TimelineScreenView: View {
     @State private var tiles = TileStore()
     @State private var cardHeight: CGFloat = 180
 
+    // Read the real size class so the layout re-evaluates on rotation. iOS-only: macOS has no
+    // size class, so the side-by-side branch never applies there.
+    #if os(iOS)
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #endif
+
+    /// True when the vertical size class is compact — in practice iPhone landscape. iPad reports a
+    /// regular height in every orientation and multitasking mode (Split View / Stage Manager make
+    /// only the *width* compact), and macOS has no size class, so neither takes the side-by-side layout.
+    private var isCompactHeight: Bool {
+        #if os(iOS)
+        verticalSizeClass == .compact
+        #else
+        false
+        #endif
+    }
+
     public init(
         viewModel: TimelineScreenViewModel,
         makeTileViewModel: @escaping (Camera) -> PreviewTileViewModel,
@@ -27,6 +44,9 @@ public struct TimelineScreenView: View {
                 .navigationTitle("Timeline")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                // iPhone landscape is wide but short — reclaim the title bar's height for the grid and
+                // the tall scrubber (the tab bar already shows you're on Timeline).
+                .toolbar(isCompactHeight ? .hidden : .visible, for: .navigationBar)
                 #endif
         }
         .task { await viewModel.loadIfNeeded() }
@@ -50,28 +70,76 @@ public struct TimelineScreenView: View {
         }
     }
 
+    @ViewBuilder
     private func ready(cameras: [Camera], timeline: DayTimeline) -> some View {
+        // iPhone landscape is wide but short: a bottom scrubber would eat the scarce height, so put
+        // the grid and a vertical scrubber side by side. Everywhere else keeps the bottom card.
+        if isCompactHeight {
+            sideBySide(cameras: cameras, timeline: timeline)
+        } else {
+            bottomCard(cameras: cameras, timeline: timeline)
+        }
+    }
+
+    private func bottomCard(cameras: [Camera], timeline: DayTimeline) -> some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
-                    ForEach(cameras) { camera in
-                        PreviewTileView(
-                            viewModel: tiles.tile(for: camera, make: makeTileViewModel),
-                            clock: viewModel.clock,
-                            range: viewModel.span
-                        )
-                        .onTapGesture { onOpenRecording(camera, viewModel.clock.instant) }
-                    }
-                }
-                .padding()
-                .padding(.bottom, cardHeight)
-            }
+            grid(cameras: cameras, bottomInset: cardHeight)
             // Float the glass card over the grid so tiles scroll behind it (the glass refracts them).
-            ScrollableTimelineView(span: viewModel.span, timeline: timeline, clock: viewModel.clock) { time in
+            ScrollableTimelineView(axis: .horizontal, span: viewModel.span, timeline: timeline, clock: viewModel.clock) { time in
                 viewModel.scrub(to: time)
             }
             .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { cardHeight = $0 }
         }
+    }
+
+    private func sideBySide(cameras: [Camera], timeline: DayTimeline) -> some View {
+        // Drive the split from the available size directly: a flexible GeometryReader sibling inside an
+        // HStack collapses both panes, so measure once and lay out with explicit widths/heights.
+        GeometryReader { geo in
+            let cardWidth: CGFloat = 160
+            let gap: CGFloat = 12
+            let columnWidth = max(0, geo.size.width - cardWidth - gap)
+            HStack(spacing: gap) {
+                // A single-column scroll, not a grid: each tile fills the column's 16:9 height, so one
+                // camera dominates the landscape height and the next peeks below it.
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(cameras) { camera in
+                            cameraTile(camera)
+                                .frame(width: columnWidth, height: columnWidth * 9 / 16)
+                        }
+                    }
+                }
+                .frame(width: columnWidth)
+
+                // The slim scrubber card takes a fixed strip of width and the full height.
+                ScrollableTimelineView(axis: .vertical, span: viewModel.span, timeline: timeline, clock: viewModel.clock) { time in
+                    viewModel.scrub(to: time)
+                }
+                .frame(width: cardWidth, height: geo.size.height)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+    }
+
+    private func grid(cameras: [Camera], bottomInset: CGFloat) -> some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+                ForEach(cameras) { camera in cameraTile(camera) }
+            }
+            .padding()
+            .padding(.bottom, bottomInset)
+        }
+    }
+
+    private func cameraTile(_ camera: Camera) -> some View {
+        PreviewTileView(
+            viewModel: tiles.tile(for: camera, make: makeTileViewModel),
+            clock: viewModel.clock,
+            range: viewModel.span
+        )
+        .onTapGesture { onOpenRecording(camera, viewModel.clock.instant) }
     }
 }
 

@@ -28,6 +28,13 @@
   span end to the present (start fixed, so tiles don't reload) and only fires when parked at the live
   edge and not scrubbing; a failed screen keeps retrying so a dropped connection self-recovers
   (see `decisions.md`).
+  When the vertical size class is compact — iPhone landscape in practice (iPad keeps a regular height
+  even in multitasking; macOS has no size class) — the layout splits side-by-side (v0.1.9) and hides the
+  nav bar: a single-column scroll of camera tiles on the left, and a **full-height vertical** glass
+  scrubber on the right that's kept visually identical to the bottom card (centered playhead, same
+  histogram and zoom scale) except it reads top→bottom now→past, so scrolling **up** goes back in time
+  (`ScrollableTimelineView` gained an `axis`). Everything else keeps the bottom card. See `decisions.md`
+  — only the iPhone-landscape snapshot baselines change and need re-recording.
 
 Package logic is covered by Swift Testing (~104 tests). The **Timeline screen** is covered by
 **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across iPhone +
