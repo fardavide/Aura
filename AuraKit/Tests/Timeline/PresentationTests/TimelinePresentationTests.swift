@@ -95,13 +95,100 @@ struct TimelineScreenViewModelTests {
         #expect(sut.clock.instant == sut.span.start)
     }
 
+    @Test func `given a ready timeline when refreshing then it re-queries with the span extended to now`() async {
+        // given
+        let clock = TestClock(at(1_000_000))
+        let timelineRepo = RecordingTimelineRepository(.success(emptyTimeline))
+        let sut = TimelineScreenViewModel(
+            getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        clock.value = at(1_000_030)
+
+        // when
+        await sut.refresh()
+
+        // then
+        #expect(sut.span.end == at(1_000_030))
+        #expect(timelineRepo.queriedRanges.last == TimeRange(start: sut.span.start, end: at(1_000_030)))
+        #expect(sut.span.start == at(1_000_000 - 2 * 86_400))
+    }
+
+    @Test func `given a refresh failure when refreshing then the last good timeline is kept`() async {
+        // given
+        let timelineRepo = RecordingTimelineRepository(.success(busyTimeline))
+        let sut = TimelineScreenViewModel(
+            getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { at(1_000_000) },
+            days: 2
+        )
+        await sut.load()
+        timelineRepo.result = .failure(.serverUnavailable)
+
+        // when
+        await sut.refresh()
+
+        // then
+        #expect(sut.state == .ready(cameras: [camera], timeline: busyTimeline))
+    }
+
+    @Test func `given a failed load when refreshing recovers then it becomes ready`() async {
+        // given
+        let timelineRepo = RecordingTimelineRepository(.failure(.unreachable))
+        let sut = TimelineScreenViewModel(
+            getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { at(1_000_000) },
+            days: 2
+        )
+        await sut.load()
+        #expect(sut.state == .failed(.unreachable))
+        timelineRepo.result = .success(busyTimeline)
+
+        // when
+        await sut.refresh()
+
+        // then
+        #expect(sut.state == .ready(cameras: [camera], timeline: busyTimeline))
+    }
+
+    @Test func `given a ready timeline at the live edge and not scrubbing then a refresh is due`() async {
+        let sut = makeViewModel(cameras: .success([camera]), timeline: .success(emptyTimeline))
+        await sut.load()
+        #expect(sut.shouldRefreshNow)
+    }
+
+    @Test func `given a scrub back into history then a refresh is suppressed`() async {
+        let sut = makeViewModel(cameras: .success([camera]), timeline: .success(emptyTimeline))
+        await sut.load()
+        sut.scrub(to: sut.span.start)
+        #expect(!sut.shouldRefreshNow)
+    }
+
+    @Test func `given an active scrub then a refresh is suppressed`() async {
+        let sut = makeViewModel(cameras: .success([camera]), timeline: .success(emptyTimeline))
+        await sut.load()
+        sut.clock.beginScrub()
+        #expect(!sut.shouldRefreshNow)
+    }
+
+    @Test func `given a failed state then a refresh is due so it can recover`() async {
+        let sut = makeViewModel(cameras: .success([camera]), timeline: .failure(.unreachable))
+        await sut.load()
+        #expect(sut.shouldRefreshNow)
+    }
+
     @Test func `given a loaded state when loadIfNeeded then it does not fetch again`() async {
         // given
         let cameras = CountingCamerasRepository(.success([camera]))
         let sut = TimelineScreenViewModel(
             getCameras: GetCameras(repository: cameras),
             getDayTimeline: GetDayTimeline(repository: FakeTimelineRepository(.success(emptyTimeline))),
-            now: at(1_000_000),
+            now: { at(1_000_000) },
             days: 2
         )
         await sut.load()
@@ -121,6 +208,7 @@ private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: s
 
 private let camera = Camera(name: CameraName("driveway"), friendlyName: "Driveway", isEnabled: true, streamNames: ["driveway"])
 private let emptyTimeline = DayTimeline(markers: [], motion: [], gaps: [])
+private let busyTimeline = DayTimeline(markers: [], motion: [MotionBucket(time: at(1_000), intensity: 80)], gaps: [])
 
 @MainActor
 private func makeViewModel(
@@ -130,9 +218,16 @@ private func makeViewModel(
     TimelineScreenViewModel(
         getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
         getDayTimeline: GetDayTimeline(repository: FakeTimelineRepository(timeline)),
-        now: at(1_000_000),
+        now: { at(1_000_000) },
         days: 2
     )
+}
+
+/// A mutable clock so a test can advance "now" between a load and a refresh.
+@MainActor
+private final class TestClock {
+    var value: Date
+    init(_ value: Date) { self.value = value }
 }
 
 private struct FakeCamerasRepository: CamerasRepository {
@@ -145,6 +240,17 @@ private struct FakeTimelineRepository: CameraDayTimelineRepository {
     let result: Result<DayTimeline, TimelineError>
     init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
     func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline { try result.get() }
+}
+
+@MainActor
+private final class RecordingTimelineRepository: CameraDayTimelineRepository {
+    var result: Result<DayTimeline, TimelineError>
+    private(set) var queriedRanges: [TimeRange] = []
+    init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
+    func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline {
+        queriedRanges.append(range)
+        return try result.get()
+    }
 }
 
 @MainActor

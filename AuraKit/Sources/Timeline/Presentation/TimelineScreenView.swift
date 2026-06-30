@@ -30,6 +30,7 @@ public struct TimelineScreenView: View {
                 #endif
         }
         .task { await viewModel.loadIfNeeded() }
+        .task { await viewModel.autoRefresh() }
     }
 
     @ViewBuilder private var content: some View {

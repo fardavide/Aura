@@ -56,6 +56,12 @@ struct ScrollableTimelineView: View {
                 let fraction = min(1, Swift.max(0, offsetX / contentWidth))
                 onScrub(span.start.addingTimeInterval(span.end.timeIntervalSince(span.start) * Double(fraction)))
             }
+            // Pause auto-refresh while the user is panning so a tick can't yank the histogram.
+            .onScrollPhaseChange { _, phase in
+                if phase == .idle { clock.endScrub() } else { clock.beginScrub() }
+            }
+            // Guard against isScrubbing getting stuck if the view disappears mid-deceleration.
+            .onDisappear { clock.endScrub() }
             .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {

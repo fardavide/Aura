@@ -85,6 +85,20 @@ overlays (review markers, motion strip, gaps) come from `/api/review`, `/api/rev
 on-device AVPlayer-vs-hls.js spike first; bound windows to ~1h for the nginx-vod segment cap). The
 current-hour `.webp` frame path is a follow-up (tiles show a placeholder for the live hour for now).
 
+### Live-edge auto-refresh, not pull-to-refresh
+The span was fixed at screen init, so new footage never appeared without an app restart. A periodic
+**quiet refresh** (every 30s, owned by the view's `.task`) re-fetches the day overlays against a span
+whose **end is extended to the present** while the **start stays fixed** — so the histogram grows at
+the live edge and tiles (keyed on `span.start`) don't reload/flash. The `now` source is injected as a
+closure (`@MainActor () -> Date`) so the span advance is deterministic in tests and snapshots. A tick
+only fires when it won't disturb the user (`shouldRefreshNow`): never mid-scrub, and over loaded
+content **only when parked at the live edge** (within a generous window) — historical footage doesn't
+change, so refreshing it is moot and would risk yanking a user inspecting the past. Over a failed
+screen it keeps retrying, so a dropped connection self-recovers. `ScrubClock.isScrubbing` — previously
+only set in tests — is now driven by the histogram's `onScrollPhaseChange`, making the mid-scrub guard
+real. Chose this over `.refreshable` (used by Cameras/Events) because the timeline is a scrub surface,
+not a list, and "track live" wants no gesture.
+
 ## Screenshot tests: app-hosted, `swift-snapshot-testing` (test-only)
 SwiftUI screenshot tests for the Timeline screen live in the **app-hosted `AuraTests` target**, not
 the `AuraKit` package. Reason (verified, not assumed): only an app-hosted target gives the tests a

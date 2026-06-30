@@ -90,7 +90,7 @@ func timelineScreen(
     let viewModel = TimelineScreenViewModel(
         getCameras: GetCameras(repository: FakeCameras(cameras)),
         getDayTimeline: GetDayTimeline(repository: FakeDayTimeline(timeline)),
-        now: snapshotNow,
+        now: { snapshotNow },
         days: snapshotDays
     )
     await viewModel.load()

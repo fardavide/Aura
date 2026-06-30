@@ -24,6 +24,10 @@
   cross-platform video/image wrapper was extracted into a shared **`CommonPlayer`** target.
   **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber → v0.1.7
   track polish: white inset + border, blue playhead, hatched no-footage, bars flush to bottom.)**
+  A **30s live-edge auto-refresh** (v0.1.8) keeps the histogram current without an app restart: it extends the
+  span end to the present (start fixed, so tiles don't reload) and only fires when parked at the live
+  edge and not scrubbing; a failed screen keeps retrying so a dropped connection self-recovers
+  (see `decisions.md`).
 
 Package logic is covered by Swift Testing (~104 tests). The **Timeline screen** is covered by
 **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across iPhone +
