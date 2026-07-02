@@ -60,6 +60,11 @@ let package = Package(
         .target(name: "CommonKeychain", path: "Sources/Common/Keychain"),
 
         .target(name: "CommonPlayer", path: "Sources/Common/Player"),
+        .testTarget(
+            name: "CommonPlayerTests",
+            dependencies: ["CommonPlayer"],
+            path: "Tests/Common/PlayerTests"
+        ),
 
         .target(
             name: "SettingsData",
