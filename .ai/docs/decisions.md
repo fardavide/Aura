@@ -69,8 +69,9 @@ The cross-platform player wrapper (`AVPlayerViewController` iOS / `AVPlayerView`
 target when the Timeline tiles needed the same bridge. Chosen over duplicating the `#if os` player
 (a third `PlatformImage` copy was about to appear). `CommonPlayer` holds `VideoPlayerView` (live,
 autoplay + PiP), `ScrubbingPlayerView` (externally-owned player, no PiP/controls, for scrub tiles),
-`makeAuthedPlayer`, and `platformImage`. It's infra-free — `VideoPlayerView` takes `url + headers`,
-not a domain type. Cameras/Events/Timeline presentation all depend on it.
+`makeAuthedPlayer`, `platformImage`, and the pinch-zoom gesture container with its clamped zoom/pan
+math (see the live-view digital-zoom decision). It's infra-free — `VideoPlayerView` takes
+`url + headers`, not a domain type. Cameras/Events/Timeline presentation all depend on it.
 
 ## Timeline: synced multi-cam preview-scrub grid (v0.1.4)
 A new `Timeline` feature vertical mirroring Frigate's Review "Motion" view. **One shared scrub clock**
@@ -178,3 +179,19 @@ re-record them locally before merging to `main` (the snapshot CI job gates). The
 snapshot config also **zeroes the safe area**, because the stock `iPhone13(.landscape)` config applies
 portrait-style notch/indicator insets that crush the usable height to a sliver — so the baseline now
 matches the on-device height.
+
+## Live view: digital pinch-zoom via a gesture container over the platform players
+Pinch-to-zoom + pan on the live camera detail is a SwiftUI **gesture container in `CommonPlayer`
+wrapped around the untouched platform players** — not a custom `AVPlayerLayer` host (which would
+forfeit `AVPlayerViewController`'s free PiP) and not per-platform recognizers. One platform-neutral
+implementation covers touch pinch (iOS) and trackpad magnify (macOS). The zoom/pan geometry is a
+**pure, clamped value type** — anchor-preserving magnify (1x–4x), pan bounded so the content edges
+never pull inside the viewport, double-tap toggling 1x↔2x at the tap point — unit-tested in the
+package (`CommonPlayerTests`, the target's first test suite); the gesture wiring stays thin and
+untested. All gestures attach as `simultaneousGesture` so the player's own tap-to-toggle-controls
+and PiP are never blocked, and because a pinch fires the magnify and drag gestures **together**,
+both cumulative values compose against one shared gesture-start baseline (not last-writer-wins,
+which jitters). Drag is inert at 1x so navigation swipe-back keeps working; a size change (rotation)
+re-clamps the offset through the same math. Fallback if SwiftUI gestures ever fail to reach through
+a hosted player view: recognizers in the platform wrappers' coordinators feeding the same math —
+not needed so far.

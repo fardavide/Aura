@@ -36,6 +36,14 @@
   (`ScrollableTimelineView` gained an `axis`). Everything else keeps the bottom card. See `decisions.md`
   — only the iPhone-landscape snapshot baselines change and need re-recording.
 
+- **Pinch-to-zoom on the live view.** Digital zoom + pan (1x–4x) on the live camera detail, both
+  platforms: pinch (touch / trackpad magnify) zooms about the pinch point, drag pans with the
+  content edges clamped to the viewport, double-tap toggles 1x↔2x at the tap point. A SwiftUI
+  gesture container in `CommonPlayer` wraps the untouched platform players (PiP and the player's
+  own controls unaffected — `simultaneousGesture`); the clamped zoom/pan math is a pure value type
+  unit-tested in the package. Gesture feel + PiP handback still need an on-device pass. See
+  `decisions.md`.
+
 Package logic is covered by Swift Testing (~104 tests). The **Timeline screen** is covered by
 **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across iPhone +
 iPad (portrait + landscape) × light + dark on the simulator — ready (busy / gappy / quiet), empty,

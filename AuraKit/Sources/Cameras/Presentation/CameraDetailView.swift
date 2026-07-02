@@ -21,9 +21,11 @@ public struct CameraDetailView: View {
     @ViewBuilder private var content: some View {
         switch viewModel.state {
         case .playing(let source):
-            VideoPlayerView(url: source.url, headers: source.headers)
-                .background(.black)
-                .ignoresSafeArea()
+            ZoomableContainer {
+                VideoPlayerView(url: source.url, headers: source.headers)
+            }
+            .background(.black)
+            .ignoresSafeArea()
         case .unavailable:
             ContentUnavailableView(
                 "No live stream",
