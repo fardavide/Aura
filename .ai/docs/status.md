@@ -36,7 +36,7 @@
   (`ScrollableTimelineView` gained an `axis`). Everything else keeps the bottom card. See `decisions.md`
   — only the iPhone-landscape snapshot baselines change and need re-recording.
 
-- **Pinch-to-zoom on the live view.** Digital zoom + pan (1x–4x) on the live camera detail, both
+- **Pinch-to-zoom on the live view (v0.1.10).** Digital zoom + pan (1x–4x) on the live camera detail, both
   platforms: pinch (touch / trackpad magnify) zooms about the pinch point, drag pans with the
   content edges clamped to the viewport, double-tap toggles 1x↔2x at the tap point. A SwiftUI
   gesture container in `CommonPlayer` wraps the untouched platform players (PiP and the player's
