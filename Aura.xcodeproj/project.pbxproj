@@ -20,19 +20,11 @@
 			remoteGlobalIDString = 6B7EB1C02FEEAB19003A9A9A;
 			remoteInfo = Aura;
 		};
-		6B7EB1D92FEEAB1A003A9A9A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 6B7EB1B92FEEAB19003A9A9A /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 6B7EB1C02FEEAB19003A9A9A;
-			remoteInfo = Aura;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		6B7EB1C12FEEAB19003A9A9A /* Aura.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aura.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B7EB1CE2FEEAB1A003A9A9A /* AuraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AuraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		6B7EB1D82FEEAB1A003A9A9A /* AuraUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AuraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -44,11 +36,6 @@
 		6B7EB1D12FEEAB1A003A9A9A /* AuraTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = AuraTests;
-			sourceTree = "<group>";
-		};
-		6B7EB1DB2FEEAB1A003A9A9A /* AuraUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AuraUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -71,13 +58,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6B7EB1D52FEEAB1A003A9A9A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -86,7 +66,6 @@
 			children = (
 				6B7EB1C32FEEAB19003A9A9A /* Aura */,
 				6B7EB1D12FEEAB1A003A9A9A /* AuraTests */,
-				6B7EB1DB2FEEAB1A003A9A9A /* AuraUITests */,
 				6B7EB1C22FEEAB19003A9A9A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -96,7 +75,6 @@
 			children = (
 				6B7EB1C12FEEAB19003A9A9A /* Aura.app */,
 				6B7EB1CE2FEEAB1A003A9A9A /* AuraTests.xctest */,
-				6B7EB1D82FEEAB1A003A9A9A /* AuraUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -152,29 +130,6 @@
 			productReference = 6B7EB1CE2FEEAB1A003A9A9A /* AuraTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		6B7EB1D72FEEAB1A003A9A9A /* AuraUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 6B7EB1E82FEEAB1A003A9A9A /* Build configuration list for PBXNativeTarget "AuraUITests" */;
-			buildPhases = (
-				6B7EB1D42FEEAB1A003A9A9A /* Sources */,
-				6B7EB1D52FEEAB1A003A9A9A /* Frameworks */,
-				6B7EB1D62FEEAB1A003A9A9A /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				6B7EB1DA2FEEAB1A003A9A9A /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				6B7EB1DB2FEEAB1A003A9A9A /* AuraUITests */,
-			);
-			name = AuraUITests;
-			packageProductDependencies = (
-			);
-			productName = AuraUITests;
-			productReference = 6B7EB1D82FEEAB1A003A9A9A /* AuraUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -189,10 +144,6 @@
 						CreatedOnToolsVersion = 26.5;
 					};
 					6B7EB1CD2FEEAB1A003A9A9A = {
-						CreatedOnToolsVersion = 26.5;
-						TestTargetID = 6B7EB1C02FEEAB19003A9A9A;
-					};
-					6B7EB1D72FEEAB1A003A9A9A = {
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = 6B7EB1C02FEEAB19003A9A9A;
 					};
@@ -218,7 +169,6 @@
 			targets = (
 				6B7EB1C02FEEAB19003A9A9A /* Aura */,
 				6B7EB1CD2FEEAB1A003A9A9A /* AuraTests */,
-				6B7EB1D72FEEAB1A003A9A9A /* AuraUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -232,13 +182,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6B7EB1CC2FEEAB1A003A9A9A /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		6B7EB1D62FEEAB1A003A9A9A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -262,13 +205,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6B7EB1D42FEEAB1A003A9A9A /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -276,11 +212,6 @@
 			isa = PBXTargetDependency;
 			target = 6B7EB1C02FEEAB19003A9A9A /* Aura */;
 			targetProxy = 6B7EB1CF2FEEAB1A003A9A9A /* PBXContainerItemProxy */;
-		};
-		6B7EB1DA2FEEAB1A003A9A9A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 6B7EB1C02FEEAB19003A9A9A /* Aura */;
-			targetProxy = 6B7EB1D92FEEAB1A003A9A9A /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -549,56 +480,6 @@
 			};
 			name = Release;
 		};
-		6B7EB1E92FEEAB1A003A9A9A /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
-				DEVELOPMENT_TEAM = A7Q83J6LR4;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 0.1.10;
-				PRODUCT_BUNDLE_IDENTIFIER = fardavide.AuraUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Aura;
-				XROS_DEPLOYMENT_TARGET = 26.5;
-			};
-			name = Debug;
-		};
-		6B7EB1EA2FEEAB1A003A9A9A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
-				DEVELOPMENT_TEAM = A7Q83J6LR4;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 0.1.10;
-				PRODUCT_BUNDLE_IDENTIFIER = fardavide.AuraUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Aura;
-				XROS_DEPLOYMENT_TARGET = 26.5;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -625,15 +506,6 @@
 			buildConfigurations = (
 				6B7EB1E62FEEAB1A003A9A9A /* Debug */,
 				6B7EB1E72FEEAB1A003A9A9A /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		6B7EB1E82FEEAB1A003A9A9A /* Build configuration list for PBXNativeTarget "AuraUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				6B7EB1E92FEEAB1A003A9A9A /* Debug */,
-				6B7EB1EA2FEEAB1A003A9A9A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

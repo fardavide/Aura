@@ -195,3 +195,17 @@ which jitters). Drag is inert at 1x so navigation swipe-back keeps working; a si
 re-clamps the offset through the same math. Fallback if SwiftUI gestures ever fail to reach through
 a hosted player view: recognizers in the platform wrappers' coordinators feeding the same math —
 not needed so far.
+
+## No XCUITest target — removed the template `AuraUITests`
+The `AuraUITests` target (untouched Xcode-template boilerplate: `testExample`,
+`testLaunchPerformance`, `testLaunch` — no real assertions) was deleted from the project and the
+shared scheme. On Xcode Cloud's **macOS** test action all three failed with *"Failed to activate
+application … (current state: Running Background)"* — a documented headless-runner limitation
+(XCUITest must bring the app frontmost, and the runner has no foreground GUI session; Apple
+Developer Forums threads 695583 / 721005 / 748570), not an app bug. The tests added no coverage
+worth keeping: launch-crash detection already comes free from the app-hosted `AuraTests` suite
+(its 6 tests can only run if the `Aura` host app launches, on both platforms), and screen
+rendering is covered by the snapshot suite. Skipping via `XCTSkip` on macOS was rejected — it
+would keep dead XCTest code (the project tests with Swift Testing) for zero remaining value.
+If real UI-flow tests are ever wanted, add a fresh target then; don't expect XCUITest activation
+to work on hosted macOS runners.
