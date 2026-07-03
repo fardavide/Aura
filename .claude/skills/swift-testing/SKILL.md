@@ -76,20 +76,31 @@ Group with `// MARK:`.
 
 ## Handwritten fakes, never mocking frameworks
 
-There is no mocking framework and we don't add one. Write `FakeXxx` types conforming
-to the domain protocol, with observable state and invocation tracking:
+There is no mocking framework and we don't add one. Every double is a `FakeXxx` class named
+after the protocol it implements — never `Stub-`, `Mock-`, `No-`, or `Empty-` — configurable
+through its initializer, with invocation tracking added only when a test asserts on it:
 
 ```swift
-final class FakeCamerasRepository: CamerasRepository {
-    var result: Result<[Camera], CamerasError> = .success([])
-    private(set) var camerasCallCount = 0
+public final class FakeCamerasRepository: CamerasRepository, @unchecked Sendable {
+    public var result: Result<[Camera], CamerasError>
+    public private(set) var fetchCount = 0
 
-    func cameras() async throws(CamerasError) -> [Camera] {
-        camerasCallCount += 1
+    public init(_ result: Result<[Camera], CamerasError>) { self.result = result }
+
+    public func cameras() async throws(CamerasError) -> [Camera] {
+        fetchCount += 1
         return try result.get()
     }
 }
 ```
+
+**Fakes live in the shared `TestDoubles` package target** (`AuraKit/Tests/TestDoubles`, one
+file per fake, all `public`) — exported as a **test-only** library product that the package
+test targets and the app-hosted `AuraTests` both import; it is deliberately not part of the
+`AuraKit` product, so it never links into the app. Don't declare a private double inside a
+test file — reuse or extend the shared fake. Exception: a fake for an *internal* protocol
+(e.g. the Timeline preview scrubber) stays private in the owning feature's test target,
+because the shared target can't see the protocol.
 
 (See the global `test-doubles` skill for the fake conventions.)
 

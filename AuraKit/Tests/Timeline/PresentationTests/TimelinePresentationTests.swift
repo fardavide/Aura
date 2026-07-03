@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 import CamerasDomain
+import TestDoubles
 import TimelineDomain
 @testable import TimelinePresentation
 
@@ -27,14 +28,14 @@ struct ScrubClockTests {
 struct PreviewTileControllerTests {
 
     @Test func `given an idle controller when scrubbing then it seeks immediately`() {
-        let scrubber = FakeScrubber()
+        let scrubber = FakePreviewScrubber()
         let sut = PreviewTileController(scrubber: scrubber, tolerance: 0.5)
         sut.scrub(to: at(10))
         #expect(scrubber.targets == [at(10)])
     }
 
     @Test func `given scrubs while seeking when it completes then only the latest is applied`() {
-        let scrubber = FakeScrubber()
+        let scrubber = FakePreviewScrubber()
         let sut = PreviewTileController(scrubber: scrubber, tolerance: 0.5)
         sut.scrub(to: at(10))   // seeks 10
         sut.scrub(to: at(20))   // coalesced
@@ -44,7 +45,7 @@ struct PreviewTileControllerTests {
     }
 
     @Test func `given a pending target within tolerance when it completes then it is not re-applied`() {
-        let scrubber = FakeScrubber()
+        let scrubber = FakePreviewScrubber()
         let sut = PreviewTileController(scrubber: scrubber, tolerance: 0.5)
         sut.scrub(to: at(10))
         sut.scrub(to: at(10.2))   // within 0.5s of the applied target
@@ -53,7 +54,7 @@ struct PreviewTileControllerTests {
     }
 
     @Test func `given no pending when it completes then a later scrub seeks again`() {
-        let scrubber = FakeScrubber()
+        let scrubber = FakePreviewScrubber()
         let sut = PreviewTileController(scrubber: scrubber, tolerance: 0.5)
         sut.scrub(to: at(10))
         scrubber.complete()
@@ -98,7 +99,7 @@ struct TimelineScreenViewModelTests {
     @Test func `given a ready timeline when refreshing then it re-queries with the span extended to now`() async {
         // given
         let clock = TestClock(at(1_000_000))
-        let timelineRepo = RecordingTimelineRepository(.success(emptyTimeline))
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
         let sut = TimelineScreenViewModel(
             getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
@@ -119,7 +120,7 @@ struct TimelineScreenViewModelTests {
 
     @Test func `given a refresh failure when refreshing then the last good timeline is kept`() async {
         // given
-        let timelineRepo = RecordingTimelineRepository(.success(busyTimeline))
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(busyTimeline))
         let sut = TimelineScreenViewModel(
             getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
@@ -138,7 +139,7 @@ struct TimelineScreenViewModelTests {
 
     @Test func `given a failed load when refreshing recovers then it becomes ready`() async {
         // given
-        let timelineRepo = RecordingTimelineRepository(.failure(.unreachable))
+        let timelineRepo = FakeCameraDayTimelineRepository(.failure(.unreachable))
         let sut = TimelineScreenViewModel(
             getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
@@ -184,10 +185,10 @@ struct TimelineScreenViewModelTests {
 
     @Test func `given a loaded state when loadIfNeeded then it does not fetch again`() async {
         // given
-        let cameras = CountingCamerasRepository(.success([camera]))
+        let cameras = FakeCamerasRepository(.success([camera]))
         let sut = TimelineScreenViewModel(
             getCameras: GetCameras(repository: cameras),
-            getDayTimeline: GetDayTimeline(repository: FakeTimelineRepository(.success(emptyTimeline))),
+            getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { at(1_000_000) },
             days: 2
         )
@@ -217,7 +218,7 @@ private func makeViewModel(
 ) -> TimelineScreenViewModel {
     TimelineScreenViewModel(
         getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
-        getDayTimeline: GetDayTimeline(repository: FakeTimelineRepository(timeline)),
+        getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(timeline)),
         now: { at(1_000_000) },
         days: 2
     )
@@ -230,42 +231,8 @@ private final class TestClock {
     init(_ value: Date) { self.value = value }
 }
 
-private struct FakeCamerasRepository: CamerasRepository {
-    let result: Result<[Camera], CamerasError>
-    init(_ result: Result<[Camera], CamerasError>) { self.result = result }
-    func cameras() async throws(CamerasError) -> [Camera] { try result.get() }
-}
-
-private struct FakeTimelineRepository: CameraDayTimelineRepository {
-    let result: Result<DayTimeline, TimelineError>
-    init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
-    func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline { try result.get() }
-}
-
 @MainActor
-private final class RecordingTimelineRepository: CameraDayTimelineRepository {
-    var result: Result<DayTimeline, TimelineError>
-    private(set) var queriedRanges: [TimeRange] = []
-    init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
-    func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline {
-        queriedRanges.append(range)
-        return try result.get()
-    }
-}
-
-@MainActor
-private final class CountingCamerasRepository: CamerasRepository {
-    private let result: Result<[Camera], CamerasError>
-    private(set) var fetchCount = 0
-    init(_ result: Result<[Camera], CamerasError>) { self.result = result }
-    func cameras() async throws(CamerasError) -> [Camera] {
-        fetchCount += 1
-        return try result.get()
-    }
-}
-
-@MainActor
-private final class FakeScrubber: PreviewScrubber {
+private final class FakePreviewScrubber: PreviewScrubber {
     private(set) var targets: [Date] = []
     private var completion: (@MainActor () -> Void)?
 

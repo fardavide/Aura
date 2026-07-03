@@ -3,6 +3,7 @@ import Testing
 
 import CamerasDomain
 import EventsDomain
+import TestDoubles
 @testable import EventsPresentation
 
 @MainActor
@@ -28,10 +29,10 @@ struct EventsListViewModelTests {
 
     @Test func `given a loaded state when loading again then the fresh content is shown`() async {
         // given
-        let repository = StubEventsRepository(.success([event("ev1")]))
+        let repository = FakeEventsRepository(.success([event("ev1")]))
         let sut = EventsListViewModel(
             getEvents: GetEvents(repository: repository),
-            thumbnailLoader: StubThumbnailLoader()
+            thumbnailLoader: FakeEventThumbnailLoader()
         )
         await sut.load()
 
@@ -45,10 +46,10 @@ struct EventsListViewModelTests {
 
     @Test func `given a loaded state when a refresh fails then the last good content is kept`() async {
         // given
-        let repository = StubEventsRepository(.success([event("ev1")]))
+        let repository = FakeEventsRepository(.success([event("ev1")]))
         let sut = EventsListViewModel(
             getEvents: GetEvents(repository: repository),
-            thumbnailLoader: StubThumbnailLoader()
+            thumbnailLoader: FakeEventThumbnailLoader()
         )
         await sut.load()
 
@@ -65,19 +66,19 @@ struct EventsListViewModelTests {
 struct EventDetailViewModelTests {
 
     @Test func `given an event with no clip then it is unavailable`() {
-        let sut = EventDetailViewModel(event: event("ev1", hasClip: false), clipLoader: StubClipLoader(nil))
+        let sut = EventDetailViewModel(event: event("ev1", hasClip: false), clipLoader: FakeEventClipLoader(nil))
         #expect(sut.state == .unavailable)
     }
 
     @Test func `given a clip when loading then it becomes ready`() async {
-        let sut = EventDetailViewModel(event: event("ev1"), clipLoader: StubClipLoader(Data([0x01, 0x02])))
+        let sut = EventDetailViewModel(event: event("ev1"), clipLoader: FakeEventClipLoader(Data([0x01, 0x02])))
         await sut.load()
         #expect(sut.state == .ready(Data([0x01, 0x02])))
         #expect(sut.title == "person")
     }
 
     @Test func `given a failing download when loading then it fails`() async {
-        let sut = EventDetailViewModel(event: event("ev1"), clipLoader: StubClipLoader(nil))
+        let sut = EventDetailViewModel(event: event("ev1"), clipLoader: FakeEventClipLoader(nil))
         await sut.load()
         #expect(sut.state == .failed)
     }
@@ -88,8 +89,8 @@ struct EventDetailViewModelTests {
 @MainActor
 private func makeViewModel(_ result: Result<[Event], EventsError>) -> EventsListViewModel {
     EventsListViewModel(
-        getEvents: GetEvents(repository: StubEventsRepository(result)),
-        thumbnailLoader: StubThumbnailLoader()
+        getEvents: GetEvents(repository: FakeEventsRepository(result)),
+        thumbnailLoader: FakeEventThumbnailLoader()
     )
 }
 
@@ -99,20 +100,4 @@ private func event(_ id: String, hasClip: Bool = true) -> Event {
         startTime: Date(timeIntervalSince1970: 1), endTime: nil,
         hasClip: hasClip, hasSnapshot: true, score: nil, zones: []
     )
-}
-
-private final class StubEventsRepository: EventsRepository, @unchecked Sendable {
-    var result: Result<[Event], EventsError>
-    init(_ result: Result<[Event], EventsError>) { self.result = result }
-    func events(limit: Int) async throws(EventsError) -> [Event] { try result.get() }
-}
-
-private final class StubThumbnailLoader: EventThumbnailLoading, @unchecked Sendable {
-    func thumbnail(for event: EventId) async -> Data? { nil }
-}
-
-private final class StubClipLoader: EventClipLoading, @unchecked Sendable {
-    private let data: Data?
-    init(_ data: Data?) { self.data = data }
-    func downloadClip(for event: Event) async -> Data? { data }
 }

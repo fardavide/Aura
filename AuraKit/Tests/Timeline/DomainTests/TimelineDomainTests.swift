@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 import CamerasDomain
+import TestDoubles
 @testable import TimelineDomain
 
 struct TimeRangeTests {
@@ -44,12 +45,12 @@ struct GetDayTimelineTests {
 
     @Test func `given a repository when executing then it returns the day timeline`() async throws {
         let timeline = DayTimeline(markers: [], motion: [], gaps: [])
-        let sut = GetDayTimeline(repository: FakeTimelineRepository(.success(timeline)))
+        let sut = GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(timeline)))
         #expect(try await sut.execute(in: window) == timeline)
     }
 
     @Test func `given a failing repository when executing then it propagates the error`() async {
-        let sut = GetDayTimeline(repository: FakeTimelineRepository(.failure(.serverUnavailable)))
+        let sut = GetDayTimeline(repository: FakeCameraDayTimelineRepository(.failure(.serverUnavailable)))
         await #expect(throws: TimelineError.serverUnavailable) { try await sut.execute(in: window) }
     }
 }
@@ -58,14 +59,14 @@ struct GetCameraPreviewsTests {
 
     @Test func `given a provider when fetching clips then it forwards them`() async throws {
         let clip = PreviewClip(camera: CameraName("drive"), range: TimeRange(start: at(0), end: at(60)), path: "/p.mp4")
-        let sut = GetCameraPreviews(provider: FakePreviewProvider(stubClips: [clip]))
+        let sut = GetCameraPreviews(provider: FakeCameraPreviewProvider(clips: [clip]))
         #expect(try await sut.clips(for: CameraName("drive"), in: window) == [clip])
     }
 
     @Test func `given a clip when resolving its source then it forwards the provider source`() {
         let clip = PreviewClip(camera: CameraName("drive"), range: TimeRange(start: at(0), end: at(60)), path: "/p.mp4")
         let source = CameraStreamSource(url: URL(string: "http://h/p.mp4")!, headers: ["Authorization": "x"])
-        let sut = GetCameraPreviews(provider: FakePreviewProvider(stubSource: source))
+        let sut = GetCameraPreviews(provider: FakeCameraPreviewProvider(source: source))
         #expect(sut.clipSource(clip) == source)
     }
 }
@@ -75,18 +76,3 @@ struct GetCameraPreviewsTests {
 private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
 
 private let window = TimeRange(start: at(0), end: at(100))
-
-private struct FakeTimelineRepository: CameraDayTimelineRepository {
-    let result: Result<DayTimeline, TimelineError>
-    init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
-    func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline { try result.get() }
-}
-
-private struct FakePreviewProvider: CameraPreviewProviding {
-    var stubClips: [PreviewClip] = []
-    var stubFrames: [PreviewFrame] = []
-    var stubSource = CameraStreamSource(url: URL(string: "http://h")!, headers: [:])
-    func clips(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewClip] { stubClips }
-    func frames(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewFrame] { stubFrames }
-    func clipSource(_ clip: PreviewClip) -> CameraStreamSource { stubSource }
-}

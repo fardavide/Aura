@@ -3,6 +3,7 @@ import Testing
 
 import SettingsDomain
 import SettingsPresentation
+import TestDoubles
 
 /// Screenshot tests for the Settings screen across its states, captured on every device +
 /// orientation (iOS). The screen is fully synchronous (no network, no dates): the fake
@@ -20,6 +21,10 @@ struct SettingsSnapshotTests {
         assertScreenSnapshot(SettingsView(viewModel: viewModel, onDone: {}), named: "first-run")
     }
 
+    // The password SecureField renders BLANK in the reference on purpose: iOS excludes
+    // isSecureTextEntry content from window-hierarchy captures (the drawHierarchyInKeyWindow
+    // path this suite needs for Liquid Glass). Verified against a plain layer-rendering probe,
+    // which shows the seven bullets.
     @Test func `given a saved connection when shown then it matches the reference`() {
         // given
         let viewModel = settingsViewModel(
@@ -54,22 +59,11 @@ struct SettingsSnapshotTests {
 /// wiring the composition root does over the real UserDefaults + Keychain repository.
 @MainActor
 private func settingsViewModel(connection: ConnectionSettings?, theme: ThemePreference) -> SettingsViewModel {
-    let repository = FakeSettings(connection: connection, theme: theme)
+    let repository = FakeSettingsRepository(connection: connection, theme: theme)
     return SettingsViewModel(
         loadConnection: LoadConnection(repository: repository),
         saveConnection: SaveConnection(repository: repository),
         loadTheme: LoadTheme(repository: repository),
         saveTheme: SaveTheme(repository: repository)
     )
-}
-
-// MARK: - Fakes
-
-private struct FakeSettings: SettingsRepository {
-    let connection: ConnectionSettings?
-    let theme: ThemePreference
-    func loadConnection() -> ConnectionSettings? { connection }
-    func saveConnection(_ settings: ConnectionSettings) {}
-    func loadTheme() -> ThemePreference { theme }
-    func saveTheme(_ theme: ThemePreference) {}
 }

@@ -2,16 +2,17 @@ import Foundation
 import Testing
 
 import CamerasDomain
+import TestDoubles
 @testable import EventsDomain
 
 struct GetEventsTests {
 
     @Test func `when getting events then they are newest first`() async throws {
         // given
-        let sut = GetEvents(repository: StubEventsRepository([
+        let sut = GetEvents(repository: FakeEventsRepository(.success([
             event("older", at: 100),
             event("newer", at: 200),
-        ]))
+        ])))
 
         // when
         let result = try await sut.execute(limit: 10)
@@ -34,10 +35,4 @@ private func event(_ id: String, at epoch: TimeInterval) -> Event {
         score: nil,
         zones: []
     )
-}
-
-private final class StubEventsRepository: EventsRepository, @unchecked Sendable {
-    private let stubbed: [Event]
-    init(_ stubbed: [Event]) { self.stubbed = stubbed }
-    func events(limit: Int) async throws(EventsError) -> [Event] { stubbed }
 }
