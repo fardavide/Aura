@@ -125,6 +125,24 @@ the app sandbox disabled for the test host to write references.) Don't retry mac
 fundamentally different renderer. Known iOS limit: camera tiles can't show live video in a snapshot, so
 they render the `unavailable` placeholder.
 
+Coverage was later extended beyond Timeline to the **Cameras grid, Events list, and Settings** screens
+(loaded/empty/failed; first-run/saved/error for Settings), through the same matrix runner (renamed
+`assertScreenSnapshot` — reference file names derive from the call-site test, so the rename didn't
+invalidate baselines). Recording surfaced two things. (1) The grid/list self-load flashed a full-screen spinner on every
+re-appearance: `.task { load() }` reset state to `.loading` before fetching, so the first baselines
+captured the spinner — and real tab switches flashed it too. The fix is a **refresh-in-place `load()`**
+(chosen over Timeline's skip-if-loaded `loadIfNeeded()`, so content also stays fresh): only the very
+first load shows the spinner (the initial state), a re-appearance re-fetches behind the current
+content, and a failed refresh keeps the last good content instead of a full-screen error — both
+behaviors unit-tested in the package.
+(2) The reference PNGs must be **excluded from the test bundle**: the synchronized `AuraTests` group
+copies every file as a flattened resource, and suites that reuse the same given/when/then test names
+produce identically-named PNGs → "Multiple commands produce". The fix is `explicitFolders` +
+`membershipExceptions` for `__Snapshots__` on the synchronized group — a folder path in
+`membershipExceptions` alone does nothing; the folder must first be an explicit folder reference to be
+excludable as one node. Nothing is lost: `swift-snapshot-testing` reads references from the source tree
+via `#filePath`, never from the bundle.
+
 ## CI: GitHub Actions, jobs split by determinism
 CI runs on **GitHub-hosted `macos-26`** (Apple Silicon; ships the Xcode 26.x line). Each job selects
 the newest installed Xcode 26 explicitly (`xcode-select` on the highest-versioned `Xcode_26*.app`) —

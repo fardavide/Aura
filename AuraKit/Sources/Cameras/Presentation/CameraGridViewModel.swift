@@ -23,12 +23,15 @@ public final class CameraGridViewModel {
         self.imageLoader = imageLoader
     }
 
+    /// Fetches and replaces the content. Only the very first load shows the full-screen spinner
+    /// (the initial state): a re-appearance re-fetches behind the current content, and a failed
+    /// refresh keeps the last good content instead of swapping it for a full-screen error.
     public func load() async {
-        state = .loading
         do {
             let cameras = try await getCameras.execute()
             state = cameras.isEmpty ? .empty : .loaded(cameras)
         } catch {
+            if case .loaded = state { return }
             state = .failed(error)
         }
     }
