@@ -34,35 +34,3 @@ extension ServerConfig {
         password: nil
     )
 }
-
-/// Canned `HttpClient` for repository tests — records the request and replays a stubbed outcome.
-final class FakeHttpClient: HttpClient, @unchecked Sendable {
-    enum Outcome {
-        case response(status: Int, body: Data)
-        case failure(any Error)
-    }
-
-    private let outcome: Outcome
-    private(set) var lastRequest: URLRequest?
-
-    init(_ outcome: Outcome) {
-        self.outcome = outcome
-    }
-
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        lastRequest = request
-        switch outcome {
-        case let .response(status, body):
-            let url = request.url ?? URL(string: "http://frigate.test")!
-            let response = HTTPURLResponse(
-                url: url,
-                statusCode: status,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (body, response)
-        case let .failure(error):
-            throw error
-        }
-    }
-}

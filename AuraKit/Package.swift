@@ -16,12 +16,27 @@ let package = Package(
                 "TimelineDomain", "TimelineData", "TimelinePresentation",
             ]
         ),
+        // Test-only, like swift-snapshot-testing: linked by the app-hosted AuraTests target,
+        // never by the app (it is deliberately not part of the "AuraKit" product above).
+        .library(name: "TestDoubles", targets: ["TestDoubles"]),
     ],
     targets: [
+        // Shared handwritten fakes (one public Fake per domain protocol) used by every test
+        // target below and by the app-hosted snapshot tests. Not a test target so it can be
+        // exported as a product; contains no tests.
+        .target(
+            name: "TestDoubles",
+            dependencies: [
+                "CamerasDomain", "EventsDomain", "SettingsDomain", "TimelineDomain",
+                "CommonNetwork", "CommonKeychain",
+            ],
+            path: "Tests/TestDoubles"
+        ),
+
         .target(name: "CamerasDomain", path: "Sources/Cameras/Domain"),
         .testTarget(
             name: "CamerasDomainTests",
-            dependencies: ["CamerasDomain"],
+            dependencies: ["CamerasDomain", "TestDoubles"],
             path: "Tests/Cameras/DomainTests"
         ),
 
@@ -46,14 +61,14 @@ let package = Package(
         ),
         .testTarget(
             name: "CamerasDataTests",
-            dependencies: ["CamerasData", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            dependencies: ["CamerasData", "CamerasDomain", "CommonFrigate", "CommonNetwork", "TestDoubles"],
             path: "Tests/Cameras/DataTests"
         ),
 
         .target(name: "SettingsDomain", path: "Sources/Settings/Domain"),
         .testTarget(
             name: "SettingsDomainTests",
-            dependencies: ["SettingsDomain"],
+            dependencies: ["SettingsDomain", "TestDoubles"],
             path: "Tests/Settings/DomainTests"
         ),
 
@@ -73,7 +88,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SettingsDataTests",
-            dependencies: ["SettingsData", "SettingsDomain", "CommonKeychain"],
+            dependencies: ["SettingsData", "SettingsDomain", "CommonKeychain", "TestDoubles"],
             path: "Tests/Settings/DataTests"
         ),
 
@@ -84,7 +99,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CamerasPresentationTests",
-            dependencies: ["CamerasPresentation", "CamerasDomain"],
+            dependencies: ["CamerasPresentation", "CamerasDomain", "TestDoubles"],
             path: "Tests/Cameras/PresentationTests"
         ),
 
@@ -95,7 +110,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SettingsPresentationTests",
-            dependencies: ["SettingsPresentation", "SettingsDomain"],
+            dependencies: ["SettingsPresentation", "SettingsDomain", "TestDoubles"],
             path: "Tests/Settings/PresentationTests"
         ),
 
@@ -106,7 +121,7 @@ let package = Package(
         ),
         .testTarget(
             name: "EventsDomainTests",
-            dependencies: ["EventsDomain", "CamerasDomain"],
+            dependencies: ["EventsDomain", "CamerasDomain", "TestDoubles"],
             path: "Tests/Events/DomainTests"
         ),
 
@@ -117,7 +132,7 @@ let package = Package(
         ),
         .testTarget(
             name: "EventsDataTests",
-            dependencies: ["EventsData", "EventsDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            dependencies: ["EventsData", "EventsDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork", "TestDoubles"],
             path: "Tests/Events/DataTests"
         ),
 
@@ -128,7 +143,7 @@ let package = Package(
         ),
         .testTarget(
             name: "EventsPresentationTests",
-            dependencies: ["EventsPresentation", "EventsDomain", "CamerasDomain"],
+            dependencies: ["EventsPresentation", "EventsDomain", "CamerasDomain", "TestDoubles"],
             path: "Tests/Events/PresentationTests"
         ),
 
@@ -139,7 +154,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TimelineDomainTests",
-            dependencies: ["TimelineDomain", "CamerasDomain"],
+            dependencies: ["TimelineDomain", "CamerasDomain", "TestDoubles"],
             path: "Tests/Timeline/DomainTests"
         ),
 
@@ -150,7 +165,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TimelineDataTests",
-            dependencies: ["TimelineData", "TimelineDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            dependencies: ["TimelineData", "TimelineDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork", "TestDoubles"],
             path: "Tests/Timeline/DataTests"
         ),
 
@@ -161,7 +176,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TimelinePresentationTests",
-            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain"],
+            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "TestDoubles"],
             path: "Tests/Timeline/PresentationTests"
         ),
     ],

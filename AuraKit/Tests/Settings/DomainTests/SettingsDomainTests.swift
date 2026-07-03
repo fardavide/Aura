@@ -1,5 +1,6 @@
 import Testing
 
+import TestDoubles
 @testable import SettingsDomain
 
 struct SaveConnectionTests {
@@ -81,14 +82,4 @@ struct ThemeUseCaseTests {
 
 private func settings(host: String, port: Int) -> ConnectionSettings {
     ConnectionSettings(scheme: .http, host: host, port: port, username: nil, password: nil)
-}
-
-private final class FakeSettingsRepository: SettingsRepository, @unchecked Sendable {
-    var savedConnection: ConnectionSettings?
-    var savedTheme: ThemePreference = .system
-
-    func loadConnection() -> ConnectionSettings? { savedConnection }
-    func saveConnection(_ settings: ConnectionSettings) { savedConnection = settings }
-    func loadTheme() -> ThemePreference { savedTheme }
-    func saveTheme(_ theme: ThemePreference) { savedTheme = theme }
 }

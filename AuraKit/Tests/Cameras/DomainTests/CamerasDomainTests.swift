@@ -1,5 +1,6 @@
 import Testing
 
+import TestDoubles
 @testable import CamerasDomain
 
 struct CamerasDomainTests {
@@ -27,10 +28,10 @@ struct CamerasDomainTests {
 
     @Test func `given a disabled camera when getting cameras then it is excluded`() async throws {
         // given
-        let getCameras = GetCameras(repository: StubCamerasRepository([
+        let getCameras = GetCameras(repository: FakeCamerasRepository(.success([
             camera("driveway", isEnabled: true),
             camera("garage", isEnabled: false),
-        ]))
+        ])))
 
         // when
         let result = try await getCameras.execute()
@@ -44,8 +45,3 @@ private func camera(_ name: String, isEnabled: Bool) -> Camera {
     Camera(name: CameraName(name), friendlyName: nil, isEnabled: isEnabled, streamNames: [])
 }
 
-private final class StubCamerasRepository: CamerasRepository {
-    private let stubbed: [Camera]
-    init(_ stubbed: [Camera]) { self.stubbed = stubbed }
-    func cameras() async throws(CamerasError) -> [Camera] { stubbed }
-}

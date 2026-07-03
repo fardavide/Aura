@@ -5,6 +5,7 @@ import Testing
 import CamerasDomain
 import EventsDomain
 import EventsPresentation
+import TestDoubles
 
 /// Screenshot tests for the events list screen across its states, captured on every device +
 /// orientation (iOS). Row thumbnails are pinned to the placeholder; event times are fixed
@@ -86,32 +87,15 @@ private func snapshotEvents() -> [Event] {
 @MainActor
 private func eventsListScreen(events: Result<[Event], EventsError>) async -> some View {
     let viewModel = EventsListViewModel(
-        getEvents: GetEvents(repository: FakeEvents(events)),
-        thumbnailLoader: NoThumbnails()
+        getEvents: GetEvents(repository: FakeEventsRepository(events)),
+        thumbnailLoader: FakeEventThumbnailLoader()
     )
     await viewModel.load()
 
     return EventsListView(
         viewModel: viewModel,
         onOpenSettings: {},
-        makeDetailViewModel: { EventDetailViewModel(event: $0, clipLoader: NoClips()) }
+        // Unused: the detail factory is never invoked in a list snapshot (no navigation happens).
+        makeDetailViewModel: { EventDetailViewModel(event: $0, clipLoader: FakeEventClipLoader()) }
     )
-}
-
-// MARK: - Fakes
-
-private struct FakeEvents: EventsRepository {
-    let result: Result<[Event], EventsError>
-    init(_ result: Result<[Event], EventsError>) { self.result = result }
-    func events(limit: Int) async throws(EventsError) -> [Event] { try result.get() }
-}
-
-/// No thumbnail material — every row renders the placeholder.
-private struct NoThumbnails: EventThumbnailLoading {
-    func thumbnail(for event: EventId) async -> Data? { nil }
-}
-
-/// Unused: the detail factory is never invoked in a list snapshot (no navigation happens).
-private struct NoClips: EventClipLoading {
-    func downloadClip(for event: Event) async -> Data? { nil }
 }

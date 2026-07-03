@@ -10,6 +10,7 @@
 		6BAA000100000000000000A1 /* AuraKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6BAA000100000000000000A2 /* AuraKit */; };
 		6BAA000200000000000000B2 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 6BAA000200000000000000B1 /* SnapshotTesting */; };
 		6BAA000200000000000000B3 /* AuraKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6BAA000100000000000000A2 /* AuraKit */; };
+		6BAA000400000000000000D2 /* TestDoubles in Frameworks */ = {isa = PBXBuildFile; productRef = 6BAA000400000000000000D1 /* TestDoubles */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 			files = (
 				6BAA000200000000000000B3 /* AuraKit in Frameworks */,
 				6BAA000200000000000000B2 /* SnapshotTesting in Frameworks */,
+				6BAA000400000000000000D2 /* TestDoubles in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -141,6 +143,7 @@
 			packageProductDependencies = (
 				6BAA000100000000000000A2 /* AuraKit */,
 				6BAA000200000000000000B1 /* SnapshotTesting */,
+				6BAA000400000000000000D1 /* TestDoubles */,
 			);
 			productName = AuraTests;
 			productReference = 6B7EB1CE2FEEAB1A003A9A9A /* AuraTests.xctest */;
@@ -555,6 +558,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6BAA000200000000000000B0 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
 			productName = SnapshotTesting;
+		};
+		6BAA000400000000000000D1 /* TestDoubles */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TestDoubles;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

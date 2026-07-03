@@ -1,6 +1,7 @@
 import Testing
 
 import SettingsDomain
+import TestDoubles
 @testable import SettingsPresentation
 
 @MainActor
@@ -94,14 +95,4 @@ private func makeViewModel(_ repository: FakeSettingsRepository = FakeSettingsRe
         loadTheme: LoadTheme(repository: repository),
         saveTheme: SaveTheme(repository: repository)
     )
-}
-
-private final class FakeSettingsRepository: SettingsRepository, @unchecked Sendable {
-    var savedConnection: ConnectionSettings?
-    var savedTheme: ThemePreference = .system
-
-    func loadConnection() -> ConnectionSettings? { savedConnection }
-    func saveConnection(_ settings: ConnectionSettings) { savedConnection = settings }
-    func loadTheme() -> ThemePreference { savedTheme }
-    func saveTheme(_ theme: ThemePreference) { savedTheme = theme }
 }

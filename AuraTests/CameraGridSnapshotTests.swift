@@ -3,6 +3,7 @@ import Testing
 
 import CamerasDomain
 import CamerasPresentation
+import TestDoubles
 
 /// Screenshot tests for the camera grid screen across its states, captured on every device +
 /// orientation (iOS). Tiles are pinned to the placeholder (no preview image, no live video) so
@@ -43,26 +44,15 @@ struct CameraGridSnapshotTests {
 @MainActor
 private func cameraGridScreen(cameras: Result<[Camera], CamerasError>) async -> some View {
     let viewModel = CameraGridViewModel(
-        getCameras: GetCameras(repository: FakeCameras(cameras)),
-        imageLoader: NoPreviewImages()
+        getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+        imageLoader: FakeCameraImageLoader()
     )
     await viewModel.load()
 
     return CameraGridView(
         viewModel: viewModel,
         onOpenSettings: {},
-        makeDetailViewModel: { CameraDetailViewModel(camera: $0, streamProvider: NoStreams()) }
+        // Unused: the detail factory is never invoked in a grid snapshot (no navigation happens).
+        makeDetailViewModel: { CameraDetailViewModel(camera: $0, streamProvider: FakeCameraStreamProvider()) }
     )
-}
-
-// MARK: - Fakes
-
-/// No preview material — every tile renders the placeholder.
-private struct NoPreviewImages: CameraImageLoading {
-    func previewImage(for camera: CameraName) async -> Data? { nil }
-}
-
-/// Unused: the detail factory is never invoked in a grid snapshot (no navigation happens).
-private struct NoStreams: CameraStreamProviding {
-    func streamSource(for camera: Camera) -> CameraStreamSource? { nil }
 }

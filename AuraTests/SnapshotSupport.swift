@@ -4,6 +4,7 @@ import SwiftUI
 import SnapshotTesting
 
 import CamerasDomain
+import TestDoubles
 import TimelineDomain
 import TimelinePresentation
 
@@ -88,14 +89,15 @@ func timelineScreen(
     timeline: Result<DayTimeline, TimelineError>
 ) async -> some View {
     let viewModel = TimelineScreenViewModel(
-        getCameras: GetCameras(repository: FakeCameras(cameras)),
-        getDayTimeline: GetDayTimeline(repository: FakeDayTimeline(timeline)),
+        getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+        getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(timeline)),
         now: { snapshotNow },
         days: snapshotDays
     )
     await viewModel.load()
 
-    let previews = GetCameraPreviews(provider: EmptyPreviews())
+    // No preview material — every tile resolves to the `.unavailable` placeholder.
+    let previews = GetCameraPreviews(provider: FakeCameraPreviewProvider())
     var tiles: [CameraName: PreviewTileViewModel] = [:]
     if case let .success(all) = cameras {
         for camera in all where camera.isEnabled {
@@ -212,28 +214,4 @@ func assertScreenSnapshot(
         }
     }
     #endif
-}
-
-// MARK: - Fakes
-
-struct FakeCameras: CamerasRepository {
-    let result: Result<[Camera], CamerasError>
-    init(_ result: Result<[Camera], CamerasError>) { self.result = result }
-    func cameras() async throws(CamerasError) -> [Camera] { try result.get() }
-}
-
-private struct FakeDayTimeline: CameraDayTimelineRepository {
-    let result: Result<DayTimeline, TimelineError>
-    init(_ result: Result<DayTimeline, TimelineError>) { self.result = result }
-    func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline { try result.get() }
-}
-
-/// No preview material — every tile resolves to the `.unavailable` placeholder.
-private struct EmptyPreviews: CameraPreviewProviding {
-    func clips(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewClip] { [] }
-    func frames(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewFrame] { [] }
-    func clipSource(_ clip: PreviewClip) -> CameraStreamSource {
-        // Unused: clips() is empty, so a tile never asks for a playable source.
-        CameraStreamSource(url: URL(filePath: "/unused"), headers: [:])
-    }
 }

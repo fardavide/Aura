@@ -5,6 +5,7 @@ import CamerasDomain
 import CommonFrigate
 import CommonNetwork
 import EventsDomain
+import TestDoubles
 @testable import EventsData
 
 struct EventDecodingTests {
@@ -125,28 +126,4 @@ extension ServerConfig {
     static let test = ServerConfig(
         scheme: .http, host: "frigate.test", port: 5000, username: nil, password: nil
     )
-}
-
-final class FakeHttpClient: HttpClient, @unchecked Sendable {
-    enum Outcome {
-        case response(status: Int, body: Data)
-        case failure(any Error)
-    }
-
-    private let outcome: Outcome
-
-    init(_ outcome: Outcome) { self.outcome = outcome }
-
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        switch outcome {
-        case let .response(status, body):
-            let response = HTTPURLResponse(
-                url: request.url ?? URL(string: "http://frigate.test")!,
-                statusCode: status, httpVersion: nil, headerFields: nil
-            )!
-            return (body, response)
-        case let .failure(error):
-            throw error
-        }
-    }
 }

@@ -143,6 +143,25 @@ produce identically-named PNGs → "Multiple commands produce". The fix is `expl
 excludable as one node. Nothing is lost: `swift-snapshot-testing` reads references from the source tree
 via `#filePath`, never from the bundle.
 
+One more capture limit (verified with a layer-rendering probe, not assumed): **`SecureField` content
+never renders through `drawHierarchyInKeyWindow`** — iOS excludes `isSecureTextEntry` fields from
+window/screenshot capture for privacy, and that's the capture path the suite needs for Liquid Glass.
+The saved-Settings baseline therefore shows a blank password field on purpose (plain layer rendering
+shows the bullets, but can't render glass).
+
+## Test doubles: one shared `TestDoubles` target, every double a `FakeXxx`
+All handwritten doubles live in a single **`TestDoubles` package target** (`Tests/TestDoubles`, one
+public fake per file), exported as a **test-only library product** — linked by every package test
+target and by the app-hosted `AuraTests`, and deliberately not part of the `AuraKit` product, so it
+never reaches the app (same rule as `swift-snapshot-testing`). This replaced a zoo of per-file private
+doubles (`Stub…`, `No…`, `Empty…`, `Counting…`, `Recording…`, three copies of `FakeHttpClient`): one
+configurable `FakeXxx` per protocol — constructor-configured, with invocation tracking only where a
+test asserts on it (`fetchCount`, `queriedRanges`, `lastRequest`) — replaces all its variants. One
+shared target was chosen over per-feature fixtures modules (the Gradle `testFixtures` shape) because
+the fakes are tiny and a solo project doesn't need five more targets. Exception: a fake for an
+**internal** protocol (`FakePreviewScrubber` for the Timeline scrubber) stays private in the owning
+test target — the shared target can't see the protocol.
+
 ## CI: GitHub Actions, jobs split by determinism
 CI runs on **GitHub-hosted `macos-26`** (Apple Silicon; ships the Xcode 26.x line). Each job selects
 the newest installed Xcode 26 explicitly (`xcode-select` on the highest-versioned `Xcode_26*.app`) —

@@ -4,6 +4,7 @@ import Testing
 import CamerasDomain
 import CommonFrigate
 import CommonNetwork
+import TestDoubles
 @testable import CamerasData
 
 struct FrigateCamerasRepositoryTests {

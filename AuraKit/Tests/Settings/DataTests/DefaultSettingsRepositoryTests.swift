@@ -3,6 +3,7 @@ import Testing
 
 import CommonKeychain
 import SettingsDomain
+import TestDoubles
 @testable import SettingsData
 
 struct DefaultSettingsRepositoryTests {
@@ -68,10 +69,4 @@ private struct Scenario {
         defaults = UserDefaults(suiteName: "SettingsDataTests-\(UUID().uuidString)")!
         sut = DefaultSettingsRepository(defaults: defaults, keychain: FakeKeychainStore())
     }
-}
-
-private final class FakeKeychainStore: KeychainStore, @unchecked Sendable {
-    private var storage: [String: String] = [:]
-    func string(for key: String) -> String? { storage[key] }
-    func set(_ value: String?, for key: String) { storage[key] = value }
 }

@@ -4,6 +4,7 @@ import Testing
 import CamerasDomain
 import CommonFrigate
 import CommonNetwork
+import TestDoubles
 import TimelineDomain
 @testable import TimelineData
 
@@ -37,10 +38,10 @@ struct TimelineDecodingTests {
 struct FrigateCameraDayTimelineRepositoryTests {
 
     @Test func `given the timeline endpoints when fetching the day then it assembles overlays`() async throws {
-        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: PathRoutingHttpClient([
-            ("review/activity/motion", 200, Data(motionJson.utf8)),
-            ("recordings/unavailable", 200, Data(gapsJson.utf8)),
-            ("api/review", 200, Data(reviewJson.utf8)),
+        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: FakeHttpClient(routes: [
+            ("review/activity/motion", .response(status: 200, body: Data(motionJson.utf8))),
+            ("recordings/unavailable", .response(status: 200, body: Data(gapsJson.utf8))),
+            ("api/review", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
         let timeline = try await sut.dayTimeline(in: window)
@@ -51,10 +52,10 @@ struct FrigateCameraDayTimelineRepositoryTests {
     }
 
     @Test func `given a failing overlay endpoint when fetching the day then that overlay degrades to empty`() async throws {
-        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: PathRoutingHttpClient([
-            ("review/activity/motion", 200, Data(motionJson.utf8)),
-            ("recordings/unavailable", 500, Data()),
-            ("api/review", 200, Data(reviewJson.utf8)),
+        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: FakeHttpClient(routes: [
+            ("review/activity/motion", .response(status: 200, body: Data(motionJson.utf8))),
+            ("recordings/unavailable", .response(status: 500, body: Data())),
+            ("api/review", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
         let timeline = try await sut.dayTimeline(in: window)
@@ -150,44 +151,4 @@ private let framesJson = #"[ "preview_driveway-1700.webp", "preview_driveway-171
 extension ServerConfig {
     static let test = ServerConfig(scheme: .http, host: "frigate.test", port: 5000, username: nil, password: nil)
     static let authed = ServerConfig(scheme: .http, host: "frigate.test", port: 5000, username: "u", password: "p")
-}
-
-final class FakeHttpClient: HttpClient, @unchecked Sendable {
-    enum Outcome {
-        case response(status: Int, body: Data)
-        case failure(any Error)
-    }
-
-    private let outcome: Outcome
-
-    init(_ outcome: Outcome) { self.outcome = outcome }
-
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        switch outcome {
-        case let .response(status, body):
-            let response = HTTPURLResponse(
-                url: request.url ?? URL(string: "http://frigate.test")!,
-                statusCode: status, httpVersion: nil, headerFields: nil
-            )!
-            return (body, response)
-        case let .failure(error):
-            throw error
-        }
-    }
-}
-
-/// Routes by URL substring so the multi-endpoint day fetch can return a different body per path.
-final class PathRoutingHttpClient: HttpClient, @unchecked Sendable {
-    private let routes: [(match: String, status: Int, body: Data)]
-
-    init(_ routes: [(String, Int, Data)]) {
-        self.routes = routes.map { (match: $0.0, status: $0.1, body: $0.2) }
-    }
-
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let urlString = request.url?.absoluteString ?? ""
-        let route = routes.first { urlString.contains($0.match) } ?? routes[0]
-        let response = HTTPURLResponse(url: request.url!, statusCode: route.status, httpVersion: nil, headerFields: nil)!
-        return (route.body, response)
-    }
 }
