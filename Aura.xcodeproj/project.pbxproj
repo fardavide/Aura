@@ -27,6 +27,16 @@
 		6B7EB1CE2FEEAB1A003A9A9A /* AuraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AuraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		6BAA000300000000000000C1 /* Exceptions for "AuraTests" folder in "AuraTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				__Snapshots__,
+			);
+			target = 6B7EB1CD2FEEAB1A003A9A9A /* AuraTests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6B7EB1C32FEEAB19003A9A9A /* Aura */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -35,6 +45,12 @@
 		};
 		6B7EB1D12FEEAB1A003A9A9A /* AuraTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6BAA000300000000000000C1 /* Exceptions for "AuraTests" folder in "AuraTests" target */,
+			);
+			explicitFolders = (
+				__Snapshots__,
+			);
 			path = AuraTests;
 			sourceTree = "<group>";
 		};

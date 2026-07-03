@@ -44,12 +44,14 @@
   unit-tested in the package. Gesture feel + PiP handback still need an on-device pass. See
   `decisions.md`.
 
-Package logic is covered by Swift Testing (~104 tests). The **Timeline screen** is covered by
-**screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across iPhone +
-iPad (portrait + landscape) × light + dark on the simulator — ready (busy / gappy / quiet), empty,
-and failed states.
+Package logic is covered by Swift Testing (~125 tests). All four main screens — **Timeline**
+(ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
+**Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
+by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
+iPhone + iPad (portrait + landscape) × light + dark on the simulator.
 Reference PNGs are committed beside the tests. macOS is excluded (AppKit offscreen rendering can't
-capture glass faithfully — see `decisions.md`). Other SwiftUI views are built, not yet snapshot-tested.
+capture glass faithfully — see `decisions.md`). The detail screens (live camera, event clip) are
+not snapshot-tested — they center on video players that can't render in a snapshot.
 
 ## Next
 - **Single-cam recordings scrubber.** Tap a Timeline tile → that camera's full-res recordings

@@ -25,6 +25,40 @@ struct EventsListViewModelTests {
         await sut.load()
         #expect(sut.state == .failed(.serverUnavailable))
     }
+
+    @Test func `given a loaded state when loading again then the fresh content is shown`() async {
+        // given
+        let repository = StubEventsRepository(.success([event("ev1")]))
+        let sut = EventsListViewModel(
+            getEvents: GetEvents(repository: repository),
+            thumbnailLoader: StubThumbnailLoader()
+        )
+        await sut.load()
+
+        // when
+        repository.result = .success([event("ev2")])
+        await sut.load()
+
+        // then
+        #expect(sut.state == .loaded([event("ev2")]))
+    }
+
+    @Test func `given a loaded state when a refresh fails then the last good content is kept`() async {
+        // given
+        let repository = StubEventsRepository(.success([event("ev1")]))
+        let sut = EventsListViewModel(
+            getEvents: GetEvents(repository: repository),
+            thumbnailLoader: StubThumbnailLoader()
+        )
+        await sut.load()
+
+        // when
+        repository.result = .failure(.serverUnavailable)
+        await sut.load()
+
+        // then
+        #expect(sut.state == .loaded([event("ev1")]))
+    }
 }
 
 @MainActor
@@ -68,7 +102,7 @@ private func event(_ id: String, hasClip: Bool = true) -> Event {
 }
 
 private final class StubEventsRepository: EventsRepository, @unchecked Sendable {
-    private let result: Result<[Event], EventsError>
+    var result: Result<[Event], EventsError>
     init(_ result: Result<[Event], EventsError>) { self.result = result }
     func events(limit: Int) async throws(EventsError) -> [Event] { try result.get() }
 }

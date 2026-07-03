@@ -7,11 +7,11 @@ import CamerasDomain
 import TimelineDomain
 import TimelinePresentation
 
-// Scaffolding for the timeline screenshot tests. These live in the app-hosted `AuraTests`
-// target (not the AuraKit package) on purpose: only an app-hosted target gives the tests a real
-// host window, so the full `NavigationStack` screen lays out and the Liquid-Glass scrubber card
-// renders via `drawHierarchyInKeyWindow`. The package test targets are hostless and render the
-// screen blank without glass. See `.ai/docs/decisions.md`.
+// Scaffolding shared by the screenshot tests (Timeline, Cameras, Events, Settings). These live
+// in the app-hosted `AuraTests` target (not the AuraKit package) on purpose: only an app-hosted
+// target gives the tests a real host window, so the full `NavigationStack` screen lays out and
+// Liquid Glass renders via `drawHierarchyInKeyWindow`. The package test targets are hostless and
+// render the screen blank without glass. See `.ai/docs/decisions.md`.
 //
 // Inputs are fixed (instant, calendar, time zone, color scheme) so the same pixels render on any
 // machine. Reference images live in `__Snapshots__/` beside the test file. To (re)generate them,
@@ -161,7 +161,7 @@ private func warmUpRender(_ view: some View, size: CGSize, style: UIUserInterfac
 
 /// Renders `view` across the platform's snapshot matrix and compares each against its reference.
 @MainActor
-func assertTimelineSnapshot(
+func assertScreenSnapshot(
     _ view: some View,
     named name: String,
     fileID: StaticString = #fileID,
@@ -216,7 +216,7 @@ func assertTimelineSnapshot(
 
 // MARK: - Fakes
 
-private struct FakeCameras: CamerasRepository {
+struct FakeCameras: CamerasRepository {
     let result: Result<[Camera], CamerasError>
     init(_ result: Result<[Camera], CamerasError>) { self.result = result }
     func cameras() async throws(CamerasError) -> [Camera] { try result.get() }

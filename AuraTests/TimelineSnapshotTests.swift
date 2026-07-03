@@ -14,7 +14,7 @@ struct TimelineScreenSnapshotTests {
         let view = await timelineScreen(cameras: .success(snapshotCameras()), timeline: .success(richTimelineFixture()))
 
         // then
-        assertTimelineSnapshot(view, named: "ready-busy")
+        assertScreenSnapshot(view, named: "ready-busy")
     }
 
     @Test func `given cameras and a gappy day when ready then it matches the reference`() async {
@@ -22,7 +22,7 @@ struct TimelineScreenSnapshotTests {
         let view = await timelineScreen(cameras: .success(snapshotCameras()), timeline: .success(gappyTimelineFixture()))
 
         // then
-        assertTimelineSnapshot(view, named: "ready-gaps")
+        assertScreenSnapshot(view, named: "ready-gaps")
     }
 
     @Test func `given cameras and no activity when ready then it matches the reference`() async {
@@ -30,7 +30,7 @@ struct TimelineScreenSnapshotTests {
         let view = await timelineScreen(cameras: .success(snapshotCameras()), timeline: .success(quietTimelineFixture()))
 
         // then
-        assertTimelineSnapshot(view, named: "ready-quiet")
+        assertScreenSnapshot(view, named: "ready-quiet")
     }
 
     @Test func `given no cameras when empty then it matches the reference`() async {
@@ -38,7 +38,7 @@ struct TimelineScreenSnapshotTests {
         let view = await timelineScreen(cameras: .success([]), timeline: .success(quietTimelineFixture()))
 
         // then
-        assertTimelineSnapshot(view, named: "empty")
+        assertScreenSnapshot(view, named: "empty")
     }
 
     @Test func `given a server failure when failed then it matches the reference`() async {
@@ -46,6 +46,6 @@ struct TimelineScreenSnapshotTests {
         let view = await timelineScreen(cameras: .failure(.serverUnavailable), timeline: .success(quietTimelineFixture()))
 
         // then
-        assertTimelineSnapshot(view, named: "failed")
+        assertScreenSnapshot(view, named: "failed")
     }
 }

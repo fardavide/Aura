@@ -40,6 +40,40 @@ struct CameraGridViewModelTests {
         #expect(sut.state == .failed(.notAuthorized))
     }
 
+    @Test func `given a loaded state when loading again then the fresh content is shown`() async {
+        // given
+        let repository = StubCamerasRepository(.success([enabledCamera("driveway")]))
+        let sut = CameraGridViewModel(
+            getCameras: GetCameras(repository: repository),
+            imageLoader: FakeImageLoader()
+        )
+        await sut.load()
+
+        // when
+        repository.result = .success([enabledCamera("garage")])
+        await sut.load()
+
+        // then
+        #expect(sut.state == .loaded([enabledCamera("garage")]))
+    }
+
+    @Test func `given a loaded state when a refresh fails then the last good content is kept`() async {
+        // given
+        let repository = StubCamerasRepository(.success([enabledCamera("driveway")]))
+        let sut = CameraGridViewModel(
+            getCameras: GetCameras(repository: repository),
+            imageLoader: FakeImageLoader()
+        )
+        await sut.load()
+
+        // when
+        repository.result = .failure(.unreachable)
+        await sut.load()
+
+        // then
+        #expect(sut.state == .loaded([enabledCamera("driveway")]))
+    }
+
     @Test func `when requesting a preview then it delegates to the image loader`() async {
         // given
         let loader = FakeImageLoader(image: Data([0x01]))
@@ -70,7 +104,7 @@ private func enabledCamera(_ name: String) -> Camera {
 }
 
 private final class StubCamerasRepository: CamerasRepository, @unchecked Sendable {
-    private let result: Result<[Camera], CamerasError>
+    var result: Result<[Camera], CamerasError>
     init(_ result: Result<[Camera], CamerasError>) { self.result = result }
     func cameras() async throws(CamerasError) -> [Camera] { try result.get() }
 }

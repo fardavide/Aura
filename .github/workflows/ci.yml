@@ -49,7 +49,7 @@ jobs:
         run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -quiet CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
   # Liquid-Glass screenshot tests (app-hosted AuraTests target, iOS-only). Isolated on purpose:
-  # the 42 reference PNGs are recorded locally and their rendering is environment-sensitive
+  # the reference PNGs are recorded locally and their rendering is environment-sensitive
   # (precision 0.98 / perceptualPrecision 0.95) — keeping them in their own job means a snapshot
   # diff never masks a real unit/build failure. If the runner's rendering drifts past tolerance,
   # re-record baselines locally (see /build-test) and commit. This job GATES the PR.

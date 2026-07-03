@@ -59,6 +59,16 @@ A use case is a small `struct` in the feature's Domain with a single
 `execute(...) async throws(<Feature>Error) -> …` method (**not** `callAsFunction`), holding
 its repository via constructor injection. ViewModels depend on use cases, not repositories.
 
+### Screen self-load — refresh in place, never re-blank
+
+A screen's `.task { await viewModel.load() }` re-runs on every appearance, so `load()` must
+not reset state to `.loading` before fetching: only the very first load shows the full-screen
+spinner (the initial state), a re-appearance **re-fetches behind the current content**, and a
+failed refresh **keeps the last good content** rather than swapping it for a full-screen error.
+Refreshing in place is preferred over skip-if-loaded (`loadIfNeeded`) so content also stays
+fresh. The snapshot suite catches regressions here — a spinner in a "loaded" baseline means
+the self-load blanked the screen.
+
 ## Typed IDs — never raw String
 
 Domain identifiers get typed wrappers (`struct CameraName`, `struct EventId`, …) that
