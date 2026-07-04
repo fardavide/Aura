@@ -246,3 +246,21 @@ rendering is covered by the snapshot suite. Skipping via `XCTSkip` on macOS was 
 would keep dead XCTest code (the project tests with Swift Testing) for zero remaining value.
 If real UI-flow tests are ever wanted, add a fresh target then; don't expect XCUITest activation
 to work on hosted macOS runners.
+
+## Camera ordering: a Settings preference, observed reactively (decided, pre-implementation)
+User-defined camera order must apply to every camera list (grid, Timeline, future consumers). It is
+a **Settings preference**: `[CameraName]` stored on the one `SettingsRepository` (UserDefaults,
+per-device like theme). A per-preference `CameraOrderRepository` was rejected — **repositories are
+per entity/aggregate, never per function/preference**. Since `SettingsDomain` now needs `CameraName`,
+the cross-feature camera entities move to a pure **`CamerasEntities`** target (zero dependencies,
+owned by the Cameras vertical: `CameraName`, `CameraStreamSource`) that other features import —
+superseding the Events-era "pure domain→domain dependency, no shared kernel" pattern. Entity modules
+are **per-feature** (`<Feature>Entities`), never one global `Entities` kernel — ownership stays with
+the feature. This also breaks the dependency cycle the old pattern would create
+(`SettingsDomain → CamerasDomain` for the type while `CamerasDomain → SettingsDomain` for observing
+the preference). Propagation is **reactive, not
+manual**: the repository exposes the order as a stream (current value first, then changes);
+`ObserveCameras` in `CamerasDomain` composes `GetCameras` with it and emits the sorted list, so
+ViewModels just `for await` — no re-apply-on-appear. Sort merge rules: saved names first in saved
+order; unknown (new) cameras appended keeping the alphabetical fallback; stale names ignored and
+self-healed on next save.

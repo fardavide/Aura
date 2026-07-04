@@ -38,6 +38,10 @@ Dependencies point **inward**; the Domain is the centre and depends on **nothing
   doesn't list those as SPM dependencies, so it *cannot* compile against them.
 - The concrete repository is named for its source — `FrigateCamerasRepository:
   CamerasRepository` — so the data source stays swappable.
+- **One repository per entity/aggregate — never per function or per preference.** All user
+  preferences live on the single `SettingsRepository`; camera data behind `CamerasRepository`.
+  Don't mint micro-repositories (a `…OrderRepository` for one preference) — a new repository
+  means a new entity, not a new field.
 - **Domain** = entities (`struct`/`enum`), repository **protocols**, **use cases**, and
   the feature's typed error. No `import SwiftUI`, Foundation networking, or AVFoundation.
 - **Data** implements the domain protocols; DTOs are `internal` and mapped to domain
@@ -71,11 +75,15 @@ the self-load blanked the screen.
 
 ## Typed IDs — never raw String
 
-Domain identifiers get typed wrappers (`struct CameraName`, `struct EventId`, …) that
-live in the **owning feature's Domain**, propagated through every signature, field, and
-return type. Unwrap to `String` only at the `URLSession`/legacy boundary. This is the project instance of the global
-**Strong Typing** rule — a `CameraName` passed where an `EventId` is expected must
-not compile.
+Domain identifiers get typed wrappers (`struct CameraName`, `struct EventId`, …),
+propagated through every signature, field, and return type. Unwrap to `String` only at
+the `URLSession`/legacy boundary. A type used by a single feature lives in that feature's
+Domain; a type referenced by **more than one feature's Domain** moves to the **owning
+feature's** pure entities target — `<Feature>Entities`, e.g. `CamerasEntities` (zero
+dependencies, entities only), which the other features import. Entity modules are
+per-feature; **never a single global `Entities` kernel** — ownership stays with the
+feature vertical. This is the project instance of the global **Strong Typing** rule — a
+`CameraName` passed where an `EventId` is expected must not compile.
 
 ## Networking / data layer
 
@@ -105,8 +113,14 @@ stays platform-neutral SwiftUI. Don't scatter `#if os` through feature code.
 
 ## Storage (decided — keep it minimal)
 
-- **UserDefaults**: server config + theme (theme is per-device, never synced).
+- **UserDefaults**: server config + per-device preferences (theme, camera order — never synced).
 - **Keychain**: the password only.
+- **Preferences are observed, not polled.** Any preference consumed outside the Settings
+  editor is exposed by the repository as a stream (current value first, then every change);
+  consumers `for await` and react. Never re-read a preference manually on appear or
+  re-apply it by hand — that's polling. One-shot synchronous `load…`/`save…` stay for
+  editor prefill and writes (per the global rule: streams are for change over time, never
+  for a one-shot read).
 - **No** SwiftData, **no** CloudKit, **no** cross-device sync. Frigate is the source
   of truth; cameras/events are fetched fresh and are ephemeral. Don't add a
   persistence framework for a handful of settings.
