@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-import CamerasDomain
+import CamerasEntities
 import EventsDomain
 import TestDoubles
 @testable import EventsPresentation

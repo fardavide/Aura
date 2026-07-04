@@ -1,4 +1,5 @@
 import CamerasDomain
+import CamerasEntities
 
 extension ConfigDto {
     /// Maps the raw config into domain cameras: `enabled` defaults to true (Frigate's

@@ -1,6 +1,7 @@
 import Foundation
 
 import CamerasDomain
+import CamerasEntities
 
 /// Serves one fixed image (or `nil` — the placeholder path) for every camera, recording which
 /// cameras were asked for.

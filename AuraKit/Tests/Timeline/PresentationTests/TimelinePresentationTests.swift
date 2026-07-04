@@ -4,6 +4,7 @@ import Testing
 import CamerasDomain
 import TestDoubles
 import TimelineDomain
+import CamerasEntities
 @testable import TimelinePresentation
 
 @MainActor

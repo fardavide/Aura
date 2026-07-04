@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 import CamerasDomain
+import CamerasEntities
 @testable import CamerasData
 
 struct ConfigMappingTests {

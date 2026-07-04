@@ -1,6 +1,7 @@
 import Foundation
 
 import CamerasDomain
+import CamerasEntities
 import TimelineDomain
 
 /// Serves fixed preview material for every camera; the defaults (no clips, no frames) drive

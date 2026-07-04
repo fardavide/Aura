@@ -3,6 +3,7 @@ import Foundation
 import CamerasDomain
 import CommonFrigate
 import CommonNetwork
+import CamerasEntities
 
 /// Builds the go2rtc HLS live stream (proxied through Frigate) for a camera, carrying Basic
 /// auth when credentials are configured. Uses the camera's first stream name.

@@ -1,6 +1,6 @@
 import Foundation
 
-import CamerasDomain
+import CamerasEntities
 
 /// A past-hour low-res preview segment for one camera — scrubbed locally by seeking the player.
 public struct PreviewClip: Equatable, Sendable {

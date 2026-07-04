@@ -1,6 +1,6 @@
 import Foundation
 
-import CamerasDomain
+import CamerasEntities
 
 /// A detected event (object/motion) on a camera.
 public struct Event: Equatable, Hashable, Sendable, Identifiable {

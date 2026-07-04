@@ -8,6 +8,7 @@ let package = Package(
         .library(
             name: "AuraKit",
             targets: [
+                "CamerasEntities",
                 "CamerasDomain", "CamerasData",
                 "CommonNetwork", "CommonFrigate", "CommonKeychain", "CommonPlayer",
                 "SettingsDomain", "SettingsData",
@@ -27,16 +28,22 @@ let package = Package(
         .target(
             name: "TestDoubles",
             dependencies: [
-                "CamerasDomain", "EventsDomain", "SettingsDomain", "TimelineDomain",
+                "CamerasDomain", "CamerasEntities", "EventsDomain", "SettingsDomain", "TimelineDomain",
                 "CommonNetwork", "CommonKeychain",
             ],
             path: "Tests/TestDoubles"
         ),
 
-        .target(name: "CamerasDomain", path: "Sources/Cameras/Domain"),
+        .target(name: "CamerasEntities", path: "Sources/Cameras/Entities"),
+
+        .target(
+            name: "CamerasDomain",
+            dependencies: ["CamerasEntities"],
+            path: "Sources/Cameras/Domain"
+        ),
         .testTarget(
             name: "CamerasDomainTests",
-            dependencies: ["CamerasDomain", "TestDoubles"],
+            dependencies: ["CamerasDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Cameras/DomainTests"
         ),
 
@@ -56,12 +63,12 @@ let package = Package(
 
         .target(
             name: "CamerasData",
-            dependencies: ["CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            dependencies: ["CamerasDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork"],
             path: "Sources/Cameras/Data"
         ),
         .testTarget(
             name: "CamerasDataTests",
-            dependencies: ["CamerasData", "CamerasDomain", "CommonFrigate", "CommonNetwork", "TestDoubles"],
+            dependencies: ["CamerasData", "CamerasDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork", "TestDoubles"],
             path: "Tests/Cameras/DataTests"
         ),
 
@@ -94,12 +101,12 @@ let package = Package(
 
         .target(
             name: "CamerasPresentation",
-            dependencies: ["CamerasDomain", "CommonPlayer"],
+            dependencies: ["CamerasDomain", "CamerasEntities", "CommonPlayer"],
             path: "Sources/Cameras/Presentation"
         ),
         .testTarget(
             name: "CamerasPresentationTests",
-            dependencies: ["CamerasPresentation", "CamerasDomain", "TestDoubles"],
+            dependencies: ["CamerasPresentation", "CamerasDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Cameras/PresentationTests"
         ),
 
@@ -116,67 +123,67 @@ let package = Package(
 
         .target(
             name: "EventsDomain",
-            dependencies: ["CamerasDomain"],
+            dependencies: ["CamerasEntities"],
             path: "Sources/Events/Domain"
         ),
         .testTarget(
             name: "EventsDomainTests",
-            dependencies: ["EventsDomain", "CamerasDomain", "TestDoubles"],
+            dependencies: ["EventsDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Events/DomainTests"
         ),
 
         .target(
             name: "EventsData",
-            dependencies: ["EventsDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            dependencies: ["EventsDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork"],
             path: "Sources/Events/Data"
         ),
         .testTarget(
             name: "EventsDataTests",
-            dependencies: ["EventsData", "EventsDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork", "TestDoubles"],
+            dependencies: ["EventsData", "EventsDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork", "TestDoubles"],
             path: "Tests/Events/DataTests"
         ),
 
         .target(
             name: "EventsPresentation",
-            dependencies: ["EventsDomain", "CamerasDomain", "CommonPlayer"],
+            dependencies: ["EventsDomain", "CamerasEntities", "CommonPlayer"],
             path: "Sources/Events/Presentation"
         ),
         .testTarget(
             name: "EventsPresentationTests",
-            dependencies: ["EventsPresentation", "EventsDomain", "CamerasDomain", "TestDoubles"],
+            dependencies: ["EventsPresentation", "EventsDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Events/PresentationTests"
         ),
 
         .target(
             name: "TimelineDomain",
-            dependencies: ["CamerasDomain"],
+            dependencies: ["CamerasEntities"],
             path: "Sources/Timeline/Domain"
         ),
         .testTarget(
             name: "TimelineDomainTests",
-            dependencies: ["TimelineDomain", "CamerasDomain", "TestDoubles"],
+            dependencies: ["TimelineDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Timeline/DomainTests"
         ),
 
         .target(
             name: "TimelineData",
-            dependencies: ["TimelineDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork"],
+            dependencies: ["TimelineDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork"],
             path: "Sources/Timeline/Data"
         ),
         .testTarget(
             name: "TimelineDataTests",
-            dependencies: ["TimelineData", "TimelineDomain", "CamerasDomain", "CommonFrigate", "CommonNetwork", "TestDoubles"],
+            dependencies: ["TimelineData", "TimelineDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork", "TestDoubles"],
             path: "Tests/Timeline/DataTests"
         ),
 
         .target(
             name: "TimelinePresentation",
-            dependencies: ["TimelineDomain", "CamerasDomain", "CommonPlayer"],
+            dependencies: ["TimelineDomain", "CamerasDomain", "CamerasEntities", "CommonPlayer"],
             path: "Sources/Timeline/Presentation"
         ),
         .testTarget(
             name: "TimelinePresentationTests",
-            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "TestDoubles"],
+            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Timeline/PresentationTests"
         ),
     ],

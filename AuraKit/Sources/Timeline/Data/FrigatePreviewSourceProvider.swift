@@ -1,9 +1,9 @@
 import Foundation
 
-import CamerasDomain
 import CommonFrigate
 import CommonNetwork
 import TimelineDomain
+import CamerasEntities
 
 /// Fetches a camera's preview material and resolves a clip's playable (authed) source.
 public struct FrigatePreviewSourceProvider: CameraPreviewProviding {

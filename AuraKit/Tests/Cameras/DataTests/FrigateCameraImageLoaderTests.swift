@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 import CamerasDomain
+import CamerasEntities
 import CommonFrigate
 import CommonNetwork
 import TestDoubles

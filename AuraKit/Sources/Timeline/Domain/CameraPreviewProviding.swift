@@ -1,4 +1,4 @@
-import CamerasDomain
+import CamerasEntities
 
 /// Supplies per-camera preview material for the scrub grid: past-hour clips, current-hour
 /// frames, and the playable source (URL + auth headers) for a clip.

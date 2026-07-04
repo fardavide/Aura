@@ -1,4 +1,5 @@
 import Testing
+import CamerasEntities
 
 import TestDoubles
 @testable import CamerasDomain

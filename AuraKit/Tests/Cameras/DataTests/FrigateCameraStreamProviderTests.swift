@@ -3,6 +3,7 @@ import Testing
 
 import CamerasDomain
 import CommonFrigate
+import CamerasEntities
 @testable import CamerasData
 
 struct FrigateCameraStreamProviderTests {

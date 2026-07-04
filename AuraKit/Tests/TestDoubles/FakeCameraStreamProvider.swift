@@ -1,4 +1,5 @@
 import CamerasDomain
+import CamerasEntities
 
 /// Returns one fixed stream source for every camera; `nil` (the default) means no stream —
 /// the detail view model resolves to its unavailable state.

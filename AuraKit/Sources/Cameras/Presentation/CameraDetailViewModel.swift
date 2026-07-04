@@ -1,6 +1,7 @@
 import Observation
 
 import CamerasDomain
+import CamerasEntities
 
 @Observable
 @MainActor

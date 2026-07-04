@@ -1,6 +1,6 @@
 import Foundation
 
-import CamerasDomain
+import CamerasEntities
 
 /// A single current-hour preview frame for one camera (the live hour has no mp4 yet).
 public struct PreviewFrame: Equatable, Sendable {

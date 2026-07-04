@@ -1,4 +1,4 @@
-import CamerasDomain
+import CamerasEntities
 
 /// Fetches a camera's preview material (clips + frames) and resolves a clip's playable source.
 public struct GetCameraPreviews: Sendable {

@@ -1,7 +1,7 @@
 import Foundation
 
-import CamerasDomain
 import EventsDomain
+import CamerasEntities
 
 extension [EventDto] {
     func toEvents() -> [Event] {
