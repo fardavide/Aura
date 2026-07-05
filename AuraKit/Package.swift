@@ -38,12 +38,12 @@ let package = Package(
 
         .target(
             name: "CamerasDomain",
-            dependencies: ["CamerasEntities"],
+            dependencies: ["CamerasEntities", "SettingsDomain"],
             path: "Sources/Cameras/Domain"
         ),
         .testTarget(
             name: "CamerasDomainTests",
-            dependencies: ["CamerasDomain", "CamerasEntities", "TestDoubles"],
+            dependencies: ["CamerasDomain", "CamerasEntities", "SettingsDomain", "TestDoubles"],
             path: "Tests/Cameras/DomainTests"
         ),
 
