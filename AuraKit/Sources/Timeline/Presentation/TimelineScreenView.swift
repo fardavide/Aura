@@ -1,8 +1,8 @@
 import SwiftUI
 
 import CamerasDomain
-import TimelineDomain
 import CamerasEntities
+import TimelineDomain
 
 public struct TimelineScreenView: View {
     private let viewModel: TimelineScreenViewModel

@@ -1,5 +1,7 @@
 import Foundation
+import Synchronization
 
+import CamerasEntities
 import CommonKeychain
 import SettingsDomain
 
@@ -8,6 +10,7 @@ import SettingsDomain
 public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable {
     private let defaults: UserDefaults
     private let keychain: any KeychainStore
+    private let observers = CameraOrderObservers()
 
     public init(defaults: UserDefaults = .standard, keychain: any KeychainStore) {
         self.defaults = defaults
@@ -47,11 +50,50 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
         defaults.set(theme.rawValue, forKey: Keys.theme)
     }
 
+    public func loadCameraOrder() -> [CameraName] {
+        defaults.stringArray(forKey: Keys.cameraOrder)?.map(CameraName.init) ?? []
+    }
+
+    public func saveCameraOrder(_ order: [CameraName]) {
+        defaults.set(order.map(\.value), forKey: Keys.cameraOrder)
+        observers.yield(order)
+    }
+
+    public func observeCameraOrder() -> AsyncStream<[CameraName]> {
+        AsyncStream { continuation in
+            continuation.yield(loadCameraOrder())
+            let id = observers.add(continuation)
+            continuation.onTermination = { [observers] _ in observers.remove(id) }
+        }
+    }
+
     private func write(_ value: String?, toDefaultsKey key: String) {
         if let value {
             defaults.set(value, forKey: key)
         } else {
             defaults.removeObject(forKey: key)
+        }
+    }
+}
+
+/// A reference type so every copy of the repository value shares the one observer set.
+private final class CameraOrderObservers: Sendable {
+    private let continuations = Mutex<[UUID: AsyncStream<[CameraName]>.Continuation]>([:])
+
+    func add(_ continuation: AsyncStream<[CameraName]>.Continuation) -> UUID {
+        let id = UUID()
+        continuations.withLock { $0[id] = continuation }
+        return id
+    }
+
+    func remove(_ id: UUID) {
+        continuations.withLock { _ = $0.removeValue(forKey: id) }
+    }
+
+    func yield(_ order: [CameraName]) {
+        let active = continuations.withLock { Array($0.values) }
+        for continuation in active {
+            continuation.yield(order)
         }
     }
 }
@@ -63,4 +105,5 @@ private enum Keys {
     static let username = "connection.username"
     static let password = "connection.password"
     static let theme = "theme"
+    static let cameraOrder = "cameraOrder"
 }

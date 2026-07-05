@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+import CamerasEntities
 import CommonKeychain
 import SettingsDomain
 import TestDoubles
@@ -47,6 +48,46 @@ struct DefaultSettingsRepositoryTests {
 
     @Test func `given no saved theme when loading then it defaults to system`() {
         #expect(Scenario().sut.loadTheme() == .system)
+    }
+
+    @Test func `given no saved camera order when loading then it is empty`() {
+        #expect(Scenario().sut.loadCameraOrder() == [])
+    }
+
+    @Test func `given a saved camera order when loading then it round-trips`() {
+        // given
+        let scenario = Scenario()
+
+        // when
+        scenario.sut.saveCameraOrder([CameraName("yard"), CameraName("front door")])
+
+        // then
+        #expect(scenario.sut.loadCameraOrder() == [CameraName("yard"), CameraName("front door")])
+    }
+
+    @Test func `given a saved camera order when observing then the current order is emitted first`() async {
+        // given
+        let scenario = Scenario()
+        scenario.sut.saveCameraOrder([CameraName("yard")])
+
+        // when
+        var iterator = scenario.sut.observeCameraOrder().makeAsyncIterator()
+
+        // then
+        #expect(await iterator.next() == [CameraName("yard")])
+    }
+
+    @Test func `given an observer when a new order is saved then it is emitted`() async {
+        // given
+        let scenario = Scenario()
+        var iterator = scenario.sut.observeCameraOrder().makeAsyncIterator()
+        _ = await iterator.next()
+
+        // when
+        scenario.sut.saveCameraOrder([CameraName("front door")])
+
+        // then
+        #expect(await iterator.next() == [CameraName("front door")])
     }
 
     @Test func `given a saved theme when loading then it round-trips`() {

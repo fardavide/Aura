@@ -64,6 +64,16 @@ Our identifiers use single-capital segments, never runs of capitals: `Dto` not `
 types keep their spelling — write `URL`, `URLSession`, `HTTPURLResponse`, `JSONDecoder`
 as-is; the rule applies to names *we* define.
 
+## Imports — grouped and alphabetical
+
+Three groups separated by one blank line, each sorted alphabetically:
+
+1. System frameworks (`Foundation`, `SwiftUI`, `Testing`, …)
+2. Third-party (test-only, e.g. `SnapshotTesting`)
+3. Project modules (`CamerasEntities`, `CommonPlayer`, …), with `@testable import` lines last
+
+When adding an import, insert it in sorted position — never append at the end of a group.
+
 ## Initializers — no silent defaults on domain models
 
 Don't give stored properties default values in a domain `struct`'s memberwise/primary

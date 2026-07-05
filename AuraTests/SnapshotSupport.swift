@@ -3,8 +3,8 @@ import SwiftUI
 
 import SnapshotTesting
 
-import CamerasEntities
 import CamerasDomain
+import CamerasEntities
 import TestDoubles
 import TimelineDomain
 import TimelinePresentation

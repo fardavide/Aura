@@ -72,10 +72,14 @@ let package = Package(
             path: "Tests/Cameras/DataTests"
         ),
 
-        .target(name: "SettingsDomain", path: "Sources/Settings/Domain"),
+        .target(
+            name: "SettingsDomain",
+            dependencies: ["CamerasEntities"],
+            path: "Sources/Settings/Domain"
+        ),
         .testTarget(
             name: "SettingsDomainTests",
-            dependencies: ["SettingsDomain", "TestDoubles"],
+            dependencies: ["SettingsDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Settings/DomainTests"
         ),
 
@@ -90,12 +94,12 @@ let package = Package(
 
         .target(
             name: "SettingsData",
-            dependencies: ["SettingsDomain", "CommonKeychain"],
+            dependencies: ["SettingsDomain", "CamerasEntities", "CommonKeychain"],
             path: "Sources/Settings/Data"
         ),
         .testTarget(
             name: "SettingsDataTests",
-            dependencies: ["SettingsData", "SettingsDomain", "CommonKeychain", "TestDoubles"],
+            dependencies: ["SettingsData", "SettingsDomain", "CamerasEntities", "CommonKeychain", "TestDoubles"],
             path: "Tests/Settings/DataTests"
         ),
 
@@ -117,7 +121,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SettingsPresentationTests",
-            dependencies: ["SettingsPresentation", "SettingsDomain", "TestDoubles"],
+            dependencies: ["SettingsPresentation", "SettingsDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Settings/PresentationTests"
         ),
 

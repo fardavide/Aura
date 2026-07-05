@@ -2,8 +2,8 @@ import Foundation
 import Testing
 
 import CamerasDomain
-import CommonFrigate
 import CamerasEntities
+import CommonFrigate
 @testable import CamerasData
 
 struct FrigateCameraStreamProviderTests {

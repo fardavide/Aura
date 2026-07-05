@@ -1,11 +1,11 @@
 import Foundation
 import Testing
 
+import CamerasEntities
 import CommonFrigate
 import CommonNetwork
 import TestDoubles
 import TimelineDomain
-import CamerasEntities
 @testable import TimelineData
 
 struct TimelineDecodingTests {

@@ -1,9 +1,9 @@
 import Foundation
 
 import CamerasDomain
+import CamerasEntities
 import CommonFrigate
 import CommonNetwork
-import CamerasEntities
 
 /// Fetches a camera's `latest.jpg` still through the authenticated HTTP client. "Frigate" is
 /// the implementation detail behind the `CameraImageLoading` domain protocol.

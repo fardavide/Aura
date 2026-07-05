@@ -1,7 +1,7 @@
 import Foundation
 
-import TimelineDomain
 import CamerasEntities
+import TimelineDomain
 
 extension [ReviewMarkerDto] {
     /// Maps review segments to markers, dropping severities the timeline doesn't render.
