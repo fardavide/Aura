@@ -5,6 +5,7 @@ import SnapshotTesting
 
 import CamerasDomain
 import CamerasEntities
+import SettingsDomain
 import TestDoubles
 import TimelineDomain
 import TimelinePresentation
@@ -90,7 +91,10 @@ func timelineScreen(
     timeline: Result<DayTimeline, TimelineError>
 ) async -> some View {
     let viewModel = TimelineScreenViewModel(
-        getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+        observeCameras: ObserveCameras(
+            getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+            observeCameraOrder: ObserveCameraOrder(repository: FakeSettingsRepository())
+        ),
         getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(timeline)),
         now: { snapshotNow },
         days: snapshotDays

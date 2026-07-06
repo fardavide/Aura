@@ -116,12 +116,12 @@ let package = Package(
 
         .target(
             name: "SettingsPresentation",
-            dependencies: ["SettingsDomain"],
+            dependencies: ["SettingsDomain", "CamerasDomain", "CamerasEntities"],
             path: "Sources/Settings/Presentation"
         ),
         .testTarget(
             name: "SettingsPresentationTests",
-            dependencies: ["SettingsPresentation", "SettingsDomain", "CamerasEntities", "TestDoubles"],
+            dependencies: ["SettingsPresentation", "SettingsDomain", "CamerasDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Settings/PresentationTests"
         ),
 

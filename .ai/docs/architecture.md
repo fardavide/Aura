@@ -6,13 +6,18 @@ skill; this is the map and the *why*.
 
 ## Layers, per feature
 
-Each feature (`Cameras`, `Events`, `Settings`) splits into three layers, each its own SwiftPM target:
+Each feature (`Cameras`, `Events`, `Settings`, `Timeline`) splits into three layers, each its own
+SwiftPM target:
 
 - **Domain** — entities, value types, repository *protocols*, use cases, the feature's error.
   Pure: depends on nothing (no networking, no Frigate, no SwiftUI).
 - **Data** — DTOs, mappers, and the concrete repository (`Frigate…Repository`) implementing the
   Domain protocol via the shared infra. "Frigate" only ever appears in this layer.
 - **Presentation** — SwiftUI views + `@Observable` view models that depend on Domain use cases.
+
+A type referenced by **more than one feature's Domain** moves to the owning feature's pure
+`<Feature>Entities` target (e.g. `CamerasEntities`: `CameraName`, `CameraStreamSource`) — zero
+dependencies, imported by the other features. Per-feature entity modules, never one global kernel.
 
 Shared infrastructure lives under `Common/*` targets:
 - **Common/Network** — generic HTTP transport (`HttpClient`) + auth header.
@@ -40,5 +45,7 @@ native macOS; iOS-only APIs (PiP, background audio) stay behind a platform wrapp
 
 ## Storage
 
-`UserDefaults` for non-secret connection config + theme; Keychain for the password. No
-SwiftData/CloudKit/sync — Frigate is the source of truth; cameras/events are fetched fresh.
+`UserDefaults` for non-secret connection config + per-device preferences (theme, camera order);
+Keychain for the password. No SwiftData/CloudKit/sync — Frigate is the source of truth;
+cameras/events are fetched fresh. Preferences consumed outside the Settings editor are **observed**
+(the repository exposes a stream: current value, then changes), never re-read on appear.

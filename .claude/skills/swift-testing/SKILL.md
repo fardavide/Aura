@@ -74,6 +74,18 @@ Name each `@Test` as a `given … when … then …` sentence with a **backtick 
 
 Group with `// MARK:`.
 
+## Fakes live in the shared `TestDoubles` target
+
+All doubles for **public** protocols live in the `TestDoubles` SwiftPM target
+(`AuraKit/Tests/TestDoubles`, one `public` type per file), exported as the
+`AuraKitTestDoubles` product so the app-hosted `AuraTests` imports them too. Never
+declare a fake privately inside a test file. One **configurable** fake per collaborator
+(`var result`, invocation counters) — no `StubXxx` / `EmptyXxx` / `CountingXxx`
+variants; every double is named `FakeXxx`. Sole exception: a double for an internal
+seam (e.g. a presentation-internal protocol) stays in the owning test target, since the
+shared module cannot see the protocol — but still in **its own file** there, never
+inline in a test file.
+
 ## Handwritten fakes, never mocking frameworks
 
 There is no mocking framework and we don't add one. Every double is a `FakeXxx` class named

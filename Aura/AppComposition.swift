@@ -47,12 +47,20 @@ final class AppComposition {
         )
     }
 
+    func cameraOrderViewModel(for connection: ConnectionSettings) -> CameraOrderViewModel {
+        CameraOrderViewModel(
+            getCameras: GetCameras(
+                repository: FrigateCamerasRepository(config: serverConfig(from: connection), httpClient: httpClient)
+            ),
+            loadCameraOrder: LoadCameraOrder(repository: settingsRepository),
+            saveCameraOrder: SaveCameraOrder(repository: settingsRepository)
+        )
+    }
+
     func cameraGridViewModel(for connection: ConnectionSettings) -> CameraGridViewModel {
         let config = serverConfig(from: connection)
         return CameraGridViewModel(
-            getCameras: GetCameras(
-                repository: FrigateCamerasRepository(config: config, httpClient: httpClient)
-            ),
+            observeCameras: observeCameras(config: config),
             imageLoader: FrigateCameraImageLoader(config: config, httpClient: httpClient)
         )
     }
@@ -90,9 +98,7 @@ final class AppComposition {
     func timelineScreenViewModel(for connection: ConnectionSettings) -> TimelineScreenViewModel {
         let config = serverConfig(from: connection)
         return TimelineScreenViewModel(
-            getCameras: GetCameras(
-                repository: FrigateCamerasRepository(config: config, httpClient: httpClient)
-            ),
+            observeCameras: observeCameras(config: config),
             getDayTimeline: GetDayTimeline(
                 repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),
@@ -107,6 +113,15 @@ final class AppComposition {
             previews: GetCameraPreviews(
                 provider: FrigatePreviewSourceProvider(config: serverConfig(from: connection), httpClient: httpClient)
             )
+        )
+    }
+
+    private func observeCameras(config: ServerConfig) -> ObserveCameras {
+        ObserveCameras(
+            getCameras: GetCameras(
+                repository: FrigateCamerasRepository(config: config, httpClient: httpClient)
+            ),
+            observeCameraOrder: ObserveCameraOrder(repository: settingsRepository)
         )
     }
 

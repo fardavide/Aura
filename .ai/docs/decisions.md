@@ -263,4 +263,16 @@ manual**: the repository exposes the order as a stream (current value first, the
 `ObserveCameras` in `CamerasDomain` composes `GetCameras` with it and emits the sorted list, so
 ViewModels just `for await` — no re-apply-on-appear. Sort merge rules: saved names first in saved
 order; unknown (new) cameras appended keeping the alphabetical fallback; stale names ignored and
-self-healed on next save.
+self-healed on next save. Implementation notes: the editor is a Settings sub-screen (`List` +
+`.onMove`, **save-on-move** — every drag persists immediately and live screens re-sort behind the
+sheet); its row is hidden until a connection exists. ViewModel `load()` still returns after the
+first emission (the `.refreshable` spinner contract) and hands the stream to a VM-owned observation
+task cancelled in `isolated deinit`; the Timeline keeps a stream-maintained latest-cameras value so
+an order change landing during the timeline fetch isn't lost. The snapshot fixtures pass an empty
+saved order, so the committed Timeline baselines are unchanged. Implementation notes: the editor is a Settings sub-screen (`List` +
+`.onMove`, **save-on-move** — every drag persists immediately and live screens re-sort behind the
+sheet); its row is hidden until a connection exists. ViewModel `load()` still returns after the
+first emission (the `.refreshable` spinner contract) and hands the stream to a VM-owned observation
+task cancelled in `isolated deinit`; the Timeline keeps a stream-maintained latest-cameras value so
+an order change landing during the timeline fetch isn't lost. The snapshot fixtures pass an empty
+saved order, so the committed Timeline baselines are unchanged.

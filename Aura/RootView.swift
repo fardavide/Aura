@@ -44,12 +44,21 @@ struct RootView: View {
                 }
                 .id(identity(of: connection))
             } else {
-                SettingsView(viewModel: composition.settingsViewModel(), onDone: reload)
+                SettingsView(
+                    viewModel: composition.settingsViewModel(),
+                    makeCameraOrderViewModel: nil,
+                    onDone: reload
+                )
             }
         }
         .preferredColorScheme(theme.colorScheme)
         .sheet(isPresented: $showingSettings) {
-            SettingsView(viewModel: composition.settingsViewModel()) {
+            SettingsView(
+                viewModel: composition.settingsViewModel(),
+                makeCameraOrderViewModel: connection.map { connection in
+                    { composition.cameraOrderViewModel(for: connection) }
+                }
+            ) {
                 showingSettings = false
                 reload()
             }

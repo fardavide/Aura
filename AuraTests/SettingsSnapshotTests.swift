@@ -18,7 +18,7 @@ struct SettingsSnapshotTests {
         viewModel.onAppear()
 
         // then
-        assertScreenSnapshot(SettingsView(viewModel: viewModel, onDone: {}), named: "first-run")
+        assertScreenSnapshot(SettingsView(viewModel: viewModel, makeCameraOrderViewModel: nil, onDone: {}), named: "first-run")
     }
 
     // The password SecureField renders BLANK in the reference on purpose: iOS excludes
@@ -37,7 +37,7 @@ struct SettingsSnapshotTests {
         viewModel.onAppear()
 
         // then
-        assertScreenSnapshot(SettingsView(viewModel: viewModel, onDone: {}), named: "saved")
+        assertScreenSnapshot(SettingsView(viewModel: viewModel, makeCameraOrderViewModel: nil, onDone: {}), named: "saved")
     }
 
     @Test func `given an empty host when saving then the error is shown`() {
@@ -49,7 +49,7 @@ struct SettingsSnapshotTests {
         viewModel.save()
 
         // then
-        assertScreenSnapshot(SettingsView(viewModel: viewModel, onDone: {}), named: "invalid-host")
+        assertScreenSnapshot(SettingsView(viewModel: viewModel, makeCameraOrderViewModel: nil, onDone: {}), named: "invalid-host")
     }
 }
 
