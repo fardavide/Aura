@@ -78,7 +78,9 @@ not snapshot-tested — they center on video players that can't render in a snap
 - **Timeline follow-ups**: auto-load ranges older than the current ~7-day span as you scroll; the
   current-hour `.webp` preview-frame path (tiles use the latest-footage fallback at the live edge
   for now); the `camera=all` batch clip-list optimization; richer markers.
-- A real **app icon** (current is a placeholder).
+- A real **app icon** (current is a placeholder; the mac slots are `sips` downscales of the
+  1024px source — regenerate them with the new artwork, and keep them filled: empty mac slots
+  ship no macOS icon at all, see the App Store packaging decision).
 - **Refactor**: extract a shared `FrigateApiClient` in `CommonFrigate` — the authed-GET +
   status→error mapping is now duplicated across the Cameras, Events, **and Timeline** repositories.
 - A **stream picker** when a camera exposes multiple go2rtc sources; **PiP keep-alive** across navigation.
