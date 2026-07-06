@@ -3,6 +3,7 @@ import SwiftUI
 import Testing
 
 import CamerasDomain
+import CamerasEntities
 import EventsDomain
 import EventsPresentation
 import TestDoubles

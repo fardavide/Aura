@@ -44,16 +44,19 @@
   unit-tested in the package. Gesture feel + PiP handback still need an on-device pass. See
   `decisions.md`.
 
-- **Slice 6 — user-defined camera order (v0.1.11).** Drag-to-reorder editor in Settings ("Camera Order",
+- **Slice 6 — user-defined camera order (v0.2.0).** Drag-to-reorder editor in Settings ("Camera Order",
   `List` + `.onMove`, save-on-move, shown only once a connection exists); the order is a Settings
   preference (`[CameraName]` on the one `SettingsRepository`, UserDefaults) **observed reactively**:
   `ObserveCameras` (CamerasDomain) re-emits the sorted list on every change, so the Cameras grid and
   the Timeline re-sort live — no manual propagation. Cross-feature camera types (`CameraName`,
   `CameraStreamSource`) moved to the new pure **`CamerasEntities`** target. Sort contract: saved
   names first in saved order, new cameras appended alphabetically, stale names ignored. See
-  `decisions.md`.
+  `decisions.md`. Settings became a **menu** (Server sub-screen with its own Save, Camera Order,
+  inline theme picker saving on change, Done to close). Settings became a **menu** (Server sub-screen with its own Save, Camera Order,
+  inline theme picker saving on change, Done to close); shared test doubles moved to the
+  **`TestDoubles`** target (product `AuraKitTestDoubles`).
 
-Package logic is covered by Swift Testing (~125 tests). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (150 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across

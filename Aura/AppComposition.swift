@@ -40,10 +40,15 @@ final class AppComposition {
 
     func settingsViewModel() -> SettingsViewModel {
         SettingsViewModel(
-            loadConnection: LoadConnection(repository: settingsRepository),
-            saveConnection: SaveConnection(repository: settingsRepository),
             loadTheme: LoadTheme(repository: settingsRepository),
             saveTheme: SaveTheme(repository: settingsRepository)
+        )
+    }
+
+    func serverSettingsViewModel() -> ServerSettingsViewModel {
+        ServerSettingsViewModel(
+            loadConnection: LoadConnection(repository: settingsRepository),
+            saveConnection: SaveConnection(repository: settingsRepository)
         )
     }
 

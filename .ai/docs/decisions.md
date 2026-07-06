@@ -278,3 +278,12 @@ first emission (the `.refreshable` spinner contract) and hands the stream to a V
 task cancelled in `isolated deinit`; the Timeline keeps a stream-maintained latest-cameras value so
 an order change landing during the timeline fetch isn't lost. The snapshot fixtures pass an empty
 saved order, so the committed Timeline baselines are unchanged.
+
+## Settings is a menu; server config is a sub-screen; theme saves on change
+Once Settings held more than the connection form (camera order, appearance), the main screen became
+a menu: a **Server** row pushing the connection form (its own Save button — validation errors live
+there — popping back on success), the Camera Order row, and the inline theme picker. The theme now
+**saves on change** (no Save step on the menu); the toolbar button is **Done**, which closes the
+sheet and triggers the root reload (theme + connection identity), same as before. First run (no
+connection) shows the same menu — the user opens Server to configure. `SettingsViewModel` slimmed
+to theme; the connection form logic moved to a dedicated view model for the sub-screen.

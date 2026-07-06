@@ -46,6 +46,7 @@ struct RootView: View {
             } else {
                 SettingsView(
                     viewModel: composition.settingsViewModel(),
+                    makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                     makeCameraOrderViewModel: nil,
                     onDone: reload
                 )
@@ -55,6 +56,7 @@ struct RootView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(
                 viewModel: composition.settingsViewModel(),
+                makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                 makeCameraOrderViewModel: connection.map { connection in
                     { composition.cameraOrderViewModel(for: connection) }
                 }

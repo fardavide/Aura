@@ -1,69 +1,111 @@
 import SwiftUI
 import Testing
 
+import CamerasDomain
 import SettingsDomain
 import SettingsPresentation
 import TestDoubles
 
-/// Screenshot tests for the Settings screen across its states, captured on every device +
-/// orientation (iOS). The screen is fully synchronous (no network, no dates): the fake
-/// repository's return values drive the fields, and the view model is pre-driven so the view's
-/// own `onAppear` re-load settles on the same pixels.
+/// Screenshot tests for the Settings menu and its Server sub-screen, captured on every device +
+/// orientation (iOS). The screens are fully synchronous (no network, no dates): the fake
+/// repository's values drive the fields, and view models are pre-driven so the views' own
+/// `onAppear` re-load settles on the same pixels.
 @MainActor
 struct SettingsSnapshotTests {
 
-    @Test func `given no saved connection when shown then it matches the reference`() {
-        // given
-        let viewModel = settingsViewModel(connection: nil, theme: .system)
-        viewModel.onAppear()
+    @Test func `given no connection when the menu is shown then it matches the reference`() {
+        // given — first run: no camera-order row yet
+        let view = settingsMenu(repository: FakeSettingsRepository(), makeCameraOrderViewModel: nil)
 
         // then
-        assertScreenSnapshot(SettingsView(viewModel: viewModel, makeCameraOrderViewModel: nil, onDone: {}), named: "first-run")
+        assertScreenSnapshot(view, named: "menu-first-run")
     }
 
-    // The password SecureField renders BLANK in the reference on purpose: iOS excludes
-    // isSecureTextEntry content from window-hierarchy captures (the drawHierarchyInKeyWindow
-    // path this suite needs for Liquid Glass). Verified against a plain layer-rendering probe,
-    // which shows the seven bullets.
-    @Test func `given a saved connection when shown then it matches the reference`() {
+    @Test func `given a configured server when the menu is shown then it matches the reference`() {
         // given
-        let viewModel = settingsViewModel(
+        let repository = FakeSettingsRepository(
             connection: ConnectionSettings(
                 scheme: .https, host: "frigate.local", port: 8_971,
                 username: "admin", password: "hunter2"
             ),
             theme: .dark
         )
+        let view = settingsMenu(repository: repository) {
+            CameraOrderViewModel(
+                getCameras: GetCameras(repository: FakeCamerasRepository(.success(snapshotCameras()))),
+                loadCameraOrder: LoadCameraOrder(repository: repository),
+                saveCameraOrder: SaveCameraOrder(repository: repository)
+            )
+        }
+
+        // then
+        assertScreenSnapshot(view, named: "menu")
+    }
+
+    @Test func `given no saved connection when the server form is shown then it matches the reference`() {
+        // given
+        let viewModel = serverSettingsViewModel(FakeSettingsRepository())
         viewModel.onAppear()
 
         // then
-        assertScreenSnapshot(SettingsView(viewModel: viewModel, makeCameraOrderViewModel: nil, onDone: {}), named: "saved")
+        assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-first-run")
     }
 
-    @Test func `given an empty host when saving then the error is shown`() {
+    // The password SecureField renders BLANK in the reference on purpose: iOS excludes
+    // isSecureTextEntry content from window-hierarchy captures (the drawHierarchyInKeyWindow
+    // path this suite needs for Liquid Glass). Verified against a plain layer-rendering probe,
+    // which shows the seven bullets.
+    @Test func `given a saved connection when the server form is shown then it matches the reference`() {
         // given
-        let viewModel = settingsViewModel(connection: nil, theme: .system)
+        let viewModel = serverSettingsViewModel(FakeSettingsRepository(
+            connection: ConnectionSettings(
+                scheme: .https, host: "frigate.local", port: 8_971,
+                username: "admin", password: "hunter2"
+            )
+        ))
+        viewModel.onAppear()
+
+        // then
+        assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-saved")
+    }
+
+    @Test func `given an empty host when saving the server form then the error is shown`() {
+        // given
+        let viewModel = serverSettingsViewModel(FakeSettingsRepository())
         viewModel.onAppear()
 
         // when
         viewModel.save()
 
         // then
-        assertScreenSnapshot(SettingsView(viewModel: viewModel, makeCameraOrderViewModel: nil, onDone: {}), named: "invalid-host")
+        assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-host")
     }
 }
 
-// MARK: - View-model builder
+// MARK: - View builders
 
-/// A view model over a fake repository holding the given saved state — the same four-use-case
-/// wiring the composition root does over the real UserDefaults + Keychain repository.
 @MainActor
-private func settingsViewModel(connection: ConnectionSettings?, theme: ThemePreference) -> SettingsViewModel {
-    let repository = FakeSettingsRepository(connection: connection, theme: theme)
-    return SettingsViewModel(
-        loadConnection: LoadConnection(repository: repository),
-        saveConnection: SaveConnection(repository: repository),
+private func settingsMenu(
+    repository: FakeSettingsRepository,
+    makeCameraOrderViewModel: (() -> CameraOrderViewModel)?
+) -> some View {
+    let viewModel = SettingsViewModel(
         loadTheme: LoadTheme(repository: repository),
         saveTheme: SaveTheme(repository: repository)
+    )
+    viewModel.onAppear()
+    return SettingsView(
+        viewModel: viewModel,
+        makeServerSettingsViewModel: { serverSettingsViewModel(repository) },
+        makeCameraOrderViewModel: makeCameraOrderViewModel,
+        onDone: {}
+    )
+}
+
+@MainActor
+private func serverSettingsViewModel(_ repository: FakeSettingsRepository) -> ServerSettingsViewModel {
+    ServerSettingsViewModel(
+        loadConnection: LoadConnection(repository: repository),
+        saveConnection: SaveConnection(repository: repository)
     )
 }
