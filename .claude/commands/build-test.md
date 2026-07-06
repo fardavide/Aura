@@ -26,6 +26,20 @@ xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17
 xcodebuild test -scheme Aura -destination 'platform=macOS'
 ```
 
+### Package tests via xcodebuild (what Xcode Cloud runs)
+
+`swift test` in `AuraKit/` stays the fast host-side default. To run the package suites through
+`xcodebuild` (simulator or macOS — the Xcode Cloud path), use the shared `AuraKitTests` scheme
+**from inside the package directory**:
+
+```bash
+cd AuraKit && xcodebuild test -scheme AuraKitTests -destination 'platform=iOS Simulator,name=iPhone 17'
+```
+
+Do **not** run package test targets through the app project's container (repo root, `Aura` scheme
+test plans, etc.) — xcodebuild silently drops them and errors with "There are no test bundles
+available to test" (see `.ai/docs/decisions.md`).
+
 ### Screenshot tests
 
 SwiftUI screen rendering is covered by **screenshot tests** in the app-hosted **`AuraTests`**

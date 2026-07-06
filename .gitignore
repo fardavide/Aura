@@ -9,7 +9,11 @@ DerivedData/
 
 # Swift Package Manager
 .build/
-.swiftpm/
+# .swiftpm is per-user state, except shared schemes (committed — Xcode Cloud needs them)
+**/.swiftpm/*
+!**/.swiftpm/xcode
+**/.swiftpm/xcode/*
+!**/.swiftpm/xcode/xcshareddata
 
 # Claude (personal local settings)
 .claude/settings.local.json

@@ -287,3 +287,26 @@ there — popping back on success), the Camera Order row, and the inline theme p
 sheet and triggers the root reload (theme + connection identity), same as before. First run (no
 connection) shows the same menu — the user opens Server to configure. `SettingsViewModel` slimmed
 to theme; the connection form logic moved to a dedicated view model for the sub-screen.
+
+## CI topology: snapshot gate on GitHub Actions only; Xcode Cloud tests via a package scheme; main is PR-gated
+Xcode Cloud's test action cannot run the screenshot suite: its tests execute on simulator VMs that
+**don't have the source checkout**, and the reference PNGs are deliberately excluded from the test
+bundle (see the screenshot-tests decision) — the snapshot library resolves references via
+`#filePath` into the build VM's checkout path, so every test fails with *"No reference was found on
+disk"* no matter how fresh the baselines are (verified 2026-07: same commit green on GitHub Actions
+and locally, red on Xcode Cloud). The **snapshot gate therefore lives on GitHub Actions only**;
+don't point Xcode Cloud at the app scheme's tests again without first bundling the references.
+
+Second verified limitation: `xcodebuild` **silently drops Swift package test targets when testing
+through the app project's container** — via `.xctestplan` references (either container-path base)
+and via a package-owned scheme invoked from the repo root, all ending in *"There are no test
+bundles available to test"*. Package tests resolve only in the package's own context. Hence the
+shared scheme **`AuraKitTests`** (committed under `AuraKit/.swiftpm/.../xcschemes/`, all package
+test targets, build entry on the library product so destinations resolve):
+`cd AuraKit && xcodebuild test -scheme AuraKitTests -destination …` — verified green on the iOS
+simulator. Xcode Cloud test actions should select this scheme (one-time App Store Connect change).
+If Xcode Cloud resolves it through the app container and hits the same limitation, drop the test
+action instead — main is PR-gated, so archives only ever see verified commits.
+
+`main` is protected by a GitHub ruleset: changes land via pull request with the four GitHub Actions
+checks required; direct pushes are blocked. This supersedes the old commit-directly-to-main flow.

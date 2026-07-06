@@ -78,10 +78,16 @@ xcodebuild build -scheme Aura -destination 'generic/platform=iOS Simulator' -qui
 xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17 Pro'  # app + screenshot tests
 ```
 
+- **`main` is PR-gated** (GitHub ruleset: required CI checks, no direct pushes) — land every change
+  via a pull request and wait for the checks.
+- Package tests via `xcodebuild` (the Xcode Cloud path) use the shared `AuraKitTests` scheme **from
+  inside `AuraKit/`** — the app project's container silently drops package test targets (see
+  `/build-test` and `decisions.md`).
 - Build **one platform at a time with `-jobs` capped** — back-to-back parallel `xcodebuild` once
   exhausted the macOS per-user process limit (`fork: resource temporarily unavailable`).
 - **CI** (`.github/workflows/ci.yml`, GitHub-hosted `macos-26`) runs on push/PR to `main`. Snapshot
-  baselines are re-recorded **locally**, never on CI (see `decisions.md`).
+  baselines are re-recorded **locally**, never on CI. Xcode Cloud runs only the package tests —
+  the snapshot suite cannot pass there (see `decisions.md`).
 - Prefer the `ast-index` skill for Swift symbol/usage lookups; fall back to `rg`/`grep`. Reserve Bash
   for git, `xcodebuild`, and non-source work.
 </content>
