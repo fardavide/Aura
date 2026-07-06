@@ -2,9 +2,10 @@ import Foundation
 import Testing
 
 import CamerasDomain
+import CamerasEntities
+import SettingsDomain
 import TestDoubles
 import TimelineDomain
-import CamerasEntities
 @testable import TimelinePresentation
 
 @MainActor
@@ -102,7 +103,7 @@ struct TimelineScreenViewModelTests {
         let clock = TestClock(at(1_000_000))
         let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
         let sut = TimelineScreenViewModel(
-            getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { clock.value },
             days: 2
@@ -123,7 +124,7 @@ struct TimelineScreenViewModelTests {
         // given
         let timelineRepo = FakeCameraDayTimelineRepository(.success(busyTimeline))
         let sut = TimelineScreenViewModel(
-            getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { at(1_000_000) },
             days: 2
@@ -142,7 +143,7 @@ struct TimelineScreenViewModelTests {
         // given
         let timelineRepo = FakeCameraDayTimelineRepository(.failure(.unreachable))
         let sut = TimelineScreenViewModel(
-            getCameras: GetCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { at(1_000_000) },
             days: 2
@@ -188,7 +189,7 @@ struct TimelineScreenViewModelTests {
         // given
         let cameras = FakeCamerasRepository(.success([camera]))
         let sut = TimelineScreenViewModel(
-            getCameras: GetCameras(repository: cameras),
+            observeCameras: makeObserveCameras(repository: cameras),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { at(1_000_000) },
             days: 2
@@ -202,6 +203,27 @@ struct TimelineScreenViewModelTests {
         #expect(cameras.fetchCount == 1)
         #expect(sut.state == .ready(cameras: [camera], timeline: emptyTimeline))
     }
+
+    @Test func `given a ready timeline when the order changes then the cameras re-sort`() async {
+        // given
+        let settings = FakeSettingsRepository()
+        let sut = makeViewModel(
+            cameras: .success([camera, garageCamera]),
+            timeline: .success(emptyTimeline),
+            settings: settings
+        )
+        await sut.load()
+
+        // when
+        settings.saveCameraOrder([CameraName("garage"), CameraName("driveway")])
+
+        // then
+        let resorted: TimelineScreenViewModel.State = .ready(cameras: [garageCamera, camera], timeline: emptyTimeline)
+        for _ in 0..<100 where sut.state != resorted {
+            await Task.yield()
+        }
+        #expect(sut.state == resorted)
+    }
 }
 
 // MARK: - Helpers
@@ -209,19 +231,32 @@ struct TimelineScreenViewModelTests {
 private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
 
 private let camera = Camera(name: CameraName("driveway"), friendlyName: "Driveway", isEnabled: true, streamNames: ["driveway"])
+private let garageCamera = Camera(name: CameraName("garage"), friendlyName: "Garage", isEnabled: true, streamNames: ["garage"])
 private let emptyTimeline = DayTimeline(markers: [], motion: [], gaps: [])
 private let busyTimeline = DayTimeline(markers: [], motion: [MotionBucket(time: at(1_000), intensity: 80)], gaps: [])
 
 @MainActor
 private func makeViewModel(
     cameras: Result<[Camera], CamerasError>,
-    timeline: Result<DayTimeline, TimelineError>
+    timeline: Result<DayTimeline, TimelineError>,
+    settings: FakeSettingsRepository = FakeSettingsRepository()
 ) -> TimelineScreenViewModel {
     TimelineScreenViewModel(
-        getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+        observeCameras: makeObserveCameras(repository: FakeCamerasRepository(cameras), settings: settings),
         getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(timeline)),
         now: { at(1_000_000) },
         days: 2
+    )
+}
+
+@MainActor
+private func makeObserveCameras(
+    repository: any CamerasRepository,
+    settings: FakeSettingsRepository = FakeSettingsRepository()
+) -> ObserveCameras {
+    ObserveCameras(
+        getCameras: GetCameras(repository: repository),
+        observeCameraOrder: ObserveCameraOrder(repository: settings)
     )
 }
 

@@ -110,7 +110,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CamerasPresentationTests",
-            dependencies: ["CamerasPresentation", "CamerasDomain", "CamerasEntities", "TestDoubles"],
+            dependencies: ["CamerasPresentation", "CamerasDomain", "CamerasEntities", "SettingsDomain", "TestDoubles"],
             path: "Tests/Cameras/PresentationTests"
         ),
 
@@ -187,7 +187,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TimelinePresentationTests",
-            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities", "TestDoubles"],
+            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities", "SettingsDomain", "TestDoubles"],
             path: "Tests/Timeline/PresentationTests"
         ),
     ],

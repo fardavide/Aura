@@ -21,22 +21,30 @@ public final class TimelineScreenViewModel {
     /// appears at the live edge without reloading the tiles (which key off `span.start`).
     public private(set) var span: TimeRange
 
-    private let getCameras: GetCameras
+    private let observeCameras: ObserveCameras
     private let getDayTimeline: GetDayTimeline
     private let now: @MainActor () -> Date
+    private var observation: Task<Void, Never>?
+    /// The freshest stream emission — read at ready-time so an order change landing while
+    /// the timeline fetch is in flight is not lost.
+    private var latestCameras: [Camera] = []
 
     /// How close to the present the playhead must be for an auto-refresh to fire. Generous so minor
     /// scroll drift never stops live updates, while genuine history browsing (hours/days back in a
     /// multi-day span) is excluded — historical footage doesn't change, so refreshing it is moot.
     private static let liveEdgeWindow: TimeInterval = 600
 
-    public init(getCameras: GetCameras, getDayTimeline: GetDayTimeline, now: @escaping @MainActor () -> Date, days: Int) {
-        self.getCameras = getCameras
+    public init(observeCameras: ObserveCameras, getDayTimeline: GetDayTimeline, now: @escaping @MainActor () -> Date, days: Int) {
+        self.observeCameras = observeCameras
         self.getDayTimeline = getDayTimeline
         self.now = now
         let start = now()
         span = TimeRange(start: start.addingTimeInterval(-Double(days) * 86_400), end: start)
         clock = ScrubClock(instant: start)
+    }
+
+    isolated deinit {
+        observation?.cancel()
     }
 
     public func load() async {
@@ -45,7 +53,7 @@ public final class TimelineScreenViewModel {
 
         let cameras: [Camera]
         do {
-            cameras = try await getCameras.execute()
+            cameras = try await startObservingCameras()
         } catch {
             state = .failed(error.asTimelineError)
             return
@@ -58,7 +66,7 @@ public final class TimelineScreenViewModel {
 
         do {
             let timeline = try await getDayTimeline.execute(in: span)
-            state = .ready(cameras: cameras, timeline: timeline)
+            state = .ready(cameras: latestCameras, timeline: timeline)
         } catch {
             state = .failed(error)
         }
@@ -95,7 +103,7 @@ public final class TimelineScreenViewModel {
             cameras = loaded
         case .loading, .empty, .failed:
             do {
-                cameras = try await getCameras.execute()
+                cameras = try await startObservingCameras()
             } catch {
                 return  // still unreachable — keep the current state, retry next tick
             }
@@ -128,6 +136,30 @@ public final class TimelineScreenViewModel {
 
     public func scrub(to time: Date) {
         clock.scrub(to: span.clamp(time))
+    }
+
+    /// Restarts the camera observation and returns its first emission. The observation keeps
+    /// running for the screen's life: an order change re-sorts the ready grid in place.
+    private func startObservingCameras() async throws(CamerasError) -> [Camera] {
+        observation?.cancel()
+        let stream = try await observeCameras.execute()
+        return await withCheckedContinuation { continuation in
+            observation = Task { [weak self] in
+                var firstEmission: CheckedContinuation<[Camera], Never>? = continuation
+                for await cameras in stream {
+                    self?.latestCameras = cameras
+                    if let first = firstEmission {
+                        first.resume(returning: cameras)
+                        firstEmission = nil
+                        continue
+                    }
+                    if case let .ready(_, timeline) = self?.state {
+                        self?.state = .ready(cameras: cameras, timeline: timeline)
+                    }
+                }
+                firstEmission?.resume(returning: [])
+            }
+        }
     }
 }
 

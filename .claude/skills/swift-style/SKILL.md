@@ -74,6 +74,23 @@ Three groups separated by one blank line, each sorted alphabetically:
 
 When adding an import, insert it in sorted position — never append at the end of a group.
 
+## Member ordering
+
+Within a type body, declare members in this order (the project port of the Kotlin
+member-ordering convention):
+
+1. Public stored properties
+2. Private stored properties — hoisted up only when initialization order forces it
+3. `init` (and `isolated deinit`)
+4. Public methods — the type's API surface
+5. Private methods
+6. Remaining nested types
+
+Settled exception: a ViewModel's `State` enum leads the type — it is the vocabulary the
+properties below it are typed with. Free helpers and file-private types are top-level at
+the **bottom of the file**, never inside the type. New members go into their group in
+place — never appended at the end of the type.
+
 ## Initializers — no silent defaults on domain models
 
 Don't give stored properties default values in a domain `struct`'s memberwise/primary

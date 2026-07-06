@@ -3,6 +3,7 @@ import Testing
 
 import CamerasDomain
 import CamerasEntities
+import SettingsDomain
 import TestDoubles
 @testable import CamerasPresentation
 
@@ -45,10 +46,7 @@ struct CameraGridViewModelTests {
     @Test func `given a loaded state when loading again then the fresh content is shown`() async {
         // given
         let repository = FakeCamerasRepository(.success([enabledCamera("driveway")]))
-        let sut = CameraGridViewModel(
-            getCameras: GetCameras(repository: repository),
-            imageLoader: FakeCameraImageLoader()
-        )
+        let sut = makeViewModel(repository: repository)
         await sut.load()
 
         // when
@@ -62,10 +60,7 @@ struct CameraGridViewModelTests {
     @Test func `given a loaded state when a refresh fails then the last good content is kept`() async {
         // given
         let repository = FakeCamerasRepository(.success([enabledCamera("driveway")]))
-        let sut = CameraGridViewModel(
-            getCameras: GetCameras(repository: repository),
-            imageLoader: FakeCameraImageLoader()
-        )
+        let sut = makeViewModel(repository: repository)
         await sut.load()
 
         // when
@@ -76,13 +71,30 @@ struct CameraGridViewModelTests {
         #expect(sut.state == .loaded([enabledCamera("driveway")]))
     }
 
+    @Test func `given loaded cameras when the order changes then the grid re-sorts`() async {
+        // given
+        let settings = FakeSettingsRepository()
+        let sut = makeViewModel(
+            .success([enabledCamera("attic"), enabledCamera("garage")]),
+            settings: settings
+        )
+        await sut.load()
+
+        // when
+        settings.saveCameraOrder([CameraName("garage"), CameraName("attic")])
+
+        // then
+        let resorted: CameraGridViewModel.State = .loaded([enabledCamera("garage"), enabledCamera("attic")])
+        for _ in 0..<100 where sut.state != resorted {
+            await Task.yield()
+        }
+        #expect(sut.state == resorted)
+    }
+
     @Test func `when requesting a preview then it delegates to the image loader`() async {
         // given
         let loader = FakeCameraImageLoader(image: Data([0x01]))
-        let sut = CameraGridViewModel(
-            getCameras: GetCameras(repository: FakeCamerasRepository(.success([]))),
-            imageLoader: loader
-        )
+        let sut = makeViewModel(repository: FakeCamerasRepository(.success([])), imageLoader: loader)
 
         // when
         let image = await sut.previewImage(for: enabledCamera("driveway"))
@@ -94,14 +106,28 @@ struct CameraGridViewModelTests {
 }
 
 @MainActor
-private func makeViewModel(_ result: Result<[Camera], CamerasError>) -> CameraGridViewModel {
+private func makeViewModel(
+    _ result: Result<[Camera], CamerasError>,
+    settings: FakeSettingsRepository = FakeSettingsRepository()
+) -> CameraGridViewModel {
+    makeViewModel(repository: FakeCamerasRepository(result), settings: settings)
+}
+
+@MainActor
+private func makeViewModel(
+    repository: FakeCamerasRepository,
+    settings: FakeSettingsRepository = FakeSettingsRepository(),
+    imageLoader: FakeCameraImageLoader = FakeCameraImageLoader()
+) -> CameraGridViewModel {
     CameraGridViewModel(
-        getCameras: GetCameras(repository: FakeCamerasRepository(result)),
-        imageLoader: FakeCameraImageLoader()
+        observeCameras: ObserveCameras(
+            getCameras: GetCameras(repository: repository),
+            observeCameraOrder: ObserveCameraOrder(repository: settings)
+        ),
+        imageLoader: imageLoader
     )
 }
 
 private func enabledCamera(_ name: String) -> Camera {
     Camera(name: CameraName(name), friendlyName: nil, isEnabled: true, streamNames: [])
 }
-

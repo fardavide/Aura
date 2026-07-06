@@ -3,6 +3,7 @@ import Testing
 
 import CamerasDomain
 import CamerasPresentation
+import SettingsDomain
 import TestDoubles
 
 /// Screenshot tests for the camera grid screen across its states, captured on every device +
@@ -44,7 +45,10 @@ struct CameraGridSnapshotTests {
 @MainActor
 private func cameraGridScreen(cameras: Result<[Camera], CamerasError>) async -> some View {
     let viewModel = CameraGridViewModel(
-        getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+        observeCameras: ObserveCameras(
+            getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+            observeCameraOrder: ObserveCameraOrder(repository: FakeSettingsRepository())
+        ),
         imageLoader: FakeCameraImageLoader()
     )
     await viewModel.load()

@@ -15,21 +15,39 @@ public final class CameraGridViewModel {
 
     public private(set) var state: State = .loading
 
-    private let getCameras: GetCameras
+    private let observeCameras: ObserveCameras
     private let imageLoader: any CameraImageLoading
+    private var observation: Task<Void, Never>?
 
-    public init(getCameras: GetCameras, imageLoader: any CameraImageLoading) {
-        self.getCameras = getCameras
+    public init(observeCameras: ObserveCameras, imageLoader: any CameraImageLoading) {
+        self.observeCameras = observeCameras
         self.imageLoader = imageLoader
+    }
+
+    isolated deinit {
+        observation?.cancel()
     }
 
     /// Fetches and replaces the content. Only the very first load shows the full-screen spinner
     /// (the initial state): a re-appearance re-fetches behind the current content, and a failed
     /// refresh keeps the last good content instead of swapping it for a full-screen error.
+    /// Returns once the first camera list is applied; keeps observing order changes for the
+    /// rest of the view model's life.
     public func load() async {
         do {
-            let cameras = try await getCameras.execute()
-            state = cameras.isEmpty ? .empty : .loaded(cameras)
+            let cameras = try await observeCameras.execute()
+            observation?.cancel()
+            await withCheckedContinuation { continuation in
+                observation = Task { [weak self] in
+                    var firstEmission: CheckedContinuation<Void, Never>? = continuation
+                    for await list in cameras {
+                        self?.state = list.isEmpty ? .empty : .loaded(list)
+                        firstEmission?.resume()
+                        firstEmission = nil
+                    }
+                    firstEmission?.resume()
+                }
+            }
         } catch {
             if case .loaded = state { return }
             state = .failed(error)
