@@ -310,3 +310,18 @@ action instead — main is PR-gated, so archives only ever see verified commits.
 
 `main` is protected by a GitHub ruleset: changes land via pull request with the four GitHub Actions
 checks required; direct pushes are blocked. This supersedes the old commit-directly-to-main flow.
+
+## macOS App Store packaging: category key in the shared Info.plist; mac icon slots must be filled
+The first macOS delivery (0.2.0 build 9) was rejected by App Store Connect with **ITMS-90242**
+(missing `LSApplicationCategoryType`) and **ITMS-90236** (no ICNS app icon). Two packaging rules
+follow. The shared Info.plist carries `LSApplicationCategoryType`
+(`public.app-category.utilities` — keep it in sync with the App Store Connect primary category;
+iOS ignores the key). And **every mac slot of the app-icon set must reference an image**: with the
+mac slots empty, the asset compiler emits *no* macOS icon at all — no ICNS and no icon entries in
+the compiled catalog (verified by compiling the pre-fix catalog) — which is exactly that rejection.
+Verified toolchain behavior (Xcode 26, identical for Debug/Release and with the archive-time
+include-all-icons flag): the generated ICNS is deliberately minimal (16pt and 128pt families only)
+while the complete set — including the 512pt@2x the rejection names — lands in the compiled asset
+catalog; that pairing is the canonical output of every Xcode 26 Mac build, so store validation
+accepts it. The mac slot images are `sips` downscales of the 1024px source — regenerate them
+whenever the icon artwork changes.

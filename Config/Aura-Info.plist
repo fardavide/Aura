@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Required for Mac App Store submission (ITMS-90242); keep in sync with the
+	     primary category configured in App Store Connect. iOS ignores this key. -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
 	<!-- Frigate is a user-configured, self-hosted server reached over plain HTTP
 	     (often via Tailscale, whose 100.64/10 range NSAllowsLocalNetworking does not
 	     cover), so cleartext loads are allowed. Tighten to exception domains if the
