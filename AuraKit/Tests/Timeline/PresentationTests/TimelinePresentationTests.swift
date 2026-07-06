@@ -204,6 +204,32 @@ struct TimelineScreenViewModelTests {
         #expect(sut.state == .ready(cameras: [camera], timeline: emptyTimeline))
     }
 
+    @Test func `given an order change landing during a refresh fetch then the fresh order wins`() async {
+        // given
+        let settings = FakeSettingsRepository()
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(
+                repository: FakeCamerasRepository(.success([camera, garageCamera])),
+                settings: settings
+            ),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { at(1_000_000) },
+            days: 2
+        )
+        await sut.load()
+
+        // when — the reorder lands while the refresh's timeline fetch is in flight
+        timelineRepo.onQuery = {
+            await MainActor.run { settings.saveCameraOrder([CameraName("garage"), CameraName("driveway")]) }
+            for _ in 0..<20 { await Task.yield() }
+        }
+        await sut.refresh()
+
+        // then
+        #expect(sut.state == .ready(cameras: [garageCamera, camera], timeline: emptyTimeline))
+    }
+
     @Test func `given a ready timeline when the order changes then the cameras re-sort`() async {
         // given
         let settings = FakeSettingsRepository()

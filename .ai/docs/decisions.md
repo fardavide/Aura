@@ -262,8 +262,10 @@ the preference). Propagation is **reactive, not
 manual**: the repository exposes the order as a stream (current value first, then changes);
 `ObserveCameras` in `CamerasDomain` composes `GetCameras` with it and emits the sorted list, so
 ViewModels just `for await` — no re-apply-on-appear. Sort merge rules: saved names first in saved
-order; unknown (new) cameras appended keeping the alphabetical fallback; stale names ignored and
-self-healed on next save. Implementation notes: the editor is a Settings sub-screen (`List` +
+order; unknown (new) cameras appended keeping the alphabetical fallback; stale names ignored by the
+sort. Editor saves preserve entries for cameras not currently listed (e.g. server-disabled) after
+the visible ones — so a disabled camera keeps its slot at the cost of truly-removed names lingering
+harmlessly in UserDefaults. Implementation notes: the editor is a Settings sub-screen (`List` +
 `.onMove`, **save-on-move** — every drag persists immediately and live screens re-sort behind the
 sheet); its row is hidden until a connection exists. ViewModel `load()` still returns after the
 first emission (the `.refreshable` spinner contract) and hands the stream to a VM-owned observation

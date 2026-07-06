@@ -36,6 +36,8 @@ public final class CameraGridViewModel {
     public func load() async {
         do {
             let cameras = try await observeCameras.execute()
+            // A racing load() may have assigned a fresh observation while we were suspended
+            // above — cancel it too, or it would leak and keep writing state forever.
             observation?.cancel()
             await withCheckedContinuation { continuation in
                 observation = Task { [weak self] in

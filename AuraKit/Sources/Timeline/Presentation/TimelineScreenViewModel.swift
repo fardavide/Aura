@@ -97,11 +97,11 @@ public final class TimelineScreenViewModel {
     public func refresh() async {
         let extended = TimeRange(start: span.start, end: now())
 
-        let cameras: [Camera]
         switch state {
-        case let .ready(loaded, _):
-            cameras = loaded
+        case .ready:
+            break
         case .loading, .empty, .failed:
+            let cameras: [Camera]
             do {
                 cameras = try await startObservingCameras()
             } catch {
@@ -113,7 +113,9 @@ public final class TimelineScreenViewModel {
         do {
             let timeline = try await getDayTimeline.execute(in: extended)
             span = extended
-            state = .ready(cameras: cameras, timeline: timeline)
+            // latestCameras, not a pre-fetch snapshot: an order change that landed while
+            // the timeline fetch was in flight must survive this write.
+            state = .ready(cameras: latestCameras, timeline: timeline)
         } catch {
             return  // transient blip — keep the last good timeline rather than show an error
         }
@@ -143,6 +145,9 @@ public final class TimelineScreenViewModel {
     private func startObservingCameras() async throws(CamerasError) -> [Camera] {
         observation?.cancel()
         let stream = try await observeCameras.execute()
+        // A racing caller may have assigned a fresh observation while we were suspended
+        // above — cancel it too, or it would leak and keep writing state forever.
+        observation?.cancel()
         return await withCheckedContinuation { continuation in
             observation = Task { [weak self] in
                 var firstEmission: CheckedContinuation<[Camera], Never>? = continuation

@@ -44,7 +44,7 @@
   unit-tested in the package. Gesture feel + PiP handback still need an on-device pass. See
   `decisions.md`.
 
-- **Slice 6 — user-defined camera order.** Drag-to-reorder editor in Settings ("Camera Order",
+- **Slice 6 — user-defined camera order (v0.1.11).** Drag-to-reorder editor in Settings ("Camera Order",
   `List` + `.onMove`, save-on-move, shown only once a connection exists); the order is a Settings
   preference (`[CameraName]` on the one `SettingsRepository`, UserDefaults) **observed reactively**:
   `ObserveCameras` (CamerasDomain) re-emits the sorted list on every change, so the Cameras grid and

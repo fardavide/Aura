@@ -43,6 +43,23 @@ struct CameraOrderViewModelTests {
         #expect(settings.savedCameraOrder == [CameraName("garage"), CameraName("attic"), CameraName("driveway")])
     }
 
+    @Test func `given saved names not shown in the editor when moving then they survive after the visible ones`() async {
+        // given — "cellar" is saved (e.g. currently disabled on the server) but not listed
+        let settings = FakeSettingsRepository()
+        settings.savedCameraOrder = [CameraName("cellar")]
+        let sut = makeViewModel(
+            cameras: .success([camera("attic"), camera("garage")]),
+            settings: settings
+        )
+        await sut.load()
+
+        // when
+        sut.move(fromOffsets: IndexSet(integer: 1), toOffset: 0)
+
+        // then
+        #expect(settings.savedCameraOrder == [CameraName("garage"), CameraName("attic"), CameraName("cellar")])
+    }
+
     @Test func `given a fetch failure when loading then the state carries the error`() async {
         // given
         let sut = makeViewModel(cameras: .failure(.notAuthorized))

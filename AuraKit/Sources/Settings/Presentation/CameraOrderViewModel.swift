@@ -39,6 +39,10 @@ public final class CameraOrderViewModel {
         guard case .loaded(var cameras) = state else { return }
         cameras.move(fromOffsets: source, toOffset: destination)
         state = .loaded(cameras)
-        saveCameraOrder.execute(cameras.map(\.name))
+        // Saved names not listed here (e.g. a camera currently disabled on the server)
+        // keep their entry after the visible ones instead of being silently erased.
+        let visible = cameras.map(\.name)
+        let hidden = loadCameraOrder.execute().filter { !visible.contains($0) }
+        saveCameraOrder.execute(visible + hidden)
     }
 }

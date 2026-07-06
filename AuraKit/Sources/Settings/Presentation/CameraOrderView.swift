@@ -27,11 +27,15 @@ public struct CameraOrderView: View {
                 .environment(\.editMode, .constant(.active))
                 #endif
             case .failed:
-                ContentUnavailableView(
-                    "Couldn't load cameras",
-                    systemImage: "video.slash",
-                    description: Text("Check the server connection and try again.")
-                )
+                ContentUnavailableView {
+                    Label("Couldn't load cameras", systemImage: "video.slash")
+                } description: {
+                    Text("Check the server connection and try again.")
+                } actions: {
+                    Button("Retry") {
+                        Task { await viewModel.load() }
+                    }
+                }
             }
         }
         .navigationTitle("Camera Order")

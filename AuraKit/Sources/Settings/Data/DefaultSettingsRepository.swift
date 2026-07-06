@@ -61,8 +61,7 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
 
     public func observeCameraOrder() -> AsyncStream<[CameraName]> {
         AsyncStream { continuation in
-            continuation.yield(loadCameraOrder())
-            let id = observers.add(continuation)
+            let id = observers.register(continuation, seededWith: loadCameraOrder)
             continuation.onTermination = { [observers] _ in observers.remove(id) }
         }
     }
@@ -80,9 +79,18 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
 private final class CameraOrderObservers: Sendable {
     private let continuations = Mutex<[UUID: AsyncStream<[CameraName]>.Continuation]>([:])
 
-    func add(_ continuation: AsyncStream<[CameraName]>.Continuation) -> UUID {
+    /// Seeding and registration happen under the one lock that `yield` also takes, so a
+    /// concurrent save is either visible to the seed read or delivered to the registered
+    /// continuation — never lost between the two.
+    func register(
+        _ continuation: AsyncStream<[CameraName]>.Continuation,
+        seededWith currentOrder: () -> [CameraName]
+    ) -> UUID {
         let id = UUID()
-        continuations.withLock { $0[id] = continuation }
+        continuations.withLock {
+            continuation.yield(currentOrder())
+            $0[id] = continuation
+        }
         return id
     }
 
