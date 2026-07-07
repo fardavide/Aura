@@ -304,9 +304,12 @@ bundles available to test"*. Package tests resolve only in the package's own con
 shared scheme **`AuraKitTests`** (committed under `AuraKit/.swiftpm/.../xcschemes/`, all package
 test targets, build entry on the library product so destinations resolve):
 `cd AuraKit && xcodebuild test -scheme AuraKitTests -destination …` — verified green on the iOS
-simulator. Xcode Cloud test actions should select this scheme (one-time App Store Connect change).
-If Xcode Cloud resolves it through the app container and hits the same limitation, drop the test
-action instead — main is PR-gated, so archives only ever see verified commits.
+simulator. **Verified 2026-07-07: Xcode Cloud hits the same limitation** — with the workflow's test
+actions pointed at the package scheme, both platforms fail with "1 error, 0 test failures" before
+any test executes (it resolves the scheme through the app container). Outcome: **Xcode Cloud runs
+no test actions** (archive-only workflow); don't re-add one for the package scheme. The scheme
+remains useful locally — it's the only way to run the package suites through `xcodebuild` on a
+simulator.
 
 `main` is protected by a GitHub ruleset: changes land via pull request with the four GitHub Actions
 checks required; direct pushes are blocked. This supersedes the old commit-directly-to-main flow.

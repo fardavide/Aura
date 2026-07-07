@@ -66,11 +66,11 @@ capture glass faithfully — see `decisions.md`). The detail screens (live camer
 not snapshot-tested — they center on video players that can't render in a snapshot.
 
 ## Next
-- **Xcode Cloud workflow (App Store Connect, manual)**: point the test actions at the shared
-  `AuraKitTests` scheme (the app-scheme snapshot suite cannot pass there — see `decisions.md`);
-  one simulator device is enough (the snapshot matrix is rendered in code, and the package tests
-  are device-independent). If the package scheme also fails to resolve on Xcode Cloud, drop the
-  test action — `main` is PR-gated, so archives only see verified commits.
+- **Xcode Cloud workflow (App Store Connect, manual)**: **remove the two test actions** (iOS +
+  macOS), keep the archives. Verified 2026-07-07: even the package-owned `AuraKitTests` scheme
+  hits the app-container limitation on Xcode Cloud — both test actions fail with "1 error,
+  0 test failures" before any test runs (see `decisions.md`). All testing is carried by the
+  PR gate on `main`, so archives only ever see verified commits.
 - **Single-cam recordings scrubber.** Tap a Timeline tile → that camera's full-res recordings
   scrubber via the VOD HLS URL (`/vod/{camera}/start/{s}/end/{e}/master.m3u8`). **Start with an
   on-device spike**: AVPlayer scrubbing Frigate's VOD HLS is unproven (the web UI uses hls.js on
