@@ -21,7 +21,7 @@
   **zoom** (glass button). Past-hour low-res `preview.mp4` tiles seek **locally**; one shared scrub
   clock fans out to a per-tile **coalescing** controller (latest-target-wins, no debounce); in the
   **live hour** (no `preview.mp4` assembled yet) tiles show the nearest `.webp` **preview frame**,
-  falling back to the latest clip's last frame only when no frame exists (v0.2.1 — fixes tiles
+  falling back to the latest clip's last frame only when no frame exists (v0.2.2 — fixes tiles
   freezing at the top of the current hour; see `decisions.md`). 3rd tab (Cameras | Timeline | Events). The
   cross-platform video/image wrapper was extracted into a shared **`CommonPlayer`** target.
   **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber → v0.1.7

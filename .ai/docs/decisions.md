@@ -85,7 +85,7 @@ overlays (review markers, motion strip, gaps) come from `/api/review`, `/api/rev
 `frigate-rest` skill. **Deferred to 0.1.5**: tap → single-cam full-res VOD HLS scrubber (needs an
 on-device AVPlayer-vs-hls.js spike first; bound windows to ~1h for the nginx-vod segment cap).
 
-### Live-hour tiles: nearest `.webp` preview frame, not a frozen clip (v0.2.1)
+### Live-hour tiles: nearest `.webp` preview frame, not a frozen clip (v0.2.2)
 Frigate assembles one `preview.mp4` **per completed hour**; the in-progress hour has **no mp4 yet**,
 only cached `.webp` preview frames (`/api/preview/{camera}/start/{s}/end/{e}/frames`). The tile
 originally loaded clips only, so at the live edge `clip(for:)` found no covering clip and fell back
