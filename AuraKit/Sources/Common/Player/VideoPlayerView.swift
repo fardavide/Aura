@@ -1,3 +1,6 @@
+#if os(iOS)
+import AVFoundation
+#endif
 import AVKit
 import SwiftUI
 
@@ -16,28 +19,78 @@ public struct VideoPlayerView {
 
 #if os(iOS)
 extension VideoPlayerView: UIViewControllerRepresentable {
-    public func makeCoordinator() -> Coordinator { Coordinator() }
+    public func makeCoordinator() -> Coordinator { Coordinator(url: url, headers: headers) }
 
     public func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
         controller.delegate = context.coordinator
         controller.allowsPictureInPicturePlayback = true
         controller.canStartPictureInPictureAutomaticallyFromInline = true
-        controller.player = makeAuthedPlayer(url: url, headers: headers)
-        controller.player?.play()
+        let player = makeAuthedPlayer(url: url, headers: headers)
+        controller.player = player
+        player.play()
+        context.coordinator.observeInterruptions(of: player)
         return controller
     }
 
     public func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {}
 
+    @MainActor
     public final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
+        private let url: URL
+        private let headers: [String: String]
+        private weak var player: AVPlayer?
+        // Written once during setup, read once in the nonisolated `deinit`; the escape hatch lets
+        // deinit unregister the non-Sendable observer token.
+        private nonisolated(unsafe) var interruptionObserver: (any NSObjectProtocol)?
+
+        init(url: URL, headers: [String: String]) {
+            self.url = url
+            self.headers = headers
+            super.init()
+        }
+
+        deinit {
+            if let interruptionObserver {
+                NotificationCenter.default.removeObserver(interruptionObserver)
+            }
+        }
+
+        /// An audio-session interruption (a call, Siri, another app playing audio) pauses the
+        /// player and deactivates our session. A *live* HLS item can't be un-paused: while it sat
+        /// idle, its segments rolled off the live window, so `play()` has nothing left to show.
+        /// Recover when the interruption ends by reactivating the session and swapping in a fresh
+        /// live item, which snaps playback back to the live edge. Delivered on the main queue so the
+        /// player is touched on its actor.
+        func observeInterruptions(of player: AVPlayer) {
+            self.player = player
+            interruptionObserver = NotificationCenter.default.addObserver(
+                forName: AVAudioSession.interruptionNotification,
+                object: AVAudioSession.sharedInstance(),
+                queue: .main
+            ) { [weak self] notification in
+                let ended = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
+                    .flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .ended
+                guard ended else { return }
+                MainActor.assumeIsolated { self?.resumeAtLiveEdge() }
+            }
+        }
+
         /// "Return to app" from the PiP window: the detail view is still in the navigation
-        /// stack, so report the UI as already restored for a seamless hand-back.
-        public func playerViewController(
+        /// stack, so report the UI as already restored for a seamless hand-back. `nonisolated` to
+        /// match the delegate requirement — it only forwards the completion handler.
+        nonisolated public func playerViewController(
             _ playerViewController: AVPlayerViewController,
             restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
         ) {
             completionHandler(true)
+        }
+
+        private func resumeAtLiveEdge() {
+            try? AVAudioSession.sharedInstance().setActive(true)
+            guard let player else { return }
+            player.replaceCurrentItem(with: makeAuthedPlayerItem(url: url, headers: headers))
+            player.play()
         }
     }
 }
