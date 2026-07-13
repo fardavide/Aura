@@ -19,8 +19,10 @@
   (`glassEffect`) floating over the grid so tiles refract through it: an activity **histogram**
   (motion height, colored by severity), dimmed gaps, a date/time readout, and an Hour/Day/Week
   **zoom** (glass button). Past-hour low-res `preview.mp4` tiles seek **locally**; one shared scrub
-  clock fans out to a per-tile **coalescing** controller (latest-target-wins, no debounce); at the
-  live edge tiles fall back to the latest footage. 3rd tab (Cameras | Timeline | Events). The
+  clock fans out to a per-tile **coalescing** controller (latest-target-wins, no debounce); in the
+  **live hour** (no `preview.mp4` assembled yet) tiles show the nearest `.webp` **preview frame**,
+  falling back to the latest clip's last frame only when no frame exists (v0.2.1 — fixes tiles
+  freezing at the top of the current hour; see `decisions.md`). 3rd tab (Cameras | Timeline | Events). The
   cross-platform video/image wrapper was extracted into a shared **`CommonPlayer`** target.
   **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber → v0.1.7
   track polish: white inset + border, blue playhead, hatched no-footage, bars flush to bottom.)**
@@ -76,8 +78,10 @@ not snapshot-tested — they center on video players that can't render in a snap
   on-device spike**: AVPlayer scrubbing Frigate's VOD HLS is unproven (the web UI uses hls.js on
   every platform, never native). Bound playback windows to ~1h (nginx-vod segment cap).
 - **Timeline follow-ups**: auto-load ranges older than the current ~7-day span as you scroll; the
-  current-hour `.webp` preview-frame path (tiles use the latest-footage fallback at the live edge
-  for now); the `camera=all` batch clip-list optimization; richer markers.
+  `camera=all` batch clip-list optimization; richer markers. Live-hour frames are fetched once per
+  tile on appear, so leaving the screen open for a long stretch without scrubbing won't pull newer
+  frames until a re-appearance or scrub (the histogram still auto-refreshes) — a continuous
+  live-follow of the tiles is a further follow-up.
 - A real **app icon** (current is a placeholder; the mac slots are `sips` downscales of the
   1024px source — regenerate them with the new artwork, and keep them filled: empty mac slots
   ship no macOS icon at all, see the App Store packaging decision).

@@ -41,6 +41,27 @@ struct PreviewClipTests {
     }
 }
 
+struct PreviewFrameTests {
+
+    @Test func `given frames when finding the most recent at or before a time then it is returned`() {
+        let frames = [frame(10), frame(20), frame(30)]
+        #expect(frames.mostRecent(atOrBefore: at(25)) == frame(20))
+        #expect(frames.mostRecent(atOrBefore: at(30)) == frame(30))
+    }
+
+    @Test func `given a time before every frame then there is none`() {
+        #expect([frame(10), frame(20)].mostRecent(atOrBefore: at(5)) == nil)
+    }
+
+    @Test func `given no frames then there is none`() {
+        #expect([PreviewFrame]().mostRecent(atOrBefore: at(5)) == nil)
+    }
+
+    private func frame(_ seconds: TimeInterval) -> PreviewFrame {
+        PreviewFrame(camera: CameraName("drive"), time: at(seconds), fileName: "preview_drive-\(Int(seconds)).webp")
+    }
+}
+
 struct GetDayTimelineTests {
 
     @Test func `given a repository when executing then it returns the day timeline`() async throws {
