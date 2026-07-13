@@ -7,6 +7,9 @@ xcuserdata/
 build/
 DerivedData/
 
+# Snapshot test failure artifacts (freshly-rendered mismatches, written per failing run)
+AuraTests/__SnapshotFailures__/
+
 # Swift Package Manager
 .build/
 # .swiftpm is per-user state, except shared schemes (committed — Xcode Cloud needs them)
@@ -17,3 +20,6 @@ DerivedData/
 
 # Claude (personal local settings)
 .claude/settings.local.json
+
+# Python bytecode cache
+__pycache__/

@@ -167,3 +167,8 @@ never `Package.swift`, so the app stays dependency-free).
 - **Recording baselines:** delete the stale reference and run the suite — the first run writes the
   missing PNG and fails, a re-run compares (xcodebuild's retry-on-failure does both in one invocation).
   Commit the reference PNGs. Reference images live in `__Snapshots__/` beside the test file.
+- **Inspecting a failure:** on a mismatch the freshly-rendered image is written to
+  `AuraTests/__SnapshotFailures__/<Suite>/<name>.png` (gitignored) — same relative path as its
+  `__Snapshots__/` baseline, so you can diff the two directly. `SnapshotSupport` pins this via
+  `SNAPSHOT_ARTIFACTS`. On CI the failure job turns this folder into a browsable HTML diff report
+  (`.github/scripts/snapshot-report.py`) uploaded as the `snapshot-diffs` artifact — no `.xcresult`.
