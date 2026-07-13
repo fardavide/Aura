@@ -51,9 +51,16 @@ public struct ZoomableContainer<Content: View>: View {
     private func magnify(in viewport: CGSize) -> some Gesture {
         MagnifyGesture()
             .onChanged { value in
+                guard viewport.width > 0, viewport.height > 0 else { return }
                 isMagnifying = true
                 activeMagnification = value.magnification
-                activeAnchor = value.startAnchor
+                // `MagnifyGesture.Value.startAnchor` reports `.center` in practice, which
+                // pins every pinch to the middle of the viewport. Derive the anchor from the
+                // pinch-midpoint location instead — same approach the double-tap uses.
+                activeAnchor = UnitPoint(
+                    x: value.startLocation.x / viewport.width,
+                    y: value.startLocation.y / viewport.height
+                )
                 applyActiveGestures(in: viewport)
             }
             .onEnded { _ in
