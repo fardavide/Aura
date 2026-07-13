@@ -92,15 +92,25 @@ jobs:
             -scheme Aura \
             -only-testing:AuraTests \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
-            -clonedSourcePackagesDirPath SourcePackages \
-            -resultBundlePath TestResults.xcresult
-      # The .xcresult holds the reference/failure/diff images swift-snapshot-testing attaches,
-      # so a red is debuggable from the artifact without re-running locally.
-      - name: Upload test results on failure
+            -clonedSourcePackagesDirPath SourcePackages
+      # On a mismatch the suite writes each freshly-rendered screen to AuraTests/__SnapshotFailures__/
+      # (SnapshotSupport.swift pins SNAPSHOT_ARTIFACTS there). Pair each with its committed baseline and
+      # emit a small self-contained HTML report — expected vs actual side by side plus an in-browser
+      # difference blend — so a red is reviewable by eye. This replaces uploading the whole ~60 MB
+      # .xcresult (hundreds of opaque files); the fix stays the same: inspect, then re-record baselines
+      # locally — never on CI.
+      - name: Build snapshot diff report
+        if: failure()
+        run: |
+          python3 .github/scripts/snapshot-report.py \
+            AuraTests/__SnapshotFailures__ \
+            AuraTests/__Snapshots__ \
+            snapshot-report
+      - name: Upload snapshot diff report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: snapshot-test-results
-          path: TestResults.xcresult
+          name: snapshot-diffs
+          path: snapshot-report
           retention-days: 7
           if-no-files-found: warn

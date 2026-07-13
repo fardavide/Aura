@@ -196,8 +196,9 @@ solid one and the failing signal is precise:
 - **Snapshot tests** — the app-hosted iOS screenshot suite, isolated in its own gating job on a concrete
   simulator. Kept apart because its rendering is environment-sensitive (the committed PNGs were recorded
   locally; glass/font rasterization can drift past the perceptual tolerance on a different runtime). It
-  **gates** by choice; on failure the `.xcresult` (with reference/diff images) is uploaded as an
-  artifact, and the fix is to inspect the diff and re-record baselines locally — never record on CI.
+  **gates** by choice; on failure a small **HTML diff report** is uploaded as an artifact (see the
+  snapshot-artifact decision below), and the fix is to inspect the diff and re-record baselines locally
+  — never record on CI.
 
 This required **sharing the `Aura` scheme** (`xcshareddata/xcschemes/Aura.xcscheme`, committed): it
 previously lived only in gitignored `xcuserdata/`, so a fresh CI checkout couldn't resolve `-scheme Aura`.
@@ -345,3 +346,22 @@ while the complete set — including the 512pt@2x the rejection names — lands 
 catalog; that pairing is the canonical output of every Xcode 26 Mac build, so store validation
 accepts it. The mac slot images are `sips` downscales of the 1024px source — regenerate them
 whenever the icon artwork changes.
+
+## Snapshot failure artifact: an HTML diff report, not the raw `.xcresult`
+A red snapshot job used to upload the whole `TestResults.xcresult` — ~60 MB of hundreds of opaque
+files, useless to eyeball. Instead the CI now uploads a small **self-contained HTML report** showing
+only the screens that didn't match: expected (baseline) vs actual (this run) side by side, plus an
+in-browser **difference blend** (`mix-blend-mode: difference` over black, so only changed pixels light
+up) with an amplify toggle. It reads without Xcode, and across the whole matrix a reviewer sees at a
+glance which device/orientation/scheme drifted. Mechanism: `swift-snapshot-testing` writes the
+freshly-rendered image on a mismatch to `$SNAPSHOT_ARTIFACTS/<Suite>/<name>.png` — by default a
+per-run temp dir **inside the simulator's data container** (effectively unreachable). `SnapshotSupport`
+pins `SNAPSHOT_ARTIFACTS` to `AuraTests/__SnapshotFailures__/` (derived from the test's `#filePath`, so
+it's correct on any machine, and only if the caller hasn't already set it), which mirrors the
+`__Snapshots__/<Suite>/<name>.png` baseline layout **at the same relative path** — so pairing
+expected↔actual is a path swap, no `.xcresult` parsing and no attachment-name guessing. A dependency-free
+`.github/scripts/snapshot-report.py` builds the report from those two folders; the failures folder is
+gitignored. This is also a local DX win: a failing run now leaves a tidy folder of exactly what rendered,
+beside the baselines. It handles a brand-new snapshot (no baseline) and the no-mismatch case (build/crash,
+not a pixel diff) gracefully. The `.xcresult` is no longer uploaded; deep-log debugging falls back to the
+job log or re-running locally.

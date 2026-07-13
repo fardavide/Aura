@@ -165,6 +165,21 @@ private func warmUpRender(_ view: some View, size: CGSize, style: UIUserInterfac
     window.isHidden = true
     window.rootViewController = nil
 }
+
+/// Redirects swift-snapshot-testing's failure artifacts — the freshly-rendered image it writes on a
+/// mismatch — into a predictable `__SnapshotFailures__/` folder beside the `__Snapshots__/` baselines,
+/// unless the caller already pinned `SNAPSHOT_ARTIFACTS`. By default those images land in a per-run
+/// temp directory inside the simulator's data container, effectively unreachable. Pinned here, a
+/// failing run (local or CI) leaves a tidy tree mirroring the baselines — exactly the screens that
+/// didn't match, same relative path — ready to diff by eye against `__Snapshots__/`. On CI the diff
+/// report is built straight from this folder (see `.github/scripts/snapshot-report.py`). Idempotent:
+/// only the first snapshot in the process sets the variable.
+private func redirectSnapshotFailureArtifacts(besideBaselinesOf filePath: StaticString) {
+    guard ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] == nil else { return }
+    let testDirectory = URL(fileURLWithPath: "\(filePath)").deletingLastPathComponent()
+    let failuresDirectory = testDirectory.appendingPathComponent("__SnapshotFailures__")
+    setenv("SNAPSHOT_ARTIFACTS", failuresDirectory.path, 1)
+}
 #endif
 
 /// Renders `view` across the platform's snapshot matrix and compares each against its reference.
@@ -181,6 +196,7 @@ func assertScreenSnapshot(
     // iOS-only: macOS AppKit offscreen rendering (cacheDisplay) can't faithfully capture Liquid
     // Glass, materials, or ContentUnavailableView — it renders light-mode/blank. See decisions.md.
     #if os(iOS)
+    redirectSnapshotFailureArtifacts(besideBaselinesOf: filePath)
     let base = view.snapshotEnvironment()
     let configs: [SnapshotConfig] = [
         SnapshotConfig(name: "iPhone-portrait", device: .iPhone13),
