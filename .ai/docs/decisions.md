@@ -83,8 +83,25 @@ is unit-tested without AVFoundation), **not** a debounce timer — matching Frig
 overlays (review markers, motion strip, gaps) come from `/api/review`, `/api/review/activity/motion`,
 `/api/recordings/unavailable`, fetched concurrently. Endpoints + scrub rules are mapped in the
 `frigate-rest` skill. **Deferred to 0.1.5**: tap → single-cam full-res VOD HLS scrubber (needs an
-on-device AVPlayer-vs-hls.js spike first; bound windows to ~1h for the nginx-vod segment cap). The
-current-hour `.webp` frame path is a follow-up (tiles show a placeholder for the live hour for now).
+on-device AVPlayer-vs-hls.js spike first; bound windows to ~1h for the nginx-vod segment cap).
+
+### Live-hour tiles: nearest `.webp` preview frame, not a frozen clip (v0.2.2)
+Frigate assembles one `preview.mp4` **per completed hour**; the in-progress hour has **no mp4 yet**,
+only cached `.webp` preview frames (`/api/preview/{camera}/start/{s}/end/{e}/frames`). The tile
+originally loaded clips only, so at the live edge `clip(for:)` found no covering clip and fell back
+to the **latest completed clip clamped to its end** — every tile froze on the last frame of the
+previous hour (e.g. stuck at ~21:00 when it's 21:45), while the histogram (from `/api/review*`, on
+the 30s auto-refresh) stayed current. The already-built-but-unwired frame path is now wired into
+`PreviewTileViewModel`: `prepare` also fetches the range's frames (best-effort — a frame-fetch
+failure degrades to the old frozen-clip fallback, not a tile error, since the clips already loaded),
+and the scrub resolution is **clip-covers-instant → else nearest frame at or before the instant →
+else the latest-clip freeze**. A `.frame(Image)` display case renders the decoded webp (immutable,
+`URLCache`-friendly). The nearest-frame pick is a pure `[PreviewFrame].mostRecent(atOrBefore:)`
+(unit-tested); the image load reuses the existing `PreviewImageLoading` seam, injected into the tile
+VM directly (same pattern as the Cameras grid's `CameraImageLoading`, not a use-case wrapper). Frames
+are fetched **once per tile on appear** (tiles still key off `span.start` and don't reload on the
+auto-refresh, by the live-edge-refresh decision), so continuous live-follow without interaction stays
+a follow-up — a fresh appearance or a scrub picks up newer frames.
 
 ### Live-edge auto-refresh, not pull-to-refresh
 The span was fixed at screen init, so new footage never appeared without an app restart. A periodic

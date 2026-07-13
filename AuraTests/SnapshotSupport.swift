@@ -103,10 +103,11 @@ func timelineScreen(
 
     // No preview material — every tile resolves to the `.unavailable` placeholder.
     let previews = GetCameraPreviews(provider: FakeCameraPreviewProvider())
+    let imageLoader = FakePreviewImageLoader()
     var tiles: [CameraName: PreviewTileViewModel] = [:]
     if case let .success(all) = cameras {
         for camera in all where camera.isEnabled {
-            let tile = PreviewTileViewModel(camera: camera, previews: previews)
+            let tile = PreviewTileViewModel(camera: camera, previews: previews, imageLoader: imageLoader)
             await tile.prepare(range: viewModel.span, at: viewModel.clock.instant)
             tiles[camera.name] = tile
         }
@@ -114,7 +115,7 @@ func timelineScreen(
 
     return TimelineScreenView(
         viewModel: viewModel,
-        makeTileViewModel: { tiles[$0.name] ?? PreviewTileViewModel(camera: $0, previews: previews) },
+        makeTileViewModel: { tiles[$0.name] ?? PreviewTileViewModel(camera: $0, previews: previews, imageLoader: imageLoader) },
         onOpenRecording: { _, _ in }
     )
 }

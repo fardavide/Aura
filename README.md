@@ -40,6 +40,14 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.2.2 — 2026-07-13
+- Timeline: live-hour camera tiles now show the current footage instead of freezing on the last
+  frame of the previous hour — the in-progress hour has no preview clip yet, so tiles fall back to
+  the nearest preview frame.
+
+### 0.2.1 — 2026-07-13
+- Live: the camera stream now recovers automatically after an audio-session interruption.
+
 ### 0.2.0 — 2026-07-06
 - Camera ordering: drag-to-reorder editor in Settings; the camera grid and timeline follow the
   order live.

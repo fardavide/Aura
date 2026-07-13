@@ -36,6 +36,10 @@ struct PreviewTileView: View {
             ProgressView()
         case .clip(let player):
             ScrubbingPlayerView(player: player)
+        case .frame(let image):
+            image
+                .resizable()
+                .scaledToFill()
         case .unavailable:
             Image(systemName: "clock.badge.questionmark").foregroundStyle(.secondary)
         case .failed:

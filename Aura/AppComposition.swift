@@ -113,11 +113,13 @@ final class AppComposition {
     }
 
     func previewTileViewModel(for camera: Camera, connection: ConnectionSettings) -> PreviewTileViewModel {
-        PreviewTileViewModel(
+        let config = serverConfig(from: connection)
+        return PreviewTileViewModel(
             camera: camera,
             previews: GetCameraPreviews(
-                provider: FrigatePreviewSourceProvider(config: serverConfig(from: connection), httpClient: httpClient)
-            )
+                provider: FrigatePreviewSourceProvider(config: config, httpClient: httpClient)
+            ),
+            imageLoader: FrigatePreviewImageLoader(config: config, httpClient: httpClient)
         )
     }
 

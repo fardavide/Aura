@@ -252,12 +252,104 @@ struct TimelineScreenViewModelTests {
     }
 }
 
+@MainActor
+struct PreviewTileViewModelTests {
+
+    @Test func `given the live hour with frames then it shows the nearest frame, not a frozen clip`() async {
+        // given — a past-hour clip [0,60] and current-hour frames at 70 and 80
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(clips: [clip(0, 60)], frames: [frame(70), frame(80)], loader: loader)
+
+        // when — the playhead sits in the live hour, past the last clip
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // then — the nearest frame at or before 85 is loaded and shown
+        #expect(loader.requestedFrames.last == frame(80))
+        #expect(isFrame(sut.display))
+    }
+
+    @Test func `given a scrub covered by a past clip then it plays the clip without loading a frame`() async {
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(clips: [clip(0, 60)], frames: [frame(70)], loader: loader)
+
+        await sut.prepare(range: tileWindow, at: at(30))
+
+        #expect(isClip(sut.display))
+        #expect(loader.requestedFrames.isEmpty)
+    }
+
+    @Test func `given the live edge with no frames then it freezes on the latest clip`() async {
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(clips: [clip(0, 60)], frames: [], loader: loader)
+
+        await sut.prepare(range: tileWindow, at: at(90))
+
+        #expect(isClip(sut.display))
+        #expect(loader.requestedFrames.isEmpty)
+    }
+
+    @Test func `given no clips and only frames then it shows a frame`() async {
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(clips: [], frames: [frame(70), frame(80), frame(90)], loader: loader)
+
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        #expect(loader.requestedFrames.last == frame(80))
+    }
+}
+
 // MARK: - Helpers
 
 private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
 
 private let camera = Camera(name: CameraName("driveway"), friendlyName: "Driveway", isEnabled: true, streamNames: ["driveway"])
 private let garageCamera = Camera(name: CameraName("garage"), friendlyName: "Garage", isEnabled: true, streamNames: ["garage"])
+private let tileWindow = TimeRange(start: at(0), end: at(100))
+
+/// A 1×1 PNG so `platformImage(from:)` decodes to a real image (arbitrary bytes decode to nil).
+private let pngData = Data(base64Encoded:
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)!
+
+private func clip(_ start: TimeInterval, _ end: TimeInterval) -> PreviewClip {
+    PreviewClip(camera: camera.name, range: TimeRange(start: at(start), end: at(end)), path: "/p.mp4")
+}
+
+private func frame(_ seconds: TimeInterval) -> PreviewFrame {
+    PreviewFrame(camera: camera.name, time: at(seconds), fileName: "preview_driveway-\(Int(seconds)).webp")
+}
+
+@MainActor
+private func makeTile(
+    clips: [PreviewClip],
+    frames: [PreviewFrame],
+    loader: FakePreviewImageLoader
+) -> PreviewTileViewModel {
+    PreviewTileViewModel(
+        camera: camera,
+        previews: GetCameraPreviews(provider: FakeCameraPreviewProvider(clips: clips, frames: frames)),
+        imageLoader: loader
+    )
+}
+
+private func isFrame(_ display: PreviewTileViewModel.Display) -> Bool {
+    if case .frame = display { true } else { false }
+}
+
+private func isClip(_ display: PreviewTileViewModel.Display) -> Bool {
+    if case .clip = display { true } else { false }
+}
+
+/// Spins the main actor until `condition` holds (the frame load hops through a `Task`), bounded so
+/// a stuck expectation fails fast rather than hanging.
+@MainActor
+private func settle(_ condition: () -> Bool) async {
+    for _ in 0..<100 where !condition() {
+        await Task.yield()
+    }
+}
 private let emptyTimeline = DayTimeline(markers: [], motion: [], gaps: [])
 private let busyTimeline = DayTimeline(markers: [], motion: [MotionBucket(time: at(1_000), intensity: 80)], gaps: [])
 
