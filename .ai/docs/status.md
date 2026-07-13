@@ -40,7 +40,9 @@
 
 - **Pinch-to-zoom on the live view (v0.1.10).** Digital zoom + pan (1x–4x) on the live camera detail, both
   platforms: pinch (touch / trackpad magnify) zooms about the pinch point, drag pans with the
-  content edges clamped to the viewport, double-tap toggles 1x↔2x at the tap point. A SwiftUI
+  content edges clamped to the viewport, double-tap toggles 1x↔2x at the tap point. The pinch
+  anchor comes from `MagnifyGesture`'s start **location** (v0.2.3) — its `startAnchor` reports
+  `.center` in practice, which pinned every pinch to the middle of the frame. A SwiftUI
   gesture container in `CommonPlayer` wraps the untouched platform players (PiP and the player's
   own controls unaffected — `simultaneousGesture`); the clamped zoom/pan math is a pure value type
   unit-tested in the package. Gesture feel + PiP handback still need an on-device pass. See
