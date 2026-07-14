@@ -45,8 +45,11 @@
   `.center` in practice, which pinned every pinch to the middle of the frame. A SwiftUI
   gesture container in `CommonPlayer` wraps the untouched platform players (PiP and the player's
   own controls unaffected — `simultaneousGesture`); the clamped zoom/pan math is a pure value type
-  unit-tested in the package. Gesture feel + PiP handback still need an on-device pass. See
-  `decisions.md`.
+  unit-tested in the package. On iOS the container's pinch was competing with `AVPlayerViewController`'s
+  **own** built-in pinch/double-tap zoom (aspect fit↔fill) — a second, center-anchored zoom that broke
+  the clamped pan and made the right gesture hard to trigger; the wrapper now disables those built-in
+  recognizers so only the container zooms (v0.2.4, on-device fix — macOS's `AVPlayerView` has no such
+  gesture). See `decisions.md`.
 
 - **Slice 6 — user-defined camera order (v0.2.0).** Drag-to-reorder editor in Settings ("Camera Order",
   `List` + `.onMove`, save-on-move, shown only once a connection exists); the order is a Settings
