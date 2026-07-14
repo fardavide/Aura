@@ -1,5 +1,6 @@
 #if os(iOS)
 import AVFoundation
+import UIKit
 #endif
 import AVKit
 import SwiftUI
@@ -30,10 +31,33 @@ extension VideoPlayerView: UIViewControllerRepresentable {
         controller.player = player
         player.play()
         context.coordinator.observeInterruptions(of: player)
+        disableBuiltInZoomGestures(in: controller.view)
         return controller
     }
 
-    public func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {}
+    public func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        // AVKit installs its zoom recognizers lazily, so re-assert on every update to keep them off.
+        disableBuiltInZoomGestures(in: controller.view)
+    }
+
+    /// `AVPlayerViewController` ships its own pinch-to-zoom (video aspect fit↔fill) and a double-tap
+    /// zoom, installed on private descendant views. They race `ZoomableContainer`'s gestures — the
+    /// built-in pinch snaps the video to center and desyncs our clamped pan, and its two-tap
+    /// recognizer collides with our double-tap toggle. There's no public switch, so walk the view
+    /// tree and disable those recognizers by kind; single-tap controls and the PiP button (which we
+    /// keep for free PiP) stay untouched. macOS's `AVPlayerView` has no such on-glass gesture, so
+    /// only iOS needs this.
+    private func disableBuiltInZoomGestures(in view: UIView) {
+        for recognizer in view.gestureRecognizers ?? [] {
+            if recognizer is UIPinchGestureRecognizer
+                || (recognizer as? UITapGestureRecognizer)?.numberOfTapsRequired == 2 {
+                recognizer.isEnabled = false
+            }
+        }
+        for subview in view.subviews {
+            disableBuiltInZoomGestures(in: subview)
+        }
+    }
 
     @MainActor
     public final class Coordinator: NSObject, AVPlayerViewControllerDelegate {

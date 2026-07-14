@@ -251,6 +251,17 @@ re-clamps the offset through the same math. Fallback if SwiftUI gestures ever fa
 a hosted player view: recognizers in the platform wrappers' coordinators feeding the same math —
 not needed so far.
 
+On iOS one thing *did* have to be neutralized: `AVPlayerViewController` installs its **own** pinch
+(video aspect fit↔fill) and double-tap zoom recognizers on private descendant views, which raced the
+container's gestures — the built-in pinch gave a second, **center-anchored** zoom that desynced the
+clamped pan and made the right pinch hard to land (the v0.2.3 anchor fix was downstream of, and
+invisible under, this). There's no public API to disable it, so the iOS wrapper walks
+`AVPlayerViewController.view`'s subtree and disables every `UIPinchGestureRecognizer` and two-tap
+`UITapGestureRecognizer`, re-asserting in `updateUIViewController` since AVKit adds them lazily;
+single-tap controls and the PiP button stay live. macOS's `AVPlayerView` has no such on-glass gesture,
+so it's iOS-only (v0.2.4, verified on device — this hosted-recognizer conflict can't surface in the
+package or snapshot tests).
+
 ## No XCUITest target — removed the template `AuraUITests`
 The `AuraUITests` target (untouched Xcode-template boilerplate: `testExample`,
 `testLaunchPerformance`, `testLaunch` — no real assertions) was deleted from the project and the
