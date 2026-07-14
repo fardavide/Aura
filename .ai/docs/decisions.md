@@ -376,3 +376,14 @@ gitignored. This is also a local DX win: a failing run now leaves a tidy folder 
 beside the baselines. It handles a brand-new snapshot (no baseline) and the no-mismatch case (build/crash,
 not a pixel diff) gracefully. The `.xcresult` is no longer uploaded; deep-log debugging falls back to the
 job log or re-running locally.
+
+## macOS Settings: grouped Forms + an explicitly sized sheet
+On iOS a `Form` defaults to the inset-grouped look; on macOS it defaults to the *columnar* style
+(right-aligned labels in a narrow column, no grouped cards, tight spacing) — which read as unpolished
+on the native Mac build. The Settings menu and its Server sub-screen therefore pin `.grouped`
+explicitly; iOS is unaffected (grouped is already its default, so the snapshot baselines don't move).
+Separately, a macOS sheet sizes to its root content's ideal size and does **not** grow when the inner
+navigation stack pushes a detail, so the drill-in camera-reorder list rendered with no room and its
+cameras didn't show. The Settings sheet now reserves a minimum frame on macOS so pushed details have
+space. Neither gap is caught by the suite — macOS snapshots are intentionally excluded (see above), so
+the Mac layout is verified by hand.

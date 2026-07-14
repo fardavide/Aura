@@ -45,6 +45,7 @@ public struct SettingsView: View {
                     }
                 }
             }
+            .formStyle(.grouped)
             .navigationTitle("Settings")
             .toolbar {
                 Button("Done", action: onDone)

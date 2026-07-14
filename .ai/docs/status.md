@@ -61,7 +61,10 @@
   `decisions.md`. Settings became a **menu** (Server sub-screen with its own Save, Camera Order,
   inline theme picker saving on change, Done to close). Settings became a **menu** (Server sub-screen with its own Save, Camera Order,
   inline theme picker saving on change, Done to close); shared test doubles moved to the
-  **`TestDoubles`** target (product `AuraKitTestDoubles`).
+  **`TestDoubles`** target (product `AuraKitTestDoubles`). On macOS both Settings `Form`s now pin
+  `.grouped` (the columnar default looked unpolished) and the Settings sheet reserves a minimum
+  frame, so the drilled-in Camera Order list has room to actually show its cameras (v0.2.5 — the
+  Mac-only gaps the iOS-only snapshot suite doesn't cover; see `decisions.md`).
 
 Package logic is covered by Swift Testing (150 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
