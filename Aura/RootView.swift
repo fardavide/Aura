@@ -64,6 +64,11 @@ struct RootView: View {
                 showingSettings = false
                 reload()
             }
+            // macOS sheets size to their root content and don't grow when the inner
+            // NavigationStack pushes a detail, so the drill-in camera list needs room reserved here.
+            #if os(macOS)
+            .frame(minWidth: 480, minHeight: 560)
+            #endif
         }
         .onAppear(perform: reload)
     }

@@ -42,6 +42,7 @@ public struct ServerSettingsView: View {
                 Text(errorMessage).foregroundStyle(.red)
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("Server")
         .toolbar {
             Button("Save") {
