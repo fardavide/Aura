@@ -40,6 +40,23 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.0 — 2026-07-15
+- Cameras: redesigned grid. Richer live tiles with a LIVE marker, an offline treatment, and
+  activity badges (person / vehicle) when Frigate is tracking something; a live·offline count in
+  the header; and an adaptive layout — a full-width list in portrait, a grid in landscape / on
+  iPad / on Mac. Tiles refresh every few seconds while the grid is open.
+
+### 0.2.5 — 2026-07-14
+- Settings (macOS): the settings forms and the drilled-in camera-reorder sheet now lay out
+  correctly on Mac.
+
+### 0.2.4 — 2026-07-14
+- Live (iOS): pinch-to-zoom no longer competes with the player's own built-in zoom, so it's
+  easier to trigger and pans correctly.
+
+### 0.2.3 — 2026-07-13
+- Live: pinch-to-zoom now zooms about the pinch point rather than the center of the frame.
+
 ### 0.2.2 — 2026-07-13
 - Timeline: live-hour camera tiles now show the current footage instead of freezing on the last
   frame of the previous hour — the in-progress hour has no preview clip yet, so tiles fall back to

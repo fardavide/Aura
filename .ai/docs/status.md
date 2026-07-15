@@ -66,7 +66,22 @@
   frame, so the drilled-in Camera Order list has room to actually show its cameras (v0.2.5 — the
   Mac-only gaps the iOS-only snapshot suite doesn't cover; see `decisions.md`).
 
-Package logic is covered by Swift Testing (150 tests). All four main screens — **Timeline**
+- **Slice 7 — Cameras grid v2 restyle.** The camera grid + tiles were restyled to the "v2" design
+  (`Cameras.dc.html`): dark 16:9 tiles with a LIVE marker, the name over a bottom scrim, a per-tile
+  **activity badge** (alert = red / detection = amber, from in-progress `/api/review` items), an
+  **offline** treatment when the still fails, and a **live·offline count** pill in the header. Layout
+  is size-class driven (iPhone portrait = full-width list, landscape/iPad/macOS = grid). The live
+  video detail (PiP + zoom) is unchanged. A new **camera-activity** vertical (`CameraActivity` +
+  `GetCameraActivity` + `FrigateCameraActivityRepository`) reads `/api/review` and keeps the
+  in-progress items. The grid **view model owns preview loading** (concurrent, so an offline camera
+  can't block the rest) and tiles are pure — this removed an AttributeGraph churn / heap-corruption
+  crash in the snapshot renderer (see `decisions.md`). **Deferred to follow-ups:** the top summary
+  card (RIGHT NOW / TODAY / RECORDING) and Outdoor/Indoor group chips (need `camera_groups` +
+  `/api/stats` verified on-server first); IR and the mock's tile drift are dropped (no verified data /
+  the design is deliberately calm). Cameras grid snapshots grew to loaded / **activity** / **offline** /
+  empty / failed.
+
+Package logic is covered by Swift Testing (174 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
@@ -76,6 +91,11 @@ capture glass faithfully — see `decisions.md`). The detail screens (live camer
 not snapshot-tested — they center on video players that can't render in a snapshot.
 
 ## Next
+- **Cameras v2 follow-ups.** The rest of the `Cameras.dc.html` design: the top **summary card**
+  (RIGHT NOW active object / TODAY event counts / RECORDING storage) and the **Outdoor/Indoor group
+  chips**. Blocked on verifying `camera_groups` (in `/api/config`) and storage (`/api/stats`) against
+  the real server and updating `/frigate-rest`; today/right-now can reuse the events + review data.
+  Optional: a periodic still refresh so "LIVE" tiles feel live.
 - **Xcode Cloud workflow (App Store Connect, manual)**: **remove the two test actions** (iOS +
   macOS), keep the archives. Verified 2026-07-07: even the package-owned `AuraKitTests` scheme
   hits the app-container limitation on Xcode Cloud — both test actions fail with "1 error,

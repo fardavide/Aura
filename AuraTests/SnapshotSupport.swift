@@ -37,6 +37,15 @@ func snapshotCameras() -> [Camera] {
     ]
 }
 
+/// In-progress activity for two of the `snapshotCameras()` — an alert and a detection — to exercise
+/// the tile badges.
+func snapshotActivity() -> [CameraActivity] {
+    [
+        CameraActivity(camera: CameraName("front_door"), label: "Person", severity: .alert, startedAt: snapshotNow),
+        CameraActivity(camera: CameraName("driveway"), label: "Car", severity: .detection, startedAt: snapshotNow),
+    ]
+}
+
 private let snapshotSpanStart = Date(timeIntervalSince1970: 1_000_000 - Double(2 * 86_400))
 
 /// A busy day: a swelling motion profile with night lulls, alert/detection markers (one still
