@@ -7,6 +7,9 @@ public struct CameraGridView: View {
     private let onOpenSettings: () -> Void
     private let makeDetailViewModel: (Camera) -> CameraDetailViewModel
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     public init(
         viewModel: CameraGridViewModel,
         onOpenSettings: @escaping () -> Void,
@@ -30,8 +33,18 @@ public struct CameraGridView: View {
                     }
                 }
         }
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            // Keep the stills and activity badges current while the grid is on screen; cancelled
+            // automatically when it disappears.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: refreshInterval)
+                await viewModel.refresh()
+            }
+        }
     }
+
+    private let refreshInterval: Duration = .seconds(5)
 
     @ViewBuilder private var content: some View {
         switch viewModel.state {
@@ -39,13 +52,22 @@ public struct CameraGridView: View {
             ProgressView()
         case .loaded(let cameras):
             ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 220), spacing: 12)],
-                    spacing: 12
-                ) {
+                HStack {
+                    Spacer()
+                    liveCountPill
+                }
+                .padding(.horizontal)
+                .padding(.top, 4)
+
+                LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(cameras) { camera in
                         NavigationLink(value: camera) {
-                            CameraTileView(camera: camera) { await viewModel.previewImage(for: $0) }
+                            CameraTileView(
+                                camera: camera,
+                                activity: viewModel.activity(for: camera),
+                                isOffline: viewModel.isOffline(camera),
+                                imageData: viewModel.previewImage(for: camera)
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -65,6 +87,36 @@ public struct CameraGridView: View {
                 Button("Settings", action: onOpenSettings)
             }
         }
+    }
+
+    /// A full-width vertical list in iPhone portrait (compact width, regular height); a uniform
+    /// 3-up grid in iPhone landscape (compact height); a width-adaptive grid on iPad and macOS.
+    private var columns: [GridItem] {
+        if verticalSizeClass == .compact {
+            return Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+        }
+        if horizontalSizeClass == .compact {
+            return [GridItem(.flexible())]
+        }
+        return [GridItem(.adaptive(minimum: 300), spacing: 12)]
+    }
+
+    private var liveCountPill: some View {
+        HStack(spacing: 6) {
+            Circle().fill(.green).frame(width: 7, height: 7)
+            Text(countLabel)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
+        .background(.thinMaterial, in: Capsule())
+    }
+
+    private var countLabel: String {
+        let live = "\(viewModel.liveCount) live"
+        guard viewModel.offlineCount > 0 else { return live }
+        return "\(live) · \(viewModel.offlineCount) offline"
     }
 
     private func message(for error: CamerasError) -> String {

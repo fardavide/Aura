@@ -387,3 +387,33 @@ navigation stack pushes a detail, so the drill-in camera-reorder list rendered w
 cameras didn't show. The Settings sheet now reserves a minimum frame on macOS so pushed details have
 space. Neither gap is caught by the suite — macOS snapshots are intentionally excluded (see above), so
 the Mac layout is verified by hand.
+
+## Cameras grid v2 restyle: activity badges, live/offline count, size-class layout
+The Cameras screen was restyled to the "v2" design concept (`Cameras.dc.html`): dark 16:9 media
+tiles with a LIVE marker, the camera name over a bottom scrim, an **activity badge** (alert = red,
+detection = amber), an **offline** treatment, and a **live·offline count** pill in the header. The
+existing live-video detail (`AVPlayer` + PiP + zoom) is kept — the design's detail overlay (with
+"Talk" two-way audio) is a larger separate feature and its live view is already more capable. The
+summary card (RIGHT NOW / TODAY / RECORDING) and Outdoor/Indoor group chips are **deferred**: they
+need `camera_groups` (in `/api/config`) and `/api/stats`, neither in the verified `/frigate-rest`
+map — confirm on-server first. **IR** and the Ken-Burns drift from the mock are dropped: no verified
+per-camera IR signal, and the design's own principle is "calm, tiles never move."
+
+- **Tile activity comes from `/api/review`, not `/api/events`.** Review items carry `severity`
+  (`alert`/`detection`) directly and `data.objects` for the label; the Cameras feature reads a recent
+  review window and keeps the **in-progress** items (`end_time == null`). Kept local to the Cameras
+  vertical (its own `ReviewItemDto`), consistent with the feature-vertical rule; a shared Frigate
+  review client is a separate roadmap item.
+- **Layout by size class**, mirroring Timeline: `verticalSizeClass == .compact` (iPhone landscape) →
+  3-up grid; else `horizontalSizeClass == .compact` (iPhone portrait) → 1-column full-width list;
+  else (iPad / macOS) → width-adaptive grid. Deterministic per snapshot config.
+- **The view model owns preview loading, not the tile.** An earlier pass had each tile self-load its
+  still via `.task` and write the offline result back into the `@Observable` view model that the grid
+  header reads — that feedback churned the AttributeGraph during the offscreen snapshot render. The
+  view model now loads all previews in `load()` (concurrently, so one offline camera can't block the
+  rest behind a timeout) and tiles are pure functions of settled state. This also makes the offline
+  treatment and the header count deterministic without depending on an async `.task` settling.
+- **Concurrent loading requires concurrency-safe fakes.** Loading previews in a `withTaskGroup`
+  surfaced a data race in `FakeCameraImageLoader` — an unsynchronized `Array.append` on its recorded
+  list corrupted the heap (a `SIGSEGV`/malloc abort that read as a SwiftUI crash). The fake now guards
+  its recorded list with a lock. The production loader is a stateless struct, already safe.

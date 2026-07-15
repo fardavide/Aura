@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 import CamerasEntities
@@ -134,6 +135,38 @@ struct CamerasDomainTests {
             _ = try await observeCameras.execute()
         }
     }
+
+    // MARK: GetCameraActivity
+
+    @Test func `given activity on several cameras when getting activity then each is keyed by its camera`() async throws {
+        // given
+        let getActivity = GetCameraActivity(repository: FakeCameraActivityRepository(.success([
+            activity("driveway", label: "Person", severity: .alert, startedAt: 100),
+            activity("garage", label: "Car", severity: .detection, startedAt: 100),
+        ])))
+
+        // when
+        let result = try await getActivity.execute()
+
+        // then
+        #expect(result[CameraName("driveway")]?.severity == .alert)
+        #expect(result[CameraName("garage")]?.label == "Car")
+    }
+
+    @Test func `given several items for one camera when getting activity then the most recent wins`() async throws {
+        // given
+        let getActivity = GetCameraActivity(repository: FakeCameraActivityRepository(.success([
+            activity("driveway", label: "Car", severity: .detection, startedAt: 100),
+            activity("driveway", label: "Person", severity: .alert, startedAt: 200),
+        ])))
+
+        // when
+        let result = try await getActivity.execute()
+
+        // then
+        #expect(result.count == 1)
+        #expect(result[CameraName("driveway")]?.label == "Person")
+    }
 }
 
 private func makeObserveCameras(cameras: [Camera], settings: FakeSettingsRepository) -> ObserveCameras {
@@ -145,5 +178,19 @@ private func makeObserveCameras(cameras: [Camera], settings: FakeSettingsReposit
 
 private func camera(_ name: String, isEnabled: Bool) -> Camera {
     Camera(name: CameraName(name), friendlyName: nil, isEnabled: isEnabled, streamNames: [])
+}
+
+private func activity(
+    _ camera: String,
+    label: String,
+    severity: CameraActivity.Severity,
+    startedAt: TimeInterval
+) -> CameraActivity {
+    CameraActivity(
+        camera: CameraName(camera),
+        label: label,
+        severity: severity,
+        startedAt: Date(timeIntervalSince1970: startedAt)
+    )
 }
 

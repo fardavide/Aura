@@ -66,6 +66,9 @@ final class AppComposition {
         let config = serverConfig(from: connection)
         return CameraGridViewModel(
             observeCameras: observeCameras(config: config),
+            getCameraActivity: GetCameraActivity(
+                repository: FrigateCameraActivityRepository(config: config, httpClient: httpClient, now: { Date() })
+            ),
             imageLoader: FrigateCameraImageLoader(config: config, httpClient: httpClient)
         )
     }

@@ -91,17 +91,106 @@ struct CameraGridViewModelTests {
         #expect(sut.state == resorted)
     }
 
-    @Test func `when requesting a preview then it delegates to the image loader`() async {
+    @Test func `given reachable cameras when loading then their previews are loaded from the image loader`() async {
         // given
         let loader = FakeCameraImageLoader(image: Data([0x01]))
-        let sut = makeViewModel(repository: FakeCamerasRepository(.success([])), imageLoader: loader)
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])), imageLoader: loader
+        )
 
         // when
-        let image = await sut.previewImage(for: enabledCamera("driveway"))
+        await sut.load()
 
         // then
-        #expect(image == Data([0x01]))
+        #expect(sut.previewImage(for: enabledCamera("driveway")) == Data([0x01]))
         #expect(loader.requested == [CameraName("driveway")])
+    }
+
+    // MARK: Activity
+
+    @Test func `given active review items when loading then the grid exposes each camera's activity`() async {
+        // given
+        let activity = CameraActivity(
+            camera: CameraName("driveway"), label: "Person", severity: .alert,
+            startedAt: Date(timeIntervalSince1970: 1)
+        )
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            activity: FakeCameraActivityRepository(.success([activity]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.activity(for: enabledCamera("driveway")) == activity)
+    }
+
+    @Test func `given the activity fetch fails when loading then the grid still loads without badges`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            activity: FakeCameraActivityRepository(.failure(.unreachable))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.state == .loaded([enabledCamera("driveway")]))
+        #expect(sut.activity(for: enabledCamera("driveway")) == nil)
+    }
+
+    // MARK: Live / offline counts
+
+    @Test func `given a preview resolves when loading then the camera is counted live`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            imageLoader: FakeCameraImageLoader(image: Data([0x01]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.liveCount == 1)
+        #expect(sut.offlineCount == 0)
+        #expect(sut.isOffline(enabledCamera("driveway")) == false)
+    }
+
+    @Test func `given a preview fails to load when loading then the camera is counted offline`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            imageLoader: FakeCameraImageLoader(image: nil)
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.liveCount == 0)
+        #expect(sut.offlineCount == 1)
+        #expect(sut.isOffline(enabledCamera("driveway")) == true)
+    }
+
+    // MARK: Refresh
+
+    @Test func `given loaded cameras when refreshing then the stills are re-fetched`() async {
+        // given
+        let loader = FakeCameraImageLoader(image: Data([0x01]))
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])), imageLoader: loader
+        )
+        await sut.load()
+
+        // when
+        loader.image = Data([0x02])
+        await sut.refresh()
+
+        // then
+        #expect(sut.previewImage(for: enabledCamera("driveway")) == Data([0x02]))
     }
 }
 
@@ -117,6 +206,7 @@ private func makeViewModel(
 private func makeViewModel(
     repository: FakeCamerasRepository,
     settings: FakeSettingsRepository = FakeSettingsRepository(),
+    activity: FakeCameraActivityRepository = FakeCameraActivityRepository(.success([])),
     imageLoader: FakeCameraImageLoader = FakeCameraImageLoader()
 ) -> CameraGridViewModel {
     CameraGridViewModel(
@@ -124,6 +214,7 @@ private func makeViewModel(
             getCameras: GetCameras(repository: repository),
             observeCameraOrder: ObserveCameraOrder(repository: settings)
         ),
+        getCameraActivity: GetCameraActivity(repository: activity),
         imageLoader: imageLoader
     )
 }
