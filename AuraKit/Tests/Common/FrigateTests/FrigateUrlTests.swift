@@ -59,10 +59,24 @@ struct FrigateUrlTests {
         )
     }
 
+    @Test func `when building the config endpoint then it targets api stats`() {
+        #expect(
+            FrigateEndpoint.stats.url(base: base)
+                == URL(string: "http://frigate.local:5000/api/stats")!
+        )
+    }
+
     @Test func `when building the events endpoint then it includes the limit`() {
         #expect(
-            FrigateEndpoint.events(limit: 50).url(base: base)
+            FrigateEndpoint.events(limit: 50, after: nil).url(base: base)
                 == URL(string: "http://frigate.local:5000/api/events?limit=50")!
+        )
+    }
+
+    @Test func `given an after bound when building the events endpoint then it rounds it into the query`() {
+        #expect(
+            FrigateEndpoint.events(limit: 50, after: 1_000.6).url(base: base)
+                == URL(string: "http://frigate.local:5000/api/events?limit=50&after=1001")!
         )
     }
 

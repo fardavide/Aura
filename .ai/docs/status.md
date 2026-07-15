@@ -75,13 +75,17 @@
   `GetCameraActivity` + `FrigateCameraActivityRepository`) reads `/api/review` and keeps the
   in-progress items. The grid **view model owns preview loading** (concurrent, so an offline camera
   can't block the rest) and tiles are pure — this removed an AttributeGraph churn / heap-corruption
-  crash in the snapshot renderer (see `decisions.md`). **Deferred to follow-ups:** the top summary
-  card (RIGHT NOW / TODAY / RECORDING) and Outdoor/Indoor group chips (need `camera_groups` +
-  `/api/stats` verified on-server first); IR and the mock's tile drift are dropped (no verified data /
-  the design is deliberately calm). Cameras grid snapshots grew to loaded / **activity** / **offline** /
-  empty / failed.
+  crash in the snapshot renderer (see `decisions.md`).
+- **Cameras v2 finished (0.3.1).** The rest of `Cameras.dc.html` shipped: a **summary card** (RIGHT
+  NOW active object, tap-to-open · TODAY event count + breakdown · RECORDING disk-free + days-kept) and
+  **camera-group filter chips**. Three new Cameras-local reads — `GetCameraGroups` (`camera_groups`),
+  `GetTodayEventCounts` (`/api/events?after=`), `GetRecordingStorage` (`/api/stats` + `record`) — each
+  best-effort and load-time; the still refresh dropped to **2 s**. Endpoints were verified against
+  Frigate v0.17.2 source and recorded in `/frigate-rest`. IR and the mock's tile drift stay dropped (no
+  verified signal / the design is deliberately calm). Cameras grid snapshots: loaded / **activity** /
+  **summary** / offline / empty / failed.
 
-Package logic is covered by Swift Testing (174 tests). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (218 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
@@ -91,11 +95,11 @@ capture glass faithfully — see `decisions.md`). The detail screens (live camer
 not snapshot-tested — they center on video players that can't render in a snapshot.
 
 ## Next
-- **Cameras v2 follow-ups.** The rest of the `Cameras.dc.html` design: the top **summary card**
-  (RIGHT NOW active object / TODAY event counts / RECORDING storage) and the **Outdoor/Indoor group
-  chips**. Blocked on verifying `camera_groups` (in `/api/config`) and storage (`/api/stats`) against
-  the real server and updating `/frigate-rest`; today/right-now can reuse the events + review data.
-  Optional: a periodic still refresh so "LIVE" tiles feel live.
+- **Cameras v2 — verify on the real server.** The summary card + chips were built against Frigate
+  **v0.17.2 source** (not a live server): confirm on the running instance that `camera_groups` parses
+  (both array + comma-string membership), `/api/stats` exposes the `/media/frigate/recordings` mount,
+  and the `record.*` retention max reads sensibly. Also sanity-check the **2 s** still refresh against
+  real `latest.jpg` load times / bandwidth.
 - **Xcode Cloud workflow (App Store Connect, manual)**: **remove the two test actions** (iOS +
   macOS), keep the archives. Verified 2026-07-07: even the package-owned `AuraKitTests` scheme
   hits the app-container limitation on Xcode Cloud — both test actions fail with "1 error,

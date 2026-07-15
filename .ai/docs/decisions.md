@@ -417,3 +417,34 @@ per-camera IR signal, and the design's own principle is "calm, tiles never move.
   surfaced a data race in `FakeCameraImageLoader` — an unsynchronized `Array.append` on its recorded
   list corrupted the heap (a `SIGSEGV`/malloc abort that read as a SwiftUI crash). The fake now guards
   its recorded list with a lock. The production loader is a stateless struct, already safe.
+
+## Cameras grid v2 completion: summary card, group chips, 2 s refresh (0.3.1)
+The deferred v2 follow-ups (above) shipped after verifying the two blocking endpoints against Frigate
+**v0.17.2 source** (the `/frigate-rest` "never guess" fallback) and recording them into the skill +
+`frigate-integration.md`. The card has three columns: **RIGHT NOW** (reuses the existing `/api/review`
+activity — the most significant current item, alert over detection then recency; tap navigates to that
+camera), **TODAY** (`/api/events?after=<start-of-day>`, counted + broken down client-side), and
+**RECORDING** (`/api/stats` disk free + `record` retention). Filter **chips** come from `camera_groups`.
+
+- **Kept local to the Cameras vertical.** Each new read has its own Cameras-local DTO + repository +
+  use case (`GetCameraGroups`, `GetTodayEventCounts`, `GetRecordingStorage`) — no dependency on the
+  Events feature, matching the existing `ReviewItemDto` precedent and the feature-vertical rule.
+- **Verified-contract corrections the source bought us.** (1) `camera_groups.<name>.cameras` is
+  `Union[str, list[str]]` — the web UI writes a **comma-joined string**, so the DTO decodes both an
+  array and a bare string. `birdseye` is stripped (not a real camera). (2) Frigate 0.17 has **no**
+  `record.retain.days`; "days kept" is the **max** of `continuous`/`motion`/`alerts.retain`/
+  `detections.retain` `.days`. (3) `/api/stats` storage is **MiB** floats keyed by mount path; we read
+  the fixed `/media/frigate/recordings` volume, every key optional.
+- **Summary is load-time; only stills + activity are on the 2 s loop.** Groups/today/storage refresh on
+  load + pull-to-refresh, not the (now 2 s) still-refresh timer — RIGHT NOW still feels live because it
+  derives from the activity that *is* on the loop. Every summary piece is **best-effort**: a failed
+  fetch just blanks its slot, never failing the grid.
+- **Known cost:** the groups read and the storage read each re-fetch the heavy `/api/config` that the
+  camera-list read already pulls (≤3 config GETs per screen appearance, load-time only). Consolidating
+  the per-screen config reads behind a shared, request-coalescing `FrigateApiClient` is the standing
+  roadmap refactor — deliberately not done here to keep the vertical boundaries clean.
+- **Byte counts read the SwiftUI environment locale**, not the process locale — `.byteCount` via
+  `Foundation` otherwise formats with `Locale.current` (this machine's), which rendered "1,4 TB" and
+  would diverge from CI. Reading `@Environment(\.locale)` localizes with the app *and* renders
+  deterministically under the snapshot harness's pinned locale. New snapshot state: **summary** (chips +
+  populated card + a selected group).

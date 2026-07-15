@@ -69,6 +69,16 @@ final class AppComposition {
             getCameraActivity: GetCameraActivity(
                 repository: FrigateCameraActivityRepository(config: config, httpClient: httpClient, now: { Date() })
             ),
+            getCameraGroups: GetCameraGroups(
+                repository: FrigateCameraGroupsRepository(config: config, httpClient: httpClient)
+            ),
+            getTodayEventCounts: GetTodayEventCounts(
+                repository: FrigateTodayEventsRepository(config: config, httpClient: httpClient),
+                now: { Date() }
+            ),
+            getRecordingStorage: GetRecordingStorage(
+                repository: FrigateRecordingStorageRepository(config: config, httpClient: httpClient)
+            ),
             imageLoader: FrigateCameraImageLoader(config: config, httpClient: httpClient)
         )
     }

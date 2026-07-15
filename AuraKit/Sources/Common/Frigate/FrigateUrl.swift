@@ -3,17 +3,24 @@ import Foundation
 /// Frigate JSON endpoints the client reads.
 public enum FrigateEndpoint: Sendable {
     case config
-    case events(limit: Int)
+    /// Runtime stats — the light endpoint carrying `service.storage` (disk free/total).
+    case stats
+    /// Events list. `after` (Unix epoch seconds) bounds the window server-side — the grid's
+    /// "today" summary passes the start of the day; the list view passes nil for all events.
+    case events(limit: Int, after: Double?)
 
     public func url(base: URL) -> URL {
         switch self {
         case .config:
             makeUrl(base: base, path: "api/config")
-        case .events(let limit):
+        case .stats:
+            makeUrl(base: base, path: "api/stats")
+        case .events(let limit, let after):
             makeUrl(
                 base: base,
                 path: "api/events",
                 queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+                    + (after.map { [URLQueryItem(name: "after", value: String(Int($0.rounded())))] } ?? [])
             )
         }
     }
