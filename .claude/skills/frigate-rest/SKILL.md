@@ -79,6 +79,39 @@ top-level object keyed by camera name:
   state but does **not** carry the enabled flag — `config` is the source of truth
   for the camera list.
 
+### Camera groups & retention — also in `/api/config` (verified v0.17.2)
+
+Two more top-level slices of the same config body, used by the Cameras grid summary + filter chips:
+
+```jsonc
+{ "camera_groups": { "<name>": { "cameras": ["front","back"], "icon": "generic", "order": 0 } },
+  "record": { "continuous": { "days": 0 }, "motion": { "days": 0 },
+              "alerts": { "retain": { "days": 10 } }, "detections": { "retain": { "days": 10 } } } }
+```
+
+- **`camera_groups`** — object keyed by group name (default `{}`). Each: `order` (int, sort by
+  this), `icon` (string), and `cameras` which is **`Union[str, list[str]]`** ⚠️ — an array **or** a
+  bare **comma-joined string** (`"front,back"`, what the web UI writes). Decode both; split the
+  string on `,`. Membership may name the pseudo-camera `birdseye` (strip it).
+- **Retention** — Frigate 0.17 has **no** `record.retain.days` (that's ≤0.13). The days live in
+  four `float` knobs: `record.continuous.days`, `record.motion.days`, `record.alerts.retain.days`,
+  `record.detections.retain.days` (defaults 0 / 0 / 10 / 10). A global "days kept" ≈ the **max** of
+  these. Per-camera overrides exist at `cameras.<name>.record.*`.
+
+### Runtime stats — `GET /api/stats` (verified v0.17.2)
+
+Light runtime snapshot. Storage lives under `service.storage`, keyed by mount path:
+
+```jsonc
+{ "service": { "version": "0.17.2", "storage": {
+    "/media/frigate/recordings": { "total": 1953125.0, "used": 488281.0, "free": 1464844.0, "mount_type": "ext4" } } } }
+```
+
+- `service.storage.<path>.{total,used,free}` are **MiB** floats (`bytes / 2²⁰`), not bytes/decimal.
+- Recordings volume is the fixed `"/media/frigate/recordings"` (`BASE_DIR = "/media/frigate"`); other
+  keys: `/media/frigate/clips`, `/tmp/cache`, `/dev/shm`. A path absent on the host is omitted — treat
+  each key as optional. `GET /api/version` returns the same `version` as plain text.
+
 ### Events list — `GET /api/events`
 
 Returns a **JSON array** of event objects (newest first by default). Key query params:

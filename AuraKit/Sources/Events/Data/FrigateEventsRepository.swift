@@ -15,7 +15,7 @@ public struct FrigateEventsRepository: EventsRepository {
     }
 
     public func events(limit: Int) async throws(EventsError) -> [Event] {
-        let data = try await get(.events(limit: limit))
+        let data = try await get(.events(limit: limit, after: nil))
         do {
             return try JSONDecoder().decode([EventDto].self, from: data).toEvents()
         } catch {

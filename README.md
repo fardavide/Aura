@@ -40,6 +40,12 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.1 — 2026-07-15
+- Cameras: finished the grid redesign. A summary card up top shows what's happening **right now**
+  (tap it to jump to that camera), **today's** event count with a breakdown, and **recording**
+  disk space + how many days are kept. When your Frigate config defines camera groups, filter
+  chips let you narrow the grid to one group. Tiles now refresh every 2 seconds.
+
 ### 0.3.0 — 2026-07-15
 - Cameras: redesigned grid. Richer live tiles with a LIVE marker, an offline treatment, and
   activity badges (person / vehicle) when Frigate is tracking something; a live·offline count in

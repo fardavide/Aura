@@ -44,35 +44,37 @@ public struct CameraGridView: View {
         }
     }
 
-    private let refreshInterval: Duration = .seconds(5)
+    private let refreshInterval: Duration = .seconds(2)
 
     @ViewBuilder private var content: some View {
         switch viewModel.state {
         case .loading:
             ProgressView()
-        case .loaded(let cameras):
+        case .loaded:
             ScrollView {
-                HStack {
-                    Spacer()
-                    liveCountPill
-                }
-                .padding(.horizontal)
-                .padding(.top, 4)
-
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(cameras) { camera in
-                        NavigationLink(value: camera) {
-                            CameraTileView(
-                                camera: camera,
-                                activity: viewModel.activity(for: camera),
-                                isOffline: viewModel.isOffline(camera),
-                                imageData: viewModel.previewImage(for: camera)
-                            )
+                VStack(spacing: 14) {
+                    header
+                    SummaryCard(
+                        rightNow: viewModel.rightNow,
+                        todayEvents: viewModel.todayEvents,
+                        storage: viewModel.storage
+                    )
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(viewModel.visibleCameras) { camera in
+                            NavigationLink(value: camera) {
+                                CameraTileView(
+                                    camera: camera,
+                                    activity: viewModel.activity(for: camera),
+                                    isOffline: viewModel.isOffline(camera),
+                                    imageData: viewModel.previewImage(for: camera)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal)
                 }
-                .padding()
+                .padding(.vertical)
             }
             .refreshable { await viewModel.load() }
         case .empty:
@@ -99,6 +101,26 @@ public struct CameraGridView: View {
             return [GridItem(.flexible())]
         }
         return [GridItem(.adaptive(minimum: 300), spacing: 12)]
+    }
+
+    /// The chips row (only when the server defines groups) with the live/offline count pinned at the
+    /// trailing edge so it stays put while the chips scroll.
+    private var header: some View {
+        HStack(spacing: 8) {
+            if viewModel.groups.isEmpty {
+                Spacer()
+            } else {
+                GroupChips(
+                    groups: viewModel.groups,
+                    selected: viewModel.selectedGroupName,
+                    onSelect: viewModel.selectGroup
+                )
+            }
+            liveCountPill
+                .padding(.leading, viewModel.groups.isEmpty ? 0 : 4)
+                .padding(.trailing)
+        }
+        .padding(.top, 4)
     }
 
     private var liveCountPill: some View {

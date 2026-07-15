@@ -3,6 +3,7 @@ import SwiftUI
 import Testing
 
 import CamerasDomain
+import CamerasEntities
 import CamerasPresentation
 import SettingsDomain
 import TestDoubles
@@ -16,7 +17,10 @@ struct CameraGridSnapshotTests {
 
     @Test func `given reachable cameras when loaded then it matches the reference`() async {
         // given
-        let view = await cameraGridScreen(cameras: .success(snapshotCameras()), reachable: true)
+        let view = await cameraGridScreen(
+            cameras: .success(snapshotCameras()), reachable: true,
+            today: snapshotToday(), storage: snapshotStorage()
+        )
 
         // then
         assertScreenSnapshot(view, named: "loaded")
@@ -25,16 +29,32 @@ struct CameraGridSnapshotTests {
     @Test func `given tracked activity when loaded then the badges match the reference`() async {
         // given
         let view = await cameraGridScreen(
-            cameras: .success(snapshotCameras()), reachable: true, activity: snapshotActivity()
+            cameras: .success(snapshotCameras()), reachable: true, activity: snapshotActivity(),
+            today: snapshotToday(), storage: snapshotStorage()
         )
 
         // then
         assertScreenSnapshot(view, named: "activity")
     }
 
+    @Test func `given groups and a selected group when loaded then the chips and summary match the reference`() async {
+        // given
+        let view = await cameraGridScreen(
+            cameras: .success(snapshotCameras()), reachable: true, activity: snapshotActivity(),
+            groups: snapshotGroups(), today: snapshotToday(), storage: snapshotStorage(),
+            selectedGroup: "Outdoor"
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "summary")
+    }
+
     @Test func `given unreachable cameras when offline then it matches the reference`() async {
         // given
-        let view = await cameraGridScreen(cameras: .success(snapshotCameras()), reachable: false)
+        let view = await cameraGridScreen(
+            cameras: .success(snapshotCameras()), reachable: false,
+            today: snapshotToday(), storage: snapshotStorage()
+        )
 
         // then
         assertScreenSnapshot(view, named: "offline")
@@ -67,7 +87,11 @@ struct CameraGridSnapshotTests {
 private func cameraGridScreen(
     cameras: Result<[Camera], CamerasError>,
     reachable: Bool = false,
-    activity: [CameraActivity] = []
+    activity: [CameraActivity] = [],
+    groups: [CameraGroup] = [],
+    today: [String] = [],
+    storage: RecordingStorage? = nil,
+    selectedGroup: String? = nil
 ) async -> some View {
     let viewModel = CameraGridViewModel(
         observeCameras: ObserveCameras(
@@ -75,9 +99,17 @@ private func cameraGridScreen(
             observeCameraOrder: ObserveCameraOrder(repository: FakeSettingsRepository())
         ),
         getCameraActivity: GetCameraActivity(repository: FakeCameraActivityRepository(.success(activity))),
+        getCameraGroups: GetCameraGroups(repository: FakeCameraGroupsRepository(.success(groups))),
+        getTodayEventCounts: GetTodayEventCounts(
+            repository: FakeTodayEventsRepository(.success(today)), now: { snapshotNow }
+        ),
+        getRecordingStorage: GetRecordingStorage(
+            repository: FakeRecordingStorageRepository(storage.map { .success($0) } ?? .failure(.unreachable))
+        ),
         imageLoader: FakeCameraImageLoader(image: reachable ? Data([0x01]) : nil)
     )
     await viewModel.load()
+    viewModel.selectGroup(selectedGroup)
 
     return CameraGridView(
         viewModel: viewModel,
@@ -85,4 +117,22 @@ private func cameraGridScreen(
         // Unused: the detail factory is never invoked in a grid snapshot (no navigation happens).
         makeDetailViewModel: { CameraDetailViewModel(camera: $0, streamProvider: FakeCameraStreamProvider()) }
     )
+}
+
+/// A day's worth of events for the summary card's TODAY column — 9 people + 5 cars = "14 events".
+private func snapshotToday() -> [String] {
+    Array(repeating: "person", count: 9) + Array(repeating: "car", count: 5)
+}
+
+/// A representative recordings-disk status: ~1.4 TB free of ~2 TB, kept 14 days.
+private func snapshotStorage() -> RecordingStorage {
+    RecordingStorage(freeBytes: 1_400_000_000_000, totalBytes: 2_000_000_000_000, retentionDays: 14)
+}
+
+/// Two groups over `snapshotCameras()` — Outdoor (driveway, front door) and Indoor (backyard, garage).
+private func snapshotGroups() -> [CameraGroup] {
+    [
+        CameraGroup(name: "Outdoor", cameraNames: [CameraName("driveway"), CameraName("front_door")], order: 0),
+        CameraGroup(name: "Indoor", cameraNames: [CameraName("backyard"), CameraName("garage")], order: 1),
+    ]
 }

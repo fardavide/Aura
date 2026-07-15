@@ -23,6 +23,20 @@ live-HLS path; the only route through Frigate's auth is the *undocumented*
 shipping live video.** Caveats and the AVFoundation tradeoff: `/frigate-live`.
 
 ## REST surface used
-`/api/config` (cameras + `enabled` flag + stream names), `/api/events` (list), and media
-(`latest.jpg`, `thumbnail.jpg`, `clip.mp4`). Event times are Unix epoch seconds; map at the DTO
-boundary. Details: `/frigate-rest`.
+`/api/config` (cameras + `enabled` flag + stream names; also `camera_groups` and `record`
+retention — see below), `/api/events` (list, and `?after=` for the grid's "today" tally),
+`/api/review` (in-progress activity), `/api/stats` (recording-disk free/total), and media
+(`latest.jpg`, `thumbnail.jpg`, `clip.mp4`). Event/review times are Unix epoch seconds; map at the
+DTO boundary. Details: `/frigate-rest`.
+
+### Cameras grid v2 findings (verified against Frigate v0.17.2 source)
+- **`camera_groups`** is a top-level object in `/api/config`, keyed by group name →
+  `{ cameras, icon, order }`. ⚠️ `cameras` is `Union[str, list[str]]`: the web UI writes a
+  **comma-joined string**, so a client must decode both an array and a bare string (split on `,`).
+  Membership may include the pseudo-camera `birdseye` (strip it). Sort by `order`.
+- **`/api/stats` → `service.storage`** is keyed by mount path; the recordings volume is the fixed
+  `"/media/frigate/recordings"` with `{ total, used, free }` in **MiB** (Frigate divides bytes by
+  2²⁰). A mount absent on the host is simply omitted — treat every key as optional.
+- **Retention has no single field in 0.17.** `record.retain.days` (≤0.13) is gone. The knobs are
+  `record.continuous.days`, `record.motion.days`, `record.alerts.retain.days`,
+  `record.detections.retain.days` (all `float`). We surface "days kept" as the **max** of the four.

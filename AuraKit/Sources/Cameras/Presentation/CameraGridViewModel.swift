@@ -19,8 +19,21 @@ public final class CameraGridViewModel {
     /// the (best-effort) fetch failed, so the grid still loads without badges.
     public private(set) var activity: [CameraName: CameraActivity] = [:]
 
+    /// The user's camera groups (the filter chips) and the one currently selected (nil = All). All
+    /// three summary fields below are best-effort and load-time only — a missing one just leaves its
+    /// slot of the summary card blank; none of them are on the refresh loop.
+    public private(set) var groups: [CameraGroup] = []
+    public private(set) var selectedGroupName: String?
+    /// Today's event tally (the summary card's TODAY column).
+    public private(set) var todayEvents: EventCount?
+    /// Recording-disk status (the summary card's RECORDING column).
+    public private(set) var storage: RecordingStorage?
+
     private let observeCameras: ObserveCameras
     private let getCameraActivity: GetCameraActivity
+    private let getCameraGroups: GetCameraGroups
+    private let getTodayEventCounts: GetTodayEventCounts
+    private let getRecordingStorage: GetRecordingStorage
     private let imageLoader: any CameraImageLoading
     private var observation: Task<Void, Never>?
     private var previews: [CameraName: Data] = [:]
@@ -29,10 +42,16 @@ public final class CameraGridViewModel {
     public init(
         observeCameras: ObserveCameras,
         getCameraActivity: GetCameraActivity,
+        getCameraGroups: GetCameraGroups,
+        getTodayEventCounts: GetTodayEventCounts,
+        getRecordingStorage: GetRecordingStorage,
         imageLoader: any CameraImageLoading
     ) {
         self.observeCameras = observeCameras
         self.getCameraActivity = getCameraActivity
+        self.getCameraGroups = getCameraGroups
+        self.getTodayEventCounts = getTodayEventCounts
+        self.getRecordingStorage = getRecordingStorage
         self.imageLoader = imageLoader
     }
 
@@ -46,11 +65,53 @@ public final class CameraGridViewModel {
         return cameras.filter { !offlineCameras.contains($0.name) }.count
     }
 
-    /// Loaded cameras whose preview still failed to load — our one honest per-camera offline signal
-    /// until `/api/stats` is wired.
+    /// Loaded cameras whose preview still failed to load — our one honest per-camera offline signal.
     public var offlineCount: Int {
         guard case .loaded(let cameras) = state else { return 0 }
         return cameras.filter { offlineCameras.contains($0.name) }.count
+    }
+
+    /// The loaded cameras the selected group keeps — the full list when no group (or a stale one) is
+    /// selected. What the grid actually renders.
+    public var visibleCameras: [Camera] {
+        guard case .loaded(let cameras) = state else { return [] }
+        guard let name = selectedGroupName, let group = groups.first(where: { $0.name == name }) else {
+            return cameras
+        }
+        return cameras.filter { group.contains($0.name) }
+    }
+
+    /// The single most significant thing happening now (the summary card's RIGHT NOW column): an
+    /// alert outranks a detection, ties break on recency. Nil when all is quiet. Carries the camera
+    /// so the row can navigate straight to it.
+    public var rightNow: RightNow? {
+        guard case .loaded(let cameras) = state else { return nil }
+        let active = cameras.compactMap { camera in activity[camera.name].map { (camera, $0) } }
+        guard let best = active.max(by: { lhs, rhs in
+            (rank(lhs.1.severity), lhs.1.startedAt) < (rank(rhs.1.severity), rhs.1.startedAt)
+        }) else {
+            return nil
+        }
+        return RightNow(camera: best.0, label: best.1.label, severity: best.1.severity)
+    }
+
+    /// The most significant current activity, resolved to the camera it's on.
+    public struct RightNow: Equatable, Sendable {
+        public let camera: Camera
+        public let label: String
+        public let severity: CameraActivity.Severity
+    }
+
+    private func rank(_ severity: CameraActivity.Severity) -> Int {
+        switch severity {
+        case .alert: 1
+        case .detection: 0
+        }
+    }
+
+    /// Picks the group to filter by; nil shows every camera.
+    public func selectGroup(_ name: String?) {
+        selectedGroupName = name
     }
 
     /// Fetches and replaces the content. Only the very first load shows the full-screen spinner: a
@@ -81,11 +142,13 @@ public final class CameraGridViewModel {
         }
         guard case .loaded(let cameras) = state else { return }
         await refreshContent(for: cameras)
+        await loadSummary()
     }
 
     /// Re-pulls the stills and activity for the cameras already on screen — the grid drives this on
     /// a timer so the "LIVE" tiles and badges stay current without a manual pull-to-refresh. Cheaper
-    /// than `load()`: it doesn't re-subscribe to the camera list.
+    /// than `load()`: it doesn't re-subscribe to the camera list, nor re-pull the (slow-moving)
+    /// groups and summary card.
     public func refresh() async {
         guard case .loaded(let cameras) = state else { return }
         await refreshContent(for: cameras)
@@ -108,6 +171,15 @@ public final class CameraGridViewModel {
         // Best-effort: a missing badge must never fail the grid.
         activity = (try? await getCameraActivity.execute()) ?? [:]
         await loadPreviews(for: cameras)
+    }
+
+    /// The grid's chrome — filter chips + the summary card. Every piece is best-effort: a slot that
+    /// fails to load just stays blank, never failing the grid. Fetched on load / pull-to-refresh
+    /// only (the setup rarely changes), not on the still-refresh timer.
+    private func loadSummary() async {
+        groups = (try? await getCameraGroups.execute()) ?? []
+        todayEvents = try? await getTodayEventCounts.execute()
+        storage = try? await getRecordingStorage.execute()
     }
 
     private func loadPreviews(for cameras: [Camera]) async {

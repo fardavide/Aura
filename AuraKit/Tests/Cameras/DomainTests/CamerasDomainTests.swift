@@ -167,6 +167,96 @@ struct CamerasDomainTests {
         #expect(result.count == 1)
         #expect(result[CameraName("driveway")]?.label == "Person")
     }
+
+    // MARK: GetCameraGroups
+
+    @Test func `given groups when getting them then they are sorted by order then name`() async throws {
+        // given
+        let getGroups = GetCameraGroups(repository: FakeCameraGroupsRepository(.success([
+            group("Indoor", ["kitchen"], order: 1),
+            group("Outdoor", ["driveway"], order: 0),
+            group("Attic", ["attic"], order: 0),
+        ])))
+
+        // when
+        let result = try await getGroups.execute()
+
+        // then
+        #expect(result.map(\.name) == ["Attic", "Outdoor", "Indoor"])
+    }
+
+    @Test func `given an empty group when getting groups then it is dropped`() async throws {
+        // given
+        let getGroups = GetCameraGroups(repository: FakeCameraGroupsRepository(.success([
+            group("Outdoor", ["driveway"], order: 0),
+            group("Birdseye only", [], order: 1),
+        ])))
+
+        // when
+        let result = try await getGroups.execute()
+
+        // then
+        #expect(result.map(\.name) == ["Outdoor"])
+    }
+
+    // MARK: GetTodayEventCounts
+
+    @Test func `given today's labels when counting then the total and per-label breakdown are read`() async throws {
+        // given
+        let getCounts = GetTodayEventCounts(
+            repository: FakeTodayEventsRepository(.success(["person", "car", "person", "person", "car"])),
+            now: { fixedNow }
+        )
+
+        // when
+        let result = try await getCounts.execute()
+
+        // then
+        #expect(result.total == 5)
+        #expect(result.breakdown == [
+            EventCount.LabelCount(label: "person", count: 3),
+            EventCount.LabelCount(label: "car", count: 2),
+        ])
+    }
+
+    @Test func `given tied label counts when counting then they are ordered alphabetically`() async throws {
+        // given
+        let getCounts = GetTodayEventCounts(
+            repository: FakeTodayEventsRepository(.success(["dog", "cat"])),
+            now: { fixedNow }
+        )
+
+        // when
+        let result = try await getCounts.execute()
+
+        // then
+        #expect(result.breakdown.map(\.label) == ["cat", "dog"])
+    }
+
+    @Test func `when counting today's events then the window starts at the start of the day`() async throws {
+        // given
+        let repository = FakeTodayEventsRepository(.success([]))
+        let getCounts = GetTodayEventCounts(repository: repository, now: { fixedNow })
+
+        // when
+        _ = try await getCounts.execute()
+
+        // then
+        let since = try #require(repository.lastSince)
+        #expect(since == Calendar.current.startOfDay(for: fixedNow))
+        #expect(since <= fixedNow)
+    }
+
+    // MARK: GetRecordingStorage
+
+    @Test func `given storage when getting it then it is returned`() async throws {
+        // given
+        let storage = RecordingStorage(freeBytes: 1_000, totalBytes: 2_000, retentionDays: 14)
+        let getStorage = GetRecordingStorage(repository: FakeRecordingStorageRepository(.success(storage)))
+
+        // when - then
+        #expect(try await getStorage.execute() == storage)
+    }
 }
 
 private func makeObserveCameras(cameras: [Camera], settings: FakeSettingsRepository) -> ObserveCameras {
@@ -176,8 +266,14 @@ private func makeObserveCameras(cameras: [Camera], settings: FakeSettingsReposit
     )
 }
 
+private let fixedNow = Date(timeIntervalSince1970: 1_000_000)
+
 private func camera(_ name: String, isEnabled: Bool) -> Camera {
     Camera(name: CameraName(name), friendlyName: nil, isEnabled: isEnabled, streamNames: [])
+}
+
+private func group(_ name: String, _ cameras: [String], order: Int) -> CameraGroup {
+    CameraGroup(name: name, cameraNames: cameras.map(CameraName.init), order: order)
 }
 
 private func activity(

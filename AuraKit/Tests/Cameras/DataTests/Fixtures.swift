@@ -41,6 +41,55 @@ let reviewJson = """
 ]
 """
 
+/// A representative `camera_groups` slice of `/api/config` covering the cases the groups mapper must
+/// handle: an array-form membership, a comma-joined-string membership (what Frigate's UI writes), and
+/// a group naming only the Birdseye composite (stripped → empty). `order` drives sorting.
+let groupsConfigJson = """
+{
+  "camera_groups": {
+    "Outdoor": { "cameras": ["driveway", "front_door"], "icon": "cctv", "order": 1 },
+    "Indoor": { "cameras": "kitchen,garage", "icon": "home", "order": 0 },
+    "Overview": { "cameras": "birdseye", "order": 2 }
+  }
+}
+"""
+
+/// A representative `/api/stats` body: the recordings mount plus another volume. Values are MiB.
+let statsJson = """
+{
+  "service": {
+    "version": "0.17.2",
+    "storage": {
+      "/media/frigate/recordings": { "total": 1953125.0, "used": 488281.0, "free": 1464844.0, "mount_type": "ext4" },
+      "/tmp/cache": { "total": 1000.0, "used": 100.0, "free": 900.0, "mount_type": "tmpfs" }
+    }
+  }
+}
+"""
+
+/// A representative `record` slice of `/api/config` — the four retention knobs; the effective
+/// "days kept" is their max (14 here).
+let recordConfigJson = """
+{
+  "record": {
+    "enabled": true,
+    "continuous": { "days": 7 },
+    "motion": { "days": 0 },
+    "alerts": { "retain": { "days": 14, "mode": "motion" } },
+    "detections": { "retain": { "days": 10, "mode": "motion" } }
+  }
+}
+"""
+
+/// A representative `/api/events` body for the "today" tally — only `label` is read.
+let todayEventsJson = """
+[
+  { "id": "e1", "camera": "driveway", "label": "person", "start_time": 1000.0 },
+  { "id": "e2", "camera": "front_door", "label": "car", "start_time": 1001.0 },
+  { "id": "e3", "camera": "driveway", "label": "person", "start_time": 1002.0 }
+]
+"""
+
 extension ServerConfig {
     static let test = ServerConfig(
         scheme: .http,
