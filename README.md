@@ -40,6 +40,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.2 — 2026-07-21
+- Navigation: the tab icons now animate — switching tabs plays a little bounce on the selected
+  tab's icon.
+
 ### 0.3.1 — 2026-07-15
 - Cameras: finished the grid redesign. A summary card up top shows what's happening **right now**
   (tap it to jump to that camera), **today's** event count with a breakdown, and **recording**

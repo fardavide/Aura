@@ -84,6 +84,9 @@
   Frigate v0.17.2 source and recorded in `/frigate-rest`. IR and the mock's tile drift stay dropped (no
   verified signal / the design is deliberately calm). Cameras grid snapshots: loaded / **activity** /
   **summary** / offline / empty / failed.
+- **Animated nav icons (0.3.2).** The root `TabView` moved to the selection-value `Tab` API (typed
+  tab enum) and each tab's icon plays an SF Symbol bounce when selected — see `decisions.md` for
+  the per-tab trigger and the custom-tab-bar rejection.
 
 Package logic is covered by Swift Testing (218 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
@@ -95,6 +98,9 @@ capture glass faithfully — see `decisions.md`). The detail screens (live camer
 not snapshot-tested — they center on video players that can't render in a snapshot.
 
 ## Next
+- **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a
+  symbol effect inside a custom `Tab` label is unconfirmed (see `decisions.md`); if stripped, the
+  icons just stay static.
 - **Cameras v2 — verify on the real server.** The summary card + chips were built against Frigate
   **v0.17.2 source** (not a live server): confirm on the running instance that `camera_groups` parses
   (both array + comma-string membership), `/api/stats` exposes the `/media/frigate/recordings` mount,
