@@ -99,9 +99,10 @@ else the latest-clip freeze**. A `.frame(Image)` display case renders the decode
 `URLCache`-friendly). The nearest-frame pick is a pure `[PreviewFrame].mostRecent(atOrBefore:)`
 (unit-tested); the image load reuses the existing `PreviewImageLoading` seam, injected into the tile
 VM directly (same pattern as the Cameras grid's `CameraImageLoading`, not a use-case wrapper). Frames
-are fetched **once per tile on appear** (tiles still key off `span.start` and don't reload on the
-auto-refresh, by the live-edge-refresh decision), so continuous live-follow without interaction stays
-a follow-up — a fresh appearance or a scrub picks up newer frames.
+were fetched **once per tile on appear** (tiles keyed off `span.start` and didn't reload on the
+auto-refresh, by the live-edge-refresh decision), so continuous live-follow without interaction stayed
+a follow-up. (The "a scrub picks up newer frames" assumption here was wrong — a scrub only picks among
+already-loaded frames — and it surfaced as a real bug; closed in 0.3.3, see the catch-up decision below.)
 
 ### Live-edge auto-refresh, not pull-to-refresh
 The span was fixed at screen init, so new footage never appeared without an app restart. A periodic
@@ -116,6 +117,45 @@ screen it keeps retrying, so a dropped connection self-recovers. `ScrubClock.isS
 only set in tests — is now driven by the histogram's `onScrollPhaseChange`, making the mid-scrub guard
 real. Chose this over `.refreshable` (used by Cameras/Events) because the timeline is a scrub surface,
 not a list, and "track live" wants no gesture.
+
+### Timeline catches up on return; tiles live-follow the span (0.3.3)
+Reported bug: reopening the app showed the pre-suspension live edge (a "last time" hours old) until a
+background tick landed, and the camera tiles stayed frozen at that old instant even after the
+histogram refreshed. Three gaps, three fixes — all pinned by view-model tests:
+- **The refresh loop only checked after its first sleep**, so a re-entered screen sat stale for up to
+  a full interval. It now checks immediately on entry, then sleeps. A scene-active task in the view
+  does the same when the app returns from the background (the appearance task doesn't re-fire on
+  foregrounding), behind the same should-refresh gate — so it never disturbs a scrub or history
+  browsing. That scene task also runs on plain appearance (SwiftUI `.task(id:)` semantics), racing
+  the loop's immediate check — so **refresh is single-flight**: concurrent calls coalesce into one
+  fetch, which also rules out out-of-order span writes.
+- **A refresh never moved the playhead.** After a long suspension the span jumped to the present while
+  the playhead stayed hours back: the readout kept the old time, and the live-edge gate then classified
+  the user as browsing history, suppressing every further tick. A refresh now moves a playhead that was
+  **parked at the old live edge** (within ~a second — sub-second load drift only) to the new one,
+  judged **entirely at landing** against the pre-refresh span end. Deliberately much tighter than the
+  600s refresh gate, and deliberately at landing: the first draft reused the gate window and a
+  pre-await capture, which adversarial review showed would teleport a user re-watching 3–9-minute-old
+  footage on every tick, and yank a drag that began *and settled* while the fetch was in flight. An
+  active drag at landing always suppresses the follow. (The histogram converges via its own trailing
+  re-anchor on content growth — the followed case is precisely the parked-at-the-anchor-edge one; the
+  scrubber's scroll→clock binding stays one-way.)
+- **Tiles loaded their preview material once** and a span extension never reached them. Tiles now
+  re-key their load off the whole span, and a repeated prepare over already-loaded content is an
+  **in-place refresh**: clips + frames are refetched, but the active clip/frame is kept, so the playing
+  player is not rebuilt (re-fetched clips are value-equal, so the seek path reuses it) and nothing
+  flashes. When the load lands it re-applies the **newest requested instant**, not the one captured at
+  its start — a scrub arriving mid-refetch wins, instead of the landing snapping every tile back to a
+  stale position with no heal path. A transient refetch failure keeps the last good material (frames
+  too — pinned by a mutation-killing test) — unlike the first load, which surfaces the error tile; a
+  *cancelled* first load (the view re-keyed, tile left the screen) leaves the placeholder rather than
+  flashing an error; and a failed tile retries from scratch on the next extension, so tiles
+  self-recover with the screen.
+
+Known, accepted exposure: the two view-layer trigger lines — the tile task keyed off the whole span
+and the scene-active refresh task — have no automated coverage (package tests can't exercise SwiftUI
+task re-keying, and snapshots render one static instant); the view-model behavior they invoke is
+fully tested, and the comments at both sites are the guard.
 
 ## Screenshot tests: app-hosted, `swift-snapshot-testing` (test-only)
 SwiftUI screenshot tests for the Timeline screen live in the **app-hosted `AuraTests` target**, not

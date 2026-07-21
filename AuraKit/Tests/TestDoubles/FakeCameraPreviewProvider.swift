@@ -5,23 +5,33 @@ import CamerasEntities
 import TimelineDomain
 
 /// Serves fixed preview material for every camera; the defaults (no clips, no frames) drive
-/// tiles to their placeholder state.
+/// tiles to their placeholder state. Reassign `clipsResult`/`framesResult` mid-test to change
+/// what a later fetch returns (new material after a refresh, or a failure).
 public final class FakeCameraPreviewProvider: CameraPreviewProviding, @unchecked Sendable {
-    public var clips: [PreviewClip]
-    public var frames: [PreviewFrame]
+    public var clipsResult: Result<[PreviewClip], TimelineError>
+    public var framesResult: Result<[PreviewFrame], TimelineError>
     public var source: CameraStreamSource
+    /// Awaited mid-fetch when set — lets a test interleave work while a clips fetch is in flight.
+    public var onClips: (@Sendable () async -> Void)?
 
     public init(
         clips: [PreviewClip] = [],
         frames: [PreviewFrame] = [],
         source: CameraStreamSource = CameraStreamSource(url: URL(filePath: "/unused"), headers: [:])
     ) {
-        self.clips = clips
-        self.frames = frames
+        clipsResult = .success(clips)
+        framesResult = .success(frames)
         self.source = source
     }
 
-    public func clips(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewClip] { clips }
-    public func frames(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewFrame] { frames }
+    public func clips(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewClip] {
+        if let onClips { await onClips() }
+        return try clipsResult.get()
+    }
+
+    public func frames(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewFrame] {
+        try framesResult.get()
+    }
+
     public func clipSource(_ clip: PreviewClip) -> CameraStreamSource { source }
 }

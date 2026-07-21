@@ -27,9 +27,12 @@
   **(v0.1.4 grid → v0.1.5 scrollable timeline → v0.1.6 Liquid-Glass histogram scrubber → v0.1.7
   track polish: white inset + border, blue playhead, hatched no-footage, bars flush to bottom.)**
   A **30s live-edge auto-refresh** (v0.1.8) keeps the histogram current without an app restart: it extends the
-  span end to the present (start fixed, so tiles don't reload) and only fires when parked at the live
+  span end to the present (start fixed) and only fires when parked at the live
   edge and not scrubbing; a failed screen keeps retrying so a dropped connection self-recovers
-  (see `decisions.md`).
+  (see `decisions.md`). Since **0.3.3** the whole screen catches up immediately on re-entry and on
+  returning from the background, the playhead parked at the live edge follows each extension, and
+  tiles refresh their preview material **in place** on every extension — so scrubbing to the present
+  shows current previews, not images frozen at first appearance.
   When the vertical size class is compact — iPhone landscape in practice (iPad keeps a regular height
   even in multitasking; macOS has no size class) — the layout splits side-by-side (v0.1.9) and hides the
   nav bar: a single-column scroll of camera tiles on the left, and a **full-height vertical** glass
@@ -116,10 +119,9 @@ not snapshot-tested — they center on video players that can't render in a snap
   on-device spike**: AVPlayer scrubbing Frigate's VOD HLS is unproven (the web UI uses hls.js on
   every platform, never native). Bound playback windows to ~1h (nginx-vod segment cap).
 - **Timeline follow-ups**: auto-load ranges older than the current ~7-day span as you scroll; the
-  `camera=all` batch clip-list optimization; richer markers. Live-hour frames are fetched once per
-  tile on appear, so leaving the screen open for a long stretch without scrubbing won't pull newer
-  frames until a re-appearance or scrub (the histogram still auto-refreshes) — a continuous
-  live-follow of the tiles is a further follow-up.
+  `camera=all` batch clip-list optimization; richer markers. (The tile live-follow gap — frames
+  fetched once per tile on appear — was closed in 0.3.3: tiles refresh their material in place on
+  every span extension.)
 - A real **app icon** (current is a placeholder; the mac slots are `sips` downscales of the
   1024px source — regenerate them with the new artwork, and keep them filled: empty mac slots
   ship no macOS icon at all, see the App Store packaging decision).
