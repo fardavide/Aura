@@ -448,3 +448,21 @@ camera), **TODAY** (`/api/events?after=<start-of-day>`, counted + broken down cl
   would diverge from CI. Reading `@Environment(\.locale)` localizes with the app *and* renders
   deterministically under the snapshot harness's pinned locale. New snapshot state: **summary** (chips +
   populated card + a selected group).
+
+## Animated tab icons: symbol bounce on the system tab bar (0.3.2)
+The root tab icons animate with an SF Symbol **bounce** when their tab is selected, on the
+**system** tab bar — a custom tab bar (the only way to *guarantee* arbitrary label animation) was
+rejected: it would forfeit the free Liquid Glass bar and each platform's own tab presentation
+("don't fight the system"). This rode along with migrating the root `TabView` from the pre-iOS-18
+`tabItem` (deprecated in the 26 SDKs) to the selection-value `Tab` API with a typed tab enum,
+which is worth keeping regardless of the animation. The bounce is keyed on a **per-tab counter**
+bumped on selection change, so only the newly selected icon animates — keying on
+`selection == tab` also fires on the deselected icon (a discrete symbol effect triggers on *any*
+change of its value). **Verified**: `Tab(value:content:label:)` exists (Apple docs); nothing
+animates automatically and legacy `tabItem` strips label modifiers (community consensus through
+the iOS 18 cycle). **Not yet verified — check on device**: whether the iOS 26 / macOS 26 system
+bars honor a symbol effect inside a custom `Tab` label (historically system bars rendered tab
+labels themselves and dropped modifiers; packages offering "custom Liquid Glass tab bars" exist
+precisely because of this). Failure mode is benign — icons stay static, no regression. If the
+effect is stripped and the animation matters, the fallback is a custom bar, a deliberate
+trade-off to re-decide then.
