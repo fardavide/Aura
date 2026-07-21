@@ -10,10 +10,13 @@ struct PreviewTileView: View {
     let range: TimeRange
 
     var body: some View {
-        content
+        // The 16:9 canvas comes from the always-flexible color, not from `content`: a fixed-size
+        // placeholder (spinner, no-footage symbol) under `aspectRatio` would collapse the whole
+        // tile to its own height, leaving a thin bar where a camera slot belongs.
+        Color.black
             .aspectRatio(16.0 / 9.0, contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .background(.black)
+            .overlay { content }
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(alignment: .bottomLeading) {
                 Text(viewModel.camera.friendlyName ?? viewModel.camera.name.value)
