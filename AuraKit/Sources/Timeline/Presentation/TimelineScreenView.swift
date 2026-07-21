@@ -17,6 +17,7 @@ public struct TimelineScreenView: View {
     // size class, so the side-by-side branch never applies there.
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
 
     /// True when the vertical size class is compact — in practice iPhone landscape. iPad reports a
@@ -25,6 +26,16 @@ public struct TimelineScreenView: View {
     private var isCompactHeight: Bool {
         #if os(iOS)
         verticalSizeClass == .compact
+        #else
+        false
+        #endif
+    }
+
+    /// True when the horizontal size class is compact — iPhone portrait and narrow iPad splits.
+    /// macOS has no size class, so it always lays out as regular width.
+    private var isCompactWidth: Bool {
+        #if os(iOS)
+        horizontalSizeClass == .compact
         #else
         false
         #endif
@@ -132,13 +143,50 @@ public struct TimelineScreenView: View {
         .padding(.top, 8)
     }
 
+    @ViewBuilder
     private func grid(cameras: [Camera], bottomInset: CGFloat) -> some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
-                ForEach(cameras) { camera in cameraTile(camera) }
+        // iPhone portrait keeps the familiar full-width scrolling column. Regular widths (iPad,
+        // macOS) size the tiles to the window instead — a handful of cameras fills it like a
+        // video wall rather than huddling at the adaptive minimum in a corner of a big display.
+        if isCompactWidth {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+                    ForEach(cameras) { camera in cameraTile(camera) }
+                }
+                .padding()
+                .padding(.bottom, bottomInset)
             }
-            .padding()
-            .padding(.bottom, bottomInset)
+        } else {
+            GeometryReader { geo in
+                let spacing: CGFloat = 12
+                let padding: CGFloat = 16
+                let available = CGSize(
+                    width: max(0, geo.size.width - padding * 2),
+                    height: max(0, geo.size.height - bottomInset - padding * 2)
+                )
+                let layout = TimelineGridLayout.bestFit(
+                    tileCount: cameras.count,
+                    available: available,
+                    spacing: spacing,
+                    minimumTileWidth: 220
+                )
+                ScrollView {
+                    LazyVGrid(
+                        columns: Array(
+                            repeating: GridItem(.fixed(layout.tileWidth), spacing: spacing),
+                            count: layout.columnCount
+                        ),
+                        spacing: spacing
+                    ) {
+                        ForEach(cameras) { camera in cameraTile(camera) }
+                    }
+                    // Center the wall in the space above the scrubber card; the fallback
+                    // (more cameras than fit) grows past `minHeight` and scrolls as before.
+                    .frame(maxWidth: .infinity, minHeight: available.height)
+                    .padding(padding)
+                    .padding(.bottom, bottomInset)
+                }
+            }
         }
     }
 
