@@ -40,6 +40,11 @@
   histogram and zoom scale) except it reads top→bottom now→past, so scrolling **up** goes back in time
   (`ScrollableTimelineView` gained an `axis`). Everything else keeps the bottom card. See `decisions.md`
   — only the iPhone-landscape snapshot baselines change and need re-recording.
+  Since **0.3.4** regular widths (iPad + macOS) size the tiles **best-fit to the window** (video
+  wall, centered above the scrubber; minimum-width scrolling fallback), the scrubber zooms
+  **continuously by pinch** (trackpad magnify on macOS) between the Week…Hour extremes with the
+  playhead instant anchored across every zoom change (pill included), and placeholder tiles keep
+  their 16:9 slot instead of collapsing to a bar — see `decisions.md`.
 
 - **Pinch-to-zoom on the live view (v0.1.10).** Digital zoom + pan (1x–4x) on the live camera detail, both
   platforms: pinch (touch / trackpad magnify) zooms about the pinch point, drag pans with the
@@ -91,7 +96,7 @@
   tab enum) and each tab's icon plays an SF Symbol bounce when selected — see `decisions.md` for
   the per-tab trigger and the custom-tab-bar rejection.
 
-Package logic is covered by Swift Testing (218 tests). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (247 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
