@@ -22,7 +22,10 @@ struct PreviewTileView: View {
                     .shadow(radius: 2)
                     .padding(8)
             }
-            .task(id: range.start) {
+            // Keyed off the whole range: the timeline refresh growing the live edge re-runs the
+            // prepare, which refreshes the material in place — newly recorded footage reaches the
+            // tile without rebuilding the playing clip.
+            .task(id: range) {
                 await viewModel.prepare(range: range, at: clock.instant)
             }
             .onChange(of: clock.instant) { _, instant in

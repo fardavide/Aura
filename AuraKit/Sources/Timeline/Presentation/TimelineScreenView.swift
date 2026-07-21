@@ -11,6 +11,7 @@ public struct TimelineScreenView: View {
 
     @State private var tiles = TileStore()
     @State private var cardHeight: CGFloat = 180
+    @Environment(\.scenePhase) private var scenePhase
 
     // Read the real size class so the layout re-evaluates on rotation. iOS-only: macOS has no
     // size class, so the side-by-side branch never applies there.
@@ -52,6 +53,13 @@ public struct TimelineScreenView: View {
         }
         .task { await viewModel.loadIfNeeded() }
         .task { await viewModel.autoRefresh() }
+        // Returning from the background catches up right away instead of waiting for the next
+        // tick — the app may have been suspended for hours, leaving the whole screen at the old
+        // live edge. Same gate as the periodic tick: never disturbs a scrub or history browsing.
+        .task(id: scenePhase) {
+            guard scenePhase == .active, viewModel.shouldRefreshNow else { return }
+            await viewModel.refresh()
+        }
     }
 
     @ViewBuilder private var content: some View {

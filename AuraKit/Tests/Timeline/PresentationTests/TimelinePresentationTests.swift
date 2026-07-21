@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 
@@ -159,6 +160,178 @@ struct TimelineScreenViewModelTests {
         #expect(sut.state == .ready(cameras: [camera], timeline: busyTimeline))
     }
 
+    @Test func `given a stale ready screen when auto-refresh starts then it refreshes immediately`() async {
+        // given — loaded at t0; "now" has since moved on (e.g. the screen was re-entered later)
+        let clock = TestClock(at(1_000_000))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        clock.value = at(1_000_300)
+
+        // when — the loop starts with an interval far longer than the test
+        let loop = Task { await sut.autoRefresh(every: .seconds(600)) }
+        await settle { sut.span.end == at(1_000_300) }
+        loop.cancel()
+
+        // then — the live edge caught up without waiting a tick
+        #expect(sut.span.end == at(1_000_300))
+    }
+
+    @Test func `given the playhead parked at the live edge when a refresh extends the span then the playhead follows`() async {
+        // given — a suspension far longer than the live-edge gate window (the reported bug: reopen
+        // the app hours later), so the follow must be judged against the *old* span end
+        let clock = TestClock(at(1_000_000))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        clock.value = at(1_000_000 + 7_200)
+
+        // when
+        await sut.refresh()
+
+        // then — the readout and the tiles track the present, not the pre-refresh live edge
+        #expect(sut.clock.instant == at(1_000_000 + 7_200))
+    }
+
+    @Test func `given the playhead parked minutes behind the live edge when a refresh lands then the playhead stays put`() async {
+        // given — parked 3 minutes back (inside the refresh-gate window, but deliberately not live)
+        let clock = TestClock(at(1_000_000))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        sut.scrub(to: at(1_000_000 - 180))
+        clock.value = at(1_000_030)
+
+        // when
+        await sut.refresh()
+
+        // then — re-watching something minutes old is never interrupted by a tick
+        #expect(sut.clock.instant == at(1_000_000 - 180))
+    }
+
+    @Test func `given a scrub begun and settled during the refresh fetch then the playhead stays put`() async {
+        // given
+        let clock = TestClock(at(1_000_000))
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        clock.value = at(1_000_030)
+
+        // when — a whole drag into history begins AND ends while the fetch is in flight
+        timelineRepo.onQuery = {
+            await MainActor.run {
+                sut.clock.beginScrub()
+                sut.scrub(to: at(1_000_000 - 10_800))
+                sut.clock.endScrub()
+            }
+        }
+        await sut.refresh()
+
+        // then — the settled position survives the landing
+        #expect(sut.clock.instant == at(1_000_000 - 10_800))
+    }
+
+    @Test func `given a refresh already in flight when refreshing again then the fetches coalesce`() async {
+        // given
+        let clock = TestClock(at(1_000_000))
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        clock.value = at(1_000_030)
+        timelineRepo.onQuery = { for _ in 0..<20 { await Task.yield() } }
+
+        // when — the scene-activation catch-up and the loop's immediate check race
+        async let first: Void = sut.refresh()
+        async let second: Void = sut.refresh()
+        _ = await (first, second)
+
+        // then — one fetch for the load, one shared fetch for both refresh calls
+        #expect(timelineRepo.queriedRanges.count == 2)
+    }
+
+    @Test func `given the playhead scrubbed into history when a refresh extends the span then the playhead stays put`() async {
+        // given — parked two hours back, well outside the live-edge window
+        let clock = TestClock(at(1_000_000))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        sut.scrub(to: at(1_000_000 - 7_200))
+        clock.value = at(1_000_030)
+
+        // when
+        await sut.refresh()
+
+        // then
+        #expect(sut.clock.instant == at(1_000_000 - 7_200))
+    }
+
+    @Test func `given an active scrub when a refresh lands then the playhead stays put`() async {
+        // given — the user is mid-drag at the live edge
+        let clock = TestClock(at(1_000_000))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        sut.clock.beginScrub()
+        clock.value = at(1_000_030)
+
+        // when
+        await sut.refresh()
+
+        // then — the drag is never yanked to the new live edge
+        #expect(sut.clock.instant == at(1_000_000))
+    }
+
+    @Test func `given a scrub starting while the refresh is in flight then the playhead stays put`() async {
+        // given
+        let clock = TestClock(at(1_000_000))
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        clock.value = at(1_000_030)
+
+        // when — the drag begins while the refresh's timeline fetch is in flight
+        timelineRepo.onQuery = { await MainActor.run { sut.clock.beginScrub() } }
+        await sut.refresh()
+
+        // then
+        #expect(sut.clock.instant == at(1_000_000))
+    }
+
     @Test func `given a ready timeline at the live edge and not scrubbing then a refresh is due`() async {
         let sut = makeViewModel(cameras: .success([camera]), timeline: .success(emptyTimeline))
         await sut.load()
@@ -298,6 +471,126 @@ struct PreviewTileViewModelTests {
 
         #expect(loader.requestedFrames.last == frame(80))
     }
+
+    @Test func `given the span grew when preparing again then the tile shows the newly recorded frame`() async {
+        // given — prepared at the live edge of the original window, frames up to 80
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // when — the timeline refresh grew the span and newer footage exists now
+        provider.framesResult = .success([frame(70), frame(80), frame(140), frame(150)])
+        await sut.prepare(range: TimeRange(start: at(0), end: at(160)), at: at(155))
+        await settle { loader.requestedFrames.last == frame(150) }
+
+        // then — the freshest frame is shown, not the stale pre-refresh one
+        #expect(loader.requestedFrames.last == frame(150))
+        #expect(isFrame(sut.display))
+    }
+
+    @Test func `given an active clip when preparing again for a grown span then the player is not rebuilt`() async throws {
+        // given — the tile plays a past-hour clip
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)])
+        let sut = makeTile(provider: provider, loader: FakePreviewImageLoader(image: pngData))
+        await sut.prepare(range: tileWindow, at: at(30))
+        let playerBefore = try #require(player(of: sut.display))
+
+        // when — the timeline refresh grew the span and the view re-prepares, then a scrub
+        // resolves a value-equal clip (driven through the scrubber seam directly, so the check
+        // cannot go vacuous on the coalescer's in-flight state)
+        await sut.prepare(range: TimeRange(start: at(0), end: at(160)), at: at(30))
+        sut.scrub(to: at(35)) { }
+
+        // then — the same player keeps playing: refreshed in place, no teardown flash
+        #expect(player(of: sut.display) === playerBefore)
+    }
+
+    @Test func `given loaded material when a refresh fetch fails then the last good material is kept`() async {
+        // given
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // when — the periodic re-prepare hits a transient failure
+        provider.clipsResult = .failure(.unreachable)
+        await sut.prepare(range: TimeRange(start: at(0), end: at(160)), at: at(85))
+
+        // then — still the last good frame, not a full-tile error
+        #expect(isFrame(sut.display))
+    }
+
+    @Test func `given a frames fetch failure during the refresh then the last good frames are kept`() async {
+        // given — a loaded tile showing the live-hour frame
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // when — the periodic re-prepare gets clips but the frames fetch blips
+        provider.framesResult = .failure(.unreachable)
+        await sut.prepare(range: TimeRange(start: at(0), end: at(160)), at: at(85))
+
+        // then — the previously loaded frame still shows; nothing was reloaded or degraded
+        #expect(isFrame(sut.display))
+        #expect(loader.requestedFrames == [frame(80)])
+    }
+
+    @Test func `given a scrub during the material refresh then the latest instant wins, not the captured one`() async {
+        // given — a loaded tile showing the live-hour frame
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // when — the user scrubs into a past clip while the refresh's refetch is in flight
+        provider.onClips = { await MainActor.run { sut.scrub(to: at(30)) } }
+        await sut.prepare(range: TimeRange(start: at(0), end: at(160)), at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // then — the tile stays on the user's instant, not the refresh's stale capture
+        #expect(isClip(sut.display))
+    }
+
+    @Test func `given the first load cancelled mid-flight then the tile does not show an error`() async {
+        // given — a first load held in flight; a torn-down fetch surfaces as unreachable
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)])
+        provider.onClips = { while !Task.isCancelled { await Task.yield() } }
+        provider.clipsResult = .failure(.unreachable)
+        let sut = makeTile(provider: provider, loader: FakePreviewImageLoader(image: pngData))
+
+        // when — the owning task is cancelled (the view re-keys, or the tile leaves the screen)
+        let load = Task { await sut.prepare(range: tileWindow, at: at(30)) }
+        await Task.yield()
+        load.cancel()
+        await load.value
+
+        // then — still the loading placeholder, not a spurious error tile
+        #expect(isLoading(sut.display))
+    }
+
+    @Test func `given a failed tile when preparing again then it recovers`() async {
+        // given — the initial load failed outright
+        let provider = FakeCameraPreviewProvider()
+        provider.clipsResult = .failure(.unreachable)
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+
+        // when — the next span refresh retries and the server is back
+        provider.clipsResult = .success([clip(0, 60)])
+        provider.framesResult = .success([frame(70), frame(80)])
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // then
+        #expect(isFrame(sut.display))
+    }
 }
 
 // MARK: - Helpers
@@ -327,9 +620,14 @@ private func makeTile(
     frames: [PreviewFrame],
     loader: FakePreviewImageLoader
 ) -> PreviewTileViewModel {
+    makeTile(provider: FakeCameraPreviewProvider(clips: clips, frames: frames), loader: loader)
+}
+
+@MainActor
+private func makeTile(provider: FakeCameraPreviewProvider, loader: FakePreviewImageLoader) -> PreviewTileViewModel {
     PreviewTileViewModel(
         camera: camera,
-        previews: GetCameraPreviews(provider: FakeCameraPreviewProvider(clips: clips, frames: frames)),
+        previews: GetCameraPreviews(provider: provider),
         imageLoader: loader
     )
 }
@@ -340,6 +638,14 @@ private func isFrame(_ display: PreviewTileViewModel.Display) -> Bool {
 
 private func isClip(_ display: PreviewTileViewModel.Display) -> Bool {
     if case .clip = display { true } else { false }
+}
+
+private func isLoading(_ display: PreviewTileViewModel.Display) -> Bool {
+    if case .loading = display { true } else { false }
+}
+
+private func player(of display: PreviewTileViewModel.Display) -> AVPlayer? {
+    if case let .clip(player) = display { player } else { nil }
 }
 
 /// Spins the main actor until `condition` holds (the frame load hops through a `Task`), bounded so

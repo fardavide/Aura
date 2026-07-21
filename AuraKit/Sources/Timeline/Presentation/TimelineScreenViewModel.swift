@@ -17,8 +17,9 @@ public final class TimelineScreenViewModel {
     public private(set) var state: State = .loading
     public let clock: ScrubClock
     /// The continuous window the timeline scrolls over: `[start, now]`. The start is fixed for the
-    /// life of the screen; a refresh only extends the end to the present so newly recorded footage
-    /// appears at the live edge without reloading the tiles (which key off `span.start`).
+    /// life of the screen; a refresh only extends the end to the present, and each extension has
+    /// the tiles refresh their preview material in place so newly recorded footage appears at the
+    /// live edge.
     public private(set) var span: TimeRange
 
     private let observeCameras: ObserveCameras
@@ -79,23 +80,47 @@ public final class TimelineScreenViewModel {
         await load()
     }
 
-    /// Keeps the timeline current while the screen is visible: re-fetches every `interval`, only
-    /// when it won't disturb the user (see `shouldRefreshNow`). The owning `.task` cancels this loop
-    /// when the view disappears.
+    /// Keeps the timeline current while the screen is visible: checks immediately on entry — a
+    /// re-entered screen catches up right away instead of showing a stale live edge for a full
+    /// tick — then re-checks every `interval`, only when it won't disturb the user (see
+    /// `shouldRefreshNow`). The owning `.task` cancels this loop when the view disappears.
     public func autoRefresh(every interval: Duration = .seconds(30)) async {
         while !Task.isCancelled {
+            if shouldRefreshNow {
+                await refresh()
+            }
             try? await Task.sleep(for: interval)
-            if Task.isCancelled { return }
-            guard shouldRefreshNow else { continue }
-            await refresh()
         }
     }
 
     /// Re-fetches the timeline against a span extended to the present, without flashing the
-    /// full-screen spinner. Reuses the already-loaded cameras when present; otherwise (initial or
-    /// recovered-from-failure) it loads them too. A transient failure keeps the last good content.
+    /// full-screen spinner. Concurrent calls — the periodic tick racing the scene-activation
+    /// catch-up on the same appearance — coalesce into one fetch; both callers await it.
     public func refresh() async {
+        if let inFlight = refreshTask {
+            await inFlight.value
+            return
+        }
+        let task = Task { await performRefresh() }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
+    }
+
+    private var refreshTask: Task<Void, Never>?
+
+    /// How far the playhead may sit behind the live edge and still count as "parked at it" for the
+    /// post-refresh follow. Sub-second drift only (load sets the span end moments after the clock):
+    /// anything the user deliberately positioned — even seconds back — must stay put, so this is
+    /// far tighter than the auto-refresh gate's `liveEdgeWindow`.
+    private static let playheadFollowTolerance: TimeInterval = 1
+
+    /// Reuses the already-loaded cameras when present; otherwise (initial or recovered-from-
+    /// failure) it loads them too. A transient failure keeps the last good content.
+    private func performRefresh() async {
         let extended = TimeRange(start: span.start, end: now())
+        // The old live edge, before the span jumps — the reference for the playhead follow below.
+        let previousEnd = span.end
 
         switch state {
         case .ready:
@@ -116,6 +141,13 @@ public final class TimelineScreenViewModel {
             // latestCameras, not a pre-fetch snapshot: an order change that landed while
             // the timeline fetch was in flight must survive this write.
             state = .ready(cameras: latestCameras, timeline: timeline)
+            // Follow only a playhead parked at the *old* live edge, judged entirely at landing —
+            // a drag that began, or even settled elsewhere, while the fetch was in flight is never
+            // yanked. This keeps the readout and tiles tracking the present across a long
+            // suspension (where the gap far exceeds the refresh gate's window).
+            if !clock.isScrubbing, previousEnd.timeIntervalSince(clock.instant) <= Self.playheadFollowTolerance {
+                clock.scrub(to: extended.end)
+            }
         } catch {
             return  // transient blip — keep the last good timeline rather than show an error
         }

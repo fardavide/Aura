@@ -40,6 +40,12 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.3 — 2026-07-21
+- Timeline: the screen now catches up the moment you return to it — reopening the app no longer
+  shows a stale "last time" until the next background tick. Camera tiles pick up newly recorded
+  footage as the timeline grows, so scrubbing to the present shows current previews instead of
+  images frozen at the moment the screen was first opened.
+
 ### 0.3.2 — 2026-07-21
 - Navigation: the tab icons now animate — switching tabs plays a little bounce on the selected
   tab's icon.

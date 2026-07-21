@@ -7,9 +7,10 @@ import CamerasDomain
 import CommonPlayer
 import TimelineDomain
 
-/// One camera tile in the synced grid. Loads the day's preview material once, then shows the
-/// shared scrub instant — seeking a past-hour clip's player, or, in the live hour (no `preview.mp4`
-/// yet), the nearest still preview frame — coalesced through a `PreviewTileController`.
+/// One camera tile in the synced grid. Loads the visible range's preview material — refreshed in
+/// place whenever the range's live edge grows — and shows the shared scrub instant: seeking a
+/// past-hour clip's player, or, in the live hour (no `preview.mp4` yet), the nearest still preview
+/// frame — coalesced through a `PreviewTileController`.
 @Observable
 @MainActor
 public final class PreviewTileViewModel {
@@ -30,6 +31,9 @@ public final class PreviewTileViewModel {
     private var frames: [PreviewFrame] = []
     private var activeClip: PreviewClip?
     private var activeFrame: PreviewFrame?
+    /// The newest externally requested instant — what a (re)load re-applies when it lands, so a
+    /// scrub that arrived while the fetch was in flight wins over the instant captured at its start.
+    private var lastRequestedInstant: Date?
     @ObservationIgnored private lazy var controller = PreviewTileController(scrubber: self, tolerance: 0.5)
 
     public init(camera: Camera, previews: GetCameraPreviews, imageLoader: any PreviewImageLoading) {
@@ -38,13 +42,32 @@ public final class PreviewTileViewModel {
         self.imageLoader = imageLoader
     }
 
-    /// Loads the visible range's preview material — past-hour clips and current-hour frames — then
-    /// shows the frame at the current scrub instant.
+    /// The view's one entry point, re-run whenever the visible range changes. The first call (or a
+    /// retry after a failed one) loads from scratch; a later call — the timeline refresh growing
+    /// the live edge — refetches the material in place, so newly recorded footage reaches the tile
+    /// without tearing down the playing clip or blanking the shown frame.
     public func prepare(range: TimeRange, at instant: Date) async {
+        switch display {
+        case .loading, .failed:
+            await loadFromScratch(range: range, at: instant)
+        case .clip, .frame, .unavailable:
+            await refreshInPlace(range: range, at: instant)
+        }
+    }
+
+    public func scrub(to time: Date) {
+        lastRequestedInstant = time
+        controller.scrub(to: time)
+    }
+
+    private func loadFromScratch(range: TimeRange, at instant: Date) async {
         let loadedClips: [PreviewClip]
         do {
             loadedClips = try await previews.clips(for: camera.name, in: range)
         } catch {
+            // A torn-down fetch (the view re-keyed, or the tile left the screen) is not a server
+            // failure — leave the display for the replacement load instead of flashing an error.
+            if Task.isCancelled { return }
             display = .failed
             return
         }
@@ -54,11 +77,17 @@ public final class PreviewTileViewModel {
         frames = (try? await previews.frames(for: camera.name, in: range)) ?? []
         activeClip = nil
         activeFrame = nil
-        controller.scrub(to: instant)
+        controller.scrub(to: lastRequestedInstant ?? instant)
     }
 
-    public func scrub(to time: Date) {
-        controller.scrub(to: time)
+    /// Refetches the range's material without resetting the active clip/frame: an unchanged clip
+    /// keeps its player (value-equal on re-fetch, so `seek` won't rebuild it) and an unchanged
+    /// frame skips its reload. A transient fetch failure keeps the last good material.
+    private func refreshInPlace(range: TimeRange, at instant: Date) async {
+        guard let refreshedClips = try? await previews.clips(for: camera.name, in: range) else { return }
+        clips = refreshedClips
+        frames = (try? await previews.frames(for: camera.name, in: range)) ?? frames
+        controller.scrub(to: lastRequestedInstant ?? instant)
     }
 }
 
