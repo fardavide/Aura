@@ -79,7 +79,9 @@ xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 1
 ```
 
 - **`main` is PR-gated** (GitHub ruleset: required CI checks, no direct pushes) — land every change
-  via a pull request and wait for the checks.
+  via a pull request and wait for the checks. **Fetch and rebase onto `origin/main` before
+  committing**: the ruleset requires up-to-date branches, and sibling PRs often touch the same
+  feature files — sync first so conflicts surface before work piles onto a stale base.
 - Package tests via `xcodebuild` (simulator runs) use the shared `AuraKitTests` scheme **from
   inside `AuraKit/`** — the app project's container silently drops package test targets (see
   `/build-test` and `decisions.md`).
