@@ -40,6 +40,14 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.5 — 2026-07-22
+- Live camera: pinch-to-zoom now scales **only the video** — the play, mute, and Picture-in-Picture
+  controls stay put at their normal size instead of zooming along with the picture.
+- Live camera: fixed the pinch occasionally snapping to a "zoom to fill" you couldn't pan back out
+  of — that stray behavior is gone for good.
+- Live camera: refreshed on-glass controls (play/pause, mute, Picture-in-Picture, a LIVE badge)
+  that fade out on their own and come back with a tap.
+
 ### 0.3.4 — 2026-07-21
 - Timeline: on Mac and iPad the camera tiles now size themselves to the window — a few cameras
   fill the screen like a video wall instead of huddling in a corner at thumbnail size.

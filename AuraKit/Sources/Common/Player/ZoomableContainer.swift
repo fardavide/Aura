@@ -6,6 +6,10 @@ import SwiftUI
 /// geometry goes through the clamped `ZoomTransform` math.
 public struct ZoomableContainer<Content: View>: View {
     private let content: Content
+    /// Fired on a single tap that is not part of a double-tap or a pan — the host uses it to
+    /// toggle its overlay chrome. Kept here (not on the host) so it shares the gesture arena with
+    /// the double-tap and is disambiguated against it.
+    private let onSingleTap: () -> Void
 
     @State private var transform = ZoomTransform.standard()
     /// Committed transform captured when a gesture starts; the gestures' cumulative
@@ -18,7 +22,8 @@ public struct ZoomableContainer<Content: View>: View {
     @State private var isMagnifying = false
     @State private var isPanning = false
 
-    public init(@ViewBuilder content: () -> Content) {
+    public init(onSingleTap: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+        self.onSingleTap = onSingleTap
         self.content = content()
     }
 
@@ -33,7 +38,7 @@ public struct ZoomableContainer<Content: View>: View {
             .contentShape(Rectangle())
             .simultaneousGesture(magnify(in: proxy.size))
             .simultaneousGesture(pan(in: proxy.size))
-            .simultaneousGesture(doubleTap(in: proxy.size))
+            .simultaneousGesture(taps(in: proxy.size))
             .accessibilityActions {
                 if transform.isZoomed {
                     Button("Reset Zoom") {
@@ -84,8 +89,11 @@ public struct ZoomableContainer<Content: View>: View {
             }
     }
 
-    private func doubleTap(in viewport: CGSize) -> some Gesture {
-        SpatialTapGesture(count: 2)
+    /// Double-tap toggles zoom at the tap point; a lone single tap forwards to `onSingleTap`.
+    /// `exclusively(before:)` gives the double-tap priority, so SwiftUI holds the single tap until
+    /// it's sure a second tap isn't coming — the single fires only when the double fails.
+    private func taps(in viewport: CGSize) -> some Gesture {
+        let doubleTap = SpatialTapGesture(count: 2)
             .onEnded { value in
                 guard viewport.width > 0, viewport.height > 0 else { return }
                 let anchor = UnitPoint(
@@ -96,6 +104,9 @@ public struct ZoomableContainer<Content: View>: View {
                     transform = transform.togglingZoom(at: anchor, viewport: viewport)
                 }
             }
+        let singleTap = SpatialTapGesture(count: 1)
+            .onEnded { _ in onSingleTap() }
+        return doubleTap.exclusively(before: singleTap)
     }
 
     private func applyActiveGestures(in viewport: CGSize) {
