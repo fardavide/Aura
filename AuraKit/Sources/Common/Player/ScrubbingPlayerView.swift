@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Hosts an externally-owned `AVPlayer` (seeks driven by the caller) with playback controls
 /// hidden and Picture-in-Picture off — for scrub-only preview tiles, distinct from the
-/// autoplaying `VideoPlayerView`.
+/// autoplaying `LiveVideoView`.
 public struct ScrubbingPlayerView {
     let player: AVPlayer
 

@@ -532,3 +532,42 @@ playhead re-read it as a different time and jumped. Three changes, shared by iPa
   ready-state baseline, and on-device whenever a camera has nothing to show. The canvas is now an
   always-flexible black color with the content overlaid, so a placeholder keeps its slot. All
   Timeline ready-state baselines (iPhone + iPad) were re-recorded for this.
+
+## Live view: bare-layer video host + custom controls — reverses "gesture container over the platform players" (0.3.5)
+The gesture-container-over-`AVPlayerViewController` approach above had a structural flaw that the
+zoom rework surfaced: `scaleEffect` on the hosted player scales the **whole** view — video *and*
+AVKit's transport controls — because they're one view hierarchy, so pinching magnified the play
+button, volume, and scrubber along with the picture. And the built-in aspect-fit↔fill pinch could
+never be *reliably* neutralized: the subtree-walk that disabled `UIPinchGestureRecognizer`/two-tap
+recognizers raced AVKit's lazy, asynchronous (re)installation, so the stray center-anchored zoom
+still surfaced intermittently. Both are the same root cause — AVKit bundles video + controls +
+gestures — so both are fixed by **not hosting the live video in AVKit's player at all**.
+
+The live video is now a **bare `AVPlayerLayer`** host (`LivePlayerView`, `layerClass` on iOS /
+`makeBackingLayer` on macOS) that renders *only* the picture — no chrome, no built-in gestures.
+That layer is the sole thing inside `ZoomableContainer`, so the zoom scales only the video; the
+transport controls (`LiveControlBar` — play/pause, mute, PiP, a LIVE badge, Liquid-Glass capsules)
+are an overlay **outside** the container and never scale. With no AVKit chrome there is no
+aspect-fill pinch to race, so the subtree-walk suppression is **gone**. `LivePlayerModel`
+(`@Observable`) owns the `AVPlayer`, drives PiP via **`AVPictureInPictureController(playerLayer:)`**
+(auto-start-on-background on iOS via `canStartPictureInPictureAutomaticallyFromInline`; a manual
+button gated on `isPictureInPicturePossible`), and keeps the audio-session interruption recovery
+(rebuild a fresh live item at the live edge). This **reverses** the earlier "not a custom
+`AVPlayerLayer` host (which would forfeit free PiP)" call: PiP is now app-owned, which costs a small
+amount of glue but is the only way to separate video from controls. One cross-platform host serves
+iPhone/iPad + macOS, so the controls-scaling bug is fixed on the Mac too (`AVPlayerView`'s inline
+controls used to scale as well).
+
+Two lifecycle subtleties, both caught by an adversarial review before shipping: (1) playback and the
+interruption observer start from the view's `onAppear` (`start()`), not `init`, and the `AVPlayer`
+is **lazy** — otherwise the throwaway `LivePlayerModel` instances SwiftUI builds and discards on
+every `LiveVideoView` re-init (the grid's 2 s refresh loop re-renders the pushed detail) would each
+open and abandon an authed stream. (2) A floating PiP window must outlive the view that started it;
+since the model is the only strong owner of the controller + player, a file-private
+`PictureInPictureRetainer` holds the model while its session is active (added on
+`didStartPictureInPicture`, removed on stop/fail) so navigating away doesn't kill PiP.
+**On-device verification still owed** (like the prior hosted-recognizer work, this can't surface in
+the package or snapshot tests): confirm PiP survives a manual start followed by leaving the screen,
+and that auto-PiP-on-background still hands back cleanly. The pure `ZoomTransform` math and its
+`CommonPlayerTests` are unchanged; the new host is thin platform glue and stays untested by the same
+rule as the old wrapper.

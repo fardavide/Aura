@@ -51,13 +51,14 @@
   content edges clamped to the viewport, double-tap toggles 1x↔2x at the tap point. The pinch
   anchor comes from `MagnifyGesture`'s start **location** (v0.2.3) — its `startAnchor` reports
   `.center` in practice, which pinned every pinch to the middle of the frame. A SwiftUI
-  gesture container in `CommonPlayer` wraps the untouched platform players (PiP and the player's
-  own controls unaffected — `simultaneousGesture`); the clamped zoom/pan math is a pure value type
-  unit-tested in the package. On iOS the container's pinch was competing with `AVPlayerViewController`'s
-  **own** built-in pinch/double-tap zoom (aspect fit↔fill) — a second, center-anchored zoom that broke
-  the clamped pan and made the right gesture hard to trigger; the wrapper now disables those built-in
-  recognizers so only the container zooms (v0.2.4, on-device fix — macOS's `AVPlayerView` has no such
-  gesture). See `decisions.md`.
+  gesture container in `CommonPlayer` wraps the video; the clamped zoom/pan math is a pure value
+  type unit-tested in the package. **Reworked in 0.3.5** to a **bare `AVPlayerLayer` host**: the
+  video is the only thing inside the zoom container so it scales alone, the transport controls
+  (play/pause, mute, PiP, LIVE) are a custom overlay **outside** the zoom (they no longer scale with
+  the picture), and PiP is app-owned via `AVPictureInPictureController`. This replaced the earlier
+  `AVPlayerViewController` host, whose bundled controls scaled with the video and whose built-in
+  aspect-fit↔fill pinch couldn't be reliably suppressed — both bugs are gone by construction. See
+  `decisions.md`.
 
 - **Slice 6 — user-defined camera order (v0.2.0).** Drag-to-reorder editor in Settings ("Camera Order",
   `List` + `.onMove`, save-on-move, shown only once a connection exists); the order is a Settings
@@ -132,7 +133,12 @@ not snapshot-tested — they center on video players that can't render in a snap
   ship no macOS icon at all, see the App Store packaging decision).
 - **Refactor**: extract a shared `FrigateApiClient` in `CommonFrigate` — the authed-GET +
   status→error mapping is now duplicated across the Cameras, Events, **and Timeline** repositories.
-- A **stream picker** when a camera exposes multiple go2rtc sources; **PiP keep-alive** across navigation.
+- A **stream picker** when a camera exposes multiple go2rtc sources. (**PiP keep-alive** across
+  navigation was implemented in 0.3.5 via a session retainer — needs the on-device check below.)
+- **Verify the reworked live player on device (0.3.5)** — the bare-`AVPlayerLayer` host can't be
+  covered by the package or snapshot tests. Confirm: pinch zooms only the video (controls stay put);
+  no stray aspect-fill pinch; PiP starts from the button and **survives navigating away**; auto-PiP
+  on backgrounding still hands back cleanly; the audio-interruption live-edge recovery still works.
 - Push notifications — out of MVP scope.
 
 ## Runtime config still needed (before the grid loads a real server)

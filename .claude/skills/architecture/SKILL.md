@@ -102,13 +102,19 @@ feature vertical. This is the project instance of the global **Strong Typing** r
 ## Cross-platform video / PiP wrapper
 
 Aura is **Multiplatform** (iPhone/iPad + native macOS — see the `macos-is-a-target`
-memory). `AVPlayerViewController` and `UIBackgroundModes` are **iOS-only**. Put the
-player + PiP behind one wrapper type with a platform split:
+memory). `UIBackgroundModes` and some AVKit APIs are **iOS-only**. The **live** view hosts video in
+a **bare `AVPlayerLayer`** (not `AVPlayerViewController`/`AVPlayerView`) so the zoom transform scales
+only the picture and our own controls sit outside it — see the "bare-layer video host" decision:
 
-- iOS: `AVPlayerViewController` (free PiP).
-- macOS: AVKit `AVPlayerView`.
+- Video surface: a `CommonPlayer` `AVPlayerLayer`-backed view — `layerClass` (iOS) /
+  `makeBackingLayer` (macOS) — with **no built-in chrome or gestures**. It's the only thing inside
+  the zoom container.
+- Controls: a custom SwiftUI overlay (play/pause, mute, PiP, LIVE) **outside** the zoom.
+- PiP: **app-owned** via `AVPictureInPictureController(playerLayer:)` (`canStart…FromInline`
+  auto-PiP is iOS-only); a file-private retainer keeps the session alive across view dismissal.
 
-Use `#if os(iOS)` / `#if os(macOS)` only inside that wrapper — the rest of the UI
+(Recorded scrub tiles still use the hidden-controls `ScrubbingPlayerView`; Events clips use SwiftUI
+`VideoPlayer`.) Use `#if os(iOS)` / `#if os(macOS)` only inside `CommonPlayer` — the rest of the UI
 stays platform-neutral SwiftUI. Don't scatter `#if os` through feature code.
 
 ## Storage (decided — keep it minimal)

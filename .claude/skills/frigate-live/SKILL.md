@@ -91,10 +91,11 @@ the Frigate config — Frigate does **not** auto-create one stream per camera.
 
 ## AVFoundation integration
 
-- Build the URL, then `AVURLAsset(url:)` → `AVPlayer`. Use `AVPlayerViewController`
-  on iOS for free PiP (the brief's requirement). On macOS the equivalent is AVKit's
-  `AVPlayerView` — keep the player behind the platform wrapper described in
-  `architecture`.
+- Build the URL, then `AVURLAsset(url:)` → `AVPlayer`. The live view hosts the player in a **bare
+  `AVPlayerLayer`** (so pinch-zoom scales only the video and our own controls stay put), with PiP
+  driven by an app-owned `AVPictureInPictureController` — **not** `AVPlayerViewController`/
+  `AVPlayerView`. Keep it behind the `CommonPlayer` wrapper described in `architecture` (see the
+  "bare-layer video host" decision for why the earlier free-PiP approach was reversed).
 - **Auth on the media load:** plain players won't carry credentials. When auth is
   required (the 8971 proxy path, or a Basic-auth reverse proxy), pass headers via
   `AVURLAsset(url:options:)` with `AVURLAssetHTTPHeaderFieldsKey`
