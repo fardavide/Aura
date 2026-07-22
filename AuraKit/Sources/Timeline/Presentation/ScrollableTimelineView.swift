@@ -18,7 +18,7 @@ struct ScrollableTimelineView: View {
     let onScrub: (Date) -> Void
 
     @State private var pointsPerHour: CGFloat = TimelineZoom.day.pointsPerHour
-    @State private var pinchBaseline: CGFloat?
+    @GestureState private var pinchBaseline: CGFloat?
     @State private var scrollPosition = ScrollPosition()
     @State private var histogramViewport: CGFloat = 0
 
@@ -130,15 +130,19 @@ struct ScrollableTimelineView: View {
     }
 
     /// Continuous pinch zoom — trackpad magnify on macOS, two-finger pinch on iOS — scaling the
-    /// density from where it sat when the pinch began.
+    /// density from where it sat when the pinch began. The baseline lives in `@GestureState` so a
+    /// *cancelled* gesture (app deactivation, a sheet reclaiming the touches) resets it too — a
+    /// plain `@State` cleared in `onEnded` survives cancellation, snapping the next pinch back to
+    /// a stale density.
     private var magnify: some Gesture {
         MagnifyGesture()
+            .updating($pinchBaseline) { _, baseline, _ in
+                if baseline == nil { baseline = pointsPerHour }
+            }
             .onChanged { value in
-                let baseline = pinchBaseline ?? pointsPerHour
-                pinchBaseline = baseline
+                guard let baseline = pinchBaseline else { return }
                 zoom(to: baseline * value.magnification)
             }
-            .onEnded { _ in pinchBaseline = nil }
     }
 
     /// Applies a new density and re-anchors the scroll so the instant under the playhead stays
