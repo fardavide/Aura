@@ -506,3 +506,29 @@ labels themselves and dropped modifiers; packages offering "custom Liquid Glass 
 precisely because of this). Failure mode is benign — icons stay static, no regression. If the
 effect is stripped and the animation matters, the fallback is a custom bar, a deliberate
 trade-off to re-decide then.
+
+## Timeline: macOS/iPad video-wall grid + continuous scrubber zoom (0.3.4)
+The Mac timeline read as broken: `GridItem(.adaptive(minimum: 220))` kept tiles at thumbnail size
+on a big window (three cameras huddled in a corner of a 27" display), and the only zoom was the
+cycling Day/Hour/Week pill — no pinch, and a preset switch kept the raw scroll offset, so the
+playhead re-read it as a different time and jumped. Three changes, shared by iPad + macOS
+(regular width):
+
+- **Best-fit wall layout.** On regular widths the grid is sized by a pure best-fit (unit-tested):
+  try every column count, tile width = min(width limit, height limit × 16/9), keep the largest;
+  the wall centers in the space above the scrubber card. If even the best fit drops below the old
+  220pt minimum (many cameras / small window) it falls back to minimum-width columns and scrolls,
+  so nothing regresses. Compact width (iPhone portrait) keeps the old adaptive column byte-for-byte;
+  iPhone landscape keeps the side-by-side split.
+- **Continuous zoom, anchored at the playhead.** The scrubber density is a continuous
+  points-per-hour clamped to the week…hour preset extremes; `MagnifyGesture` (trackpad pinch on
+  macOS, two fingers on iOS) scales it, and the pill shows/cycles the log-space-nearest preset.
+  Every zoom change recomputes the current instant's offset through the same pure offset↔instant
+  scale the scroll mapping uses and re-anchors via `ScrollPosition.scrollTo` — also fixing the
+  pre-existing preset-switch jump. The `ScrollPosition` binding starts idle, so
+  `defaultScrollAnchor` still governs the initial live-edge position.
+- **Tiles own their 16:9 canvas.** `aspectRatio(.fit)` over non-resizable content (spinner,
+  no-footage symbol) collapsed the whole tile to a thin bar — visible in every committed
+  ready-state baseline, and on-device whenever a camera has nothing to show. The canvas is now an
+  always-flexible black color with the content overlaid, so a placeholder keeps its slot. All
+  Timeline ready-state baselines (iPhone + iPad) were re-recorded for this.

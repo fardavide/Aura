@@ -40,6 +40,15 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.4 — 2026-07-21
+- Timeline: on Mac and iPad the camera tiles now size themselves to the window — a few cameras
+  fill the screen like a video wall instead of huddling in a corner at thumbnail size.
+- Timeline: pinch to zoom the scrubber — trackpad pinch on Mac, two fingers on iPhone/iPad —
+  smoothly between the Week and Hour densities; the playhead keeps its place while you zoom
+  (the Day/Hour/Week pill included, which used to jump the scrub position).
+- Timeline: cameras with nothing to show no longer collapse into a thin bar — the tile keeps its
+  place in the grid with a proper placeholder.
+
 ### 0.3.3 — 2026-07-21
 - Timeline: the screen now catches up the moment you return to it — reopening the app no longer
   shows a stale "last time" until the next background tick. Camera tiles pick up newly recorded

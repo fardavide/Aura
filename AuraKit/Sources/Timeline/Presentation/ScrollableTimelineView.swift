@@ -17,7 +17,10 @@ struct ScrollableTimelineView: View {
     let clock: ScrubClock
     let onScrub: (Date) -> Void
 
-    @State private var zoom: TimelineZoom = .day
+    @State private var pointsPerHour: CGFloat = TimelineZoom.day.pointsPerHour
+    @GestureState private var pinchBaseline: CGFloat?
+    @State private var scrollPosition = ScrollPosition()
+    @State private var histogramViewport: CGFloat = 0
 
     var body: some View {
         glassCard
@@ -55,8 +58,8 @@ struct ScrollableTimelineView: View {
             // The slim card stacks the readout over the zoom pill (no room for them side by side).
             VStack(alignment: .leading, spacing: 10) {
                 TimelineClockLabel(clock: clock, axis: .vertical)
-                Button { zoom = zoom.next } label: {
-                    Label(zoom.title, systemImage: zoom.icon)
+                Button { zoom(to: zoomPreset.next.pointsPerHour) } label: {
+                    Label(zoomPreset.title, systemImage: zoomPreset.icon)
                 }
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.glass)
@@ -65,7 +68,7 @@ struct ScrollableTimelineView: View {
             HStack(alignment: .firstTextBaseline) {
                 TimelineClockLabel(clock: clock, axis: .horizontal)
                 Spacer()
-                Button(zoom.title) { zoom = zoom.next }
+                Button(zoomPreset.title) { zoom(to: zoomPreset.next.pointsPerHour) }
                     .font(.subheadline.weight(.semibold))
                     .buttonStyle(.glass)
             }
@@ -76,28 +79,23 @@ struct ScrollableTimelineView: View {
         GeometryReader { geo in
             let isVertical = axis == .vertical
             let viewport = isVertical ? geo.size.height : geo.size.width
-            let hours = span.end.timeIntervalSince(span.start) / 3600
-            let contentLength = Swift.max(viewport, CGFloat(hours) * zoom.pointsPerHour)
+            let scale = TimelineScale(axis: axis, span: span, pointsPerHour: pointsPerHour, viewport: viewport)
             ScrollView(isVertical ? .vertical : .horizontal, showsIndicators: false) {
                 scrollStack {
                     endSpacer(viewport / 2)
-                    HistogramTrack(axis: axis, span: span, timeline: timeline, length: contentLength)
+                    HistogramTrack(axis: axis, span: span, timeline: timeline, length: scale.contentLength)
                     endSpacer(viewport / 2)
                 }
             }
+            .scrollPosition($scrollPosition)
             // Vertical anchors the live edge at the top and runs into the past downward, so scrolling
             // *up* reveals older footage. Horizontal anchors the live edge at the trailing edge.
             .defaultScrollAnchor(isVertical ? .top : .trailing)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 isVertical ? geometry.contentOffset.y : geometry.contentOffset.x
             } action: { _, offset in
-                guard contentLength > 0 else { return }
-                let fraction = min(1, Swift.max(0, offset / contentLength))
-                let range = span.end.timeIntervalSince(span.start)
-                let time = isVertical
-                    ? span.end.addingTimeInterval(-range * Double(fraction))
-                    : span.start.addingTimeInterval(range * Double(fraction))
-                onScrub(time)
+                guard scale.contentLength > 0 else { return }
+                onScrub(scale.instant(atOffset: offset))
             }
             // Pause auto-refresh while the user is panning so a tick can't yank the histogram.
             .onScrollPhaseChange { _, phase in
@@ -105,6 +103,8 @@ struct ScrollableTimelineView: View {
             }
             // Guard against isScrubbing getting stuck if the view disappears mid-deceleration.
             .onDisappear { clock.endScrub() }
+            // Simultaneous so the pinch composes with the scroll pan instead of blocking it.
+            .simultaneousGesture(magnify)
             .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
@@ -113,10 +113,51 @@ struct ScrollableTimelineView: View {
             }
             .overlay(alignment: .center) { playhead }
         }
+        // The zoom pill lives outside the GeometryReader — keep the measured viewport around for
+        // its re-anchor math.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            axis == .vertical ? proxy.size.height : proxy.size.width
+        } action: { histogramViewport = $0 }
         // Horizontal: a fixed 68pt strip (as the bottom card). Vertical: claim all the height the
         // full-height card leaves below the header, so the histogram (and the glass) fill it.
         .frame(height: axis == .horizontal ? 68 : nil)
         .frame(maxHeight: axis == .vertical ? .infinity : nil)
+    }
+
+    /// The preset the pill shows — after a pinch, the one nearest the continuous density.
+    private var zoomPreset: TimelineZoom {
+        TimelineZoom.nearest(to: pointsPerHour)
+    }
+
+    /// Continuous pinch zoom — trackpad magnify on macOS, two-finger pinch on iOS — scaling the
+    /// density from where it sat when the pinch began. The baseline lives in `@GestureState` so a
+    /// *cancelled* gesture (app deactivation, a sheet reclaiming the touches) resets it too — a
+    /// plain `@State` cleared in `onEnded` survives cancellation, snapping the next pinch back to
+    /// a stale density.
+    private var magnify: some Gesture {
+        MagnifyGesture()
+            .updating($pinchBaseline) { _, baseline, _ in
+                if baseline == nil { baseline = pointsPerHour }
+            }
+            .onChanged { value in
+                guard let baseline = pinchBaseline else { return }
+                zoom(to: baseline * value.magnification)
+            }
+    }
+
+    /// Applies a new density and re-anchors the scroll so the instant under the playhead stays
+    /// put — the scroll offset is otherwise kept, which would re-read as a different time and
+    /// yank the scrub position.
+    private func zoom(to density: CGFloat) {
+        let clamped = TimelineZoom.clamped(density)
+        guard clamped != pointsPerHour else { return }
+        pointsPerHour = clamped
+        let scale = TimelineScale(axis: axis, span: span, pointsPerHour: clamped, viewport: histogramViewport)
+        if axis == .vertical {
+            scrollPosition.scrollTo(y: scale.offset(for: clock.instant))
+        } else {
+            scrollPosition.scrollTo(x: scale.offset(for: clock.instant))
+        }
     }
 
     /// Lays the two padding spacers and the track along the scroll axis.
@@ -323,40 +364,5 @@ private struct HistogramTrack: View {
             }
         }
         return .green
-    }
-}
-
-/// How densely the timeline is drawn — the zoom pill cycles through these. The same scale drives
-/// both axes so the bar spacing reads identically whether the card is horizontal or vertical.
-private enum TimelineZoom: CaseIterable {
-    case hour, day, week
-
-    var pointsPerHour: CGFloat {
-        switch self {
-        case .hour: 480
-        case .day: 120
-        case .week: 36
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .hour: "Hour"
-        case .day: "Day"
-        case .week: "Week"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .hour: "clock"
-        case .day: "sun.max"
-        case .week: "calendar"
-        }
-    }
-
-    var next: TimelineZoom {
-        let all = Self.allCases
-        return all[(all.firstIndex(of: self).map { $0 + 1 } ?? 0) % all.count]
     }
 }
