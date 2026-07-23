@@ -48,6 +48,21 @@ struct FrigateCameraActivityRepositoryTests {
         #expect(http.lastRequest?.timeoutInterval == 15)
     }
 
+    @Test func `when fetching activity then the review query is windowed and capped`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(reviewJson.utf8)))
+        let sut = makeSut(http)
+
+        // when
+        _ = try await sut.activeActivity()
+
+        // then
+        #expect(
+            http.lastRequest?.url
+                == URL(string: "http://frigate.test:5000/api/review?after=978400&before=1000000&limit=100")!
+        )
+    }
+
     @Test func `given a 401 when fetching activity then it throws not authorized`() async {
         await expect(status: 401, mapsTo: .notAuthorized)
     }
