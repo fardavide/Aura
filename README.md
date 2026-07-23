@@ -40,6 +40,12 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.7 — 2026-07-23
+- Timeline: fixed the camera tiles getting stuck on their loading spinner and never showing footage
+  — the periodic live-edge refresh was cancelling each tile's first load before it could finish. The
+  first load now always runs to completion, and the timeline no longer waits forever on an
+  unresponsive server.
+
 ### 0.3.6 — 2026-07-23
 - Live camera: the LIVE badge and playback controls no longer tuck under the status bar / notch —
   they now sit within the safe area while the video still fills the screen edge to edge.

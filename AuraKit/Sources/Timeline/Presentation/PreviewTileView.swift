@@ -25,11 +25,16 @@ struct PreviewTileView: View {
                     .shadow(radius: 2)
                     .padding(8)
             }
-            // Keyed off the whole range: the timeline refresh growing the live edge re-runs the
-            // prepare, which refreshes the material in place — newly recorded footage reaches the
-            // tile without rebuilding the playing clip.
-            .task(id: range) {
+            // The first load is keyed off the **fixed span start**, so extending the live edge
+            // (which moves only span.end) can't cancel an in-flight first load and strand the tile
+            // on its spinner. Following the live edge is a separate trigger keyed off span.end — it
+            // refreshes the material in place (newly recorded footage reaches the tile without
+            // rebuilding the playing clip) but never tears the first load down.
+            .task(id: range.start) {
                 await viewModel.prepare(range: range, at: clock.instant)
+            }
+            .task(id: range.end) {
+                await viewModel.followLiveEdge(to: range, at: clock.instant)
             }
             .onChange(of: clock.instant) { _, instant in
                 viewModel.scrub(to: instant)

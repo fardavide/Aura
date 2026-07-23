@@ -45,6 +45,11 @@
   **continuously by pinch** (trackpad magnify on macOS) between the Week…Hour extremes with the
   playhead instant anchored across every zoom change (pill included), and placeholder tiles keep
   their 16:9 slot instead of collapsing to a bar — see `decisions.md`.
+  Since **0.3.7** the camera tiles no longer get stuck on their loading spinner: the 30s live-edge
+  refresh advanced the span and so **cancelled each tile's in-flight first load** (the load task was
+  re-keyed off the whole span), stranding it. The first load is now keyed off the **fixed span start**
+  with the live-edge follow on a **separate trigger** (`followLiveEdge`), and timeline reads carry a
+  request timeout so an unresponsive server can't hang a load. See `decisions.md`.
 
 - **Pinch-to-zoom on the live view (v0.1.10).** Digital zoom + pan (1x–4x) on the live camera detail, both
   platforms: pinch (touch / trackpad magnify) zooms about the pinch point, drag pans with the
@@ -100,7 +105,7 @@
   tab enum) and each tab's icon plays an SF Symbol bounce when selected — see `decisions.md` for
   the per-tab trigger and the custom-tab-bar rejection.
 
-Package logic is covered by Swift Testing (247 tests). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (253 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across

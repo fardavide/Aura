@@ -42,10 +42,10 @@ public final class PreviewTileViewModel {
         self.imageLoader = imageLoader
     }
 
-    /// The view's one entry point, re-run whenever the visible range changes. The first call (or a
-    /// retry after a failed one) loads from scratch; a later call — the timeline refresh growing
-    /// the live edge — refetches the material in place, so newly recorded footage reaches the tile
-    /// without tearing down the playing clip or blanking the shown frame.
+    /// The first load for the tile's window. The view drives this off the **fixed span start**, so
+    /// extending the live edge (which moves only the end) can no longer cancel an in-flight first
+    /// load and strand the tile on its spinner. Loads from scratch while on the spinner or after a
+    /// failure; a re-appearance over already-loaded material refreshes it in place.
     public func prepare(range: TimeRange, at instant: Date) async {
         switch display {
         case .loading, .failed:
@@ -53,6 +53,16 @@ public final class PreviewTileViewModel {
         case .clip, .frame, .unavailable:
             await refreshInPlace(range: range, at: instant)
         }
+    }
+
+    /// Follows the growing live edge — the view drives this off the span **end**, a trigger separate
+    /// from the first load, so newly recorded footage reaches the tile without an extension ever
+    /// tearing down (cancelling) an in-flight first load. While the first load is still on the
+    /// spinner this does nothing, so it can neither race nor duplicate it; once material is present
+    /// (or the load has failed) it defers to `prepare` to refresh in place or retry from scratch.
+    public func followLiveEdge(to range: TimeRange, at instant: Date) async {
+        if case .loading = display { return }
+        await prepare(range: range, at: instant)
     }
 
     public func scrub(to time: Date) {
@@ -148,8 +158,15 @@ extension PreviewTileViewModel: PreviewScrubber {
         Task { @MainActor in
             if let image = await imageLoader.frameImage(frame).flatMap(platformImage(from:)) {
                 display = .frame(image)
+            } else if case .loading = display {
+                // A first load whose frame image failed must not sit on `.loading` — that reads as
+                // "first load still in flight", which makes `followLiveEdge` skip the tile, so the
+                // live-edge refresh would never retry it (it would spin forever whenever the playhead
+                // is parked behind the edge). Resolve to the placeholder instead: the tile leaves the
+                // spinner and the next extension re-fetches it through `refreshInPlace`.
+                display = .unavailable
             }
-            // On a load failure keep the current tile (don't flash) — a later scrub retries.
+            // A loaded tile keeps its last good frame on a failure (don't flash) — a later scrub retries.
             completion()
         }
     }

@@ -157,6 +157,46 @@ and the scene-active refresh task — have no automated coverage (package tests 
 task re-keying, and snapshots render one static instant); the view-model behavior they invoke is
 fully tested, and the comments at both sites are the guard.
 
+### Timeline tiles stuck on the spinner: the live-edge refresh cancelled the first load (0.3.7)
+Reported: on iPhone the timeline "couldn't load" — the camera tiles sat on their loading spinner and
+never showed footage. Root cause was the 0.3.3 change above: the tile's load task was re-keyed off the
+**whole span** (`.task(id: range)`), and the 30s live-edge auto-refresh advances `span.end` every
+tick. Each tick re-keyed the task, so SwiftUI **cancelled the in-flight first load** and restarted it;
+the cancel path deliberately leaves the tile on `.loading` (a torn-down fetch is not an error), and
+the restart then raced the next tick. A tile whose clip/frame fetch didn't beat the refresh interval —
+a slow server, many cameras, a wide preview list — was cancelled just before it resolved, every time,
+and spun forever. (Before 0.3.3 the load was keyed off the fixed `span.start` and ran to completion;
+the regression was the switch to the mutable whole range.)
+
+Fix: split the tile's two concerns onto **two triggers with different keys**. The first load stays on
+`.task(id: range.start)` — `span.start` is fixed for the screen's life, so extending the live edge
+(which moves only `span.end`) can no longer cancel it. Following the live edge moves to
+`.task(id: range.end)` calling a new `followLiveEdge`, which does nothing while the first load is still
+on the spinner (so it can neither race nor duplicate it) and otherwise defers to `prepare` to refresh
+material in place or retry a failed tile — preserving every 0.3.3 behavior (live-follow, failed
+self-recovery, last-good on a transient failure, latest-instant-wins). Accepted cost: a re-appearance
+of an already-loaded tile now runs one redundant in-place refetch (both triggers fire on appear); it's
+idempotent (value-equal clips reuse the player) and strictly better than a stranded spinner. This
+supersedes the "tile task keyed off the whole span" detail in the 0.3.3 note directly above.
+
+Because `followLiveEdge` reads `.loading` as "first load in flight", the first load must always resolve
+to a **non-`.loading`** display or the guard would strand it. Adversarial review found the one path that
+didn't: a live-hour first load whose `.webp` frame image fails (clips + frame-list already succeeded)
+left the tile on `.loading` — `show` only assigned `.frame` on a successful decode. It now resolves a
+failed first-load frame to the `.unavailable` placeholder, so the next extension retries it via
+`refreshInPlace` instead of the tile spinning forever whenever the playhead is parked 1–600s behind the
+edge (a loaded tile still keeps its last good frame on a transient failure — no flash).
+
+Also hardened the fetch itself: timeline reads now carry a request timeout (`timelineRequestTimeout`,
+15s) so a server that accepts a connection but never responds can't hang a load indefinitely — the
+best-effort `try?` only catches *errors*, never a silent stall, so the day-timeline overlays (which
+gate the whole screen) and a tile's clip/frame list (which gates its spinner) could otherwise block
+forever. On a trip an overlay degrades to empty and a tile fails and retries on the next extension.
+`followLiveEdge`'s contract is unit-tested (skips while the first load is in flight — including the
+held-in-flight regression scenario — refreshes a loaded tile, retries a failed one); the two view
+trigger lines themselves stay uncovered for the reason above (package tests can't exercise SwiftUI
+task re-keying), so the comments at both sites are the guard.
+
 ## Screenshot tests: app-hosted, `swift-snapshot-testing` (test-only)
 SwiftUI screenshot tests for the Timeline screen live in the **app-hosted `AuraTests` target**, not
 the `AuraKit` package. Reason (verified, not assumed): only an app-hosted target gives the tests a

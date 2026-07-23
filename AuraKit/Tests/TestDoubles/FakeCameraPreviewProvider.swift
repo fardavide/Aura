@@ -13,6 +13,10 @@ public final class FakeCameraPreviewProvider: CameraPreviewProviding, @unchecked
     public var source: CameraStreamSource
     /// Awaited mid-fetch when set — lets a test interleave work while a clips fetch is in flight.
     public var onClips: (@Sendable () async -> Void)?
+    /// How many times `clips(for:in:)` was entered — a test asserts a follow-up didn't duplicate
+    /// (or cancel and restart) an in-flight first load. Incremented before `onClips` awaits, so a
+    /// held-in-flight fetch already counts.
+    public private(set) var clipsCallCount = 0
 
     public init(
         clips: [PreviewClip] = [],
@@ -25,6 +29,7 @@ public final class FakeCameraPreviewProvider: CameraPreviewProviding, @unchecked
     }
 
     public func clips(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewClip] {
+        clipsCallCount += 1
         if let onClips { await onClips() }
         return try clipsResult.get()
     }
