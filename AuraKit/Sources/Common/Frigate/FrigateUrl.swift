@@ -66,9 +66,16 @@ public enum FrigateLiveUrl {
 /// layer converts its `Date`s at the boundary. `cameras` defaults to all cameras server-side.
 public enum FrigateReviewUrl {
 
-    /// Activity markers (alerts + detections) in the window.
-    public static func review(base: URL, after: Double, before: Double) -> URL {
-        makeUrl(base: base, path: "api/review", queryItems: window(after: after, before: before))
+    /// Activity markers (alerts + detections) in the window. `limit` is required because the
+    /// server answers an unbounded query with every review item in the window — on an
+    /// event-dense deployment that payload gates first paint. Frigate orders severity asc then
+    /// start_time desc, so truncation keeps all alerts before the oldest detections drop.
+    public static func review(base: URL, after: Double, before: Double, limit: Int) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/review",
+            queryItems: window(after: after, before: before) + [URLQueryItem(name: "limit", value: String(limit))]
+        )
     }
 
     /// Normalized motion-intensity buckets for the activity strip.

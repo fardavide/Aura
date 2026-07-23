@@ -117,8 +117,13 @@
   ladder collapsed into `FrigateApiClient` in `CommonFrigate`; feature Data layers map its
   transport error into their own domain errors at the boundary. See `decisions.md`. The
   request-coalescing `/api/config` consolidation is still open (below).
+- **Closed the two 0.3.9 exposures (0.3.11).** `/api/review` now takes a **required** `limit` (day
+  timeline 1000, Cameras activity 100), so first paint no longer downloads an unbounded review
+  payload on event-dense servers; and `UrlSessionHttpClient` builds its own session with a
+  **600s `timeoutIntervalForResource`** wall-clock ceiling that the idle per-request timer couldn't
+  provide (a byte-dribbling proxy no longer holds a load open forever). See `decisions.md`.
 
-Package logic is covered by Swift Testing (271 tests). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (274 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across

@@ -233,7 +233,7 @@ Known, accepted exposures (verified real but rare, not this bug): `URLRequest.ti
 *idle* timer, so a proxy dribbling ≥1 byte per window evades both this and the 0.3.7 timeouts
 (bounding wall-clock needs a session-level `timeoutIntervalForResource`); and `/api/review` is
 queried over the full 7-day span with no `limit`, so first paint pays for an unbounded review payload
-on event-dense deployments. Both are candidates for a later hardening pass.
+on event-dense deployments. **Both closed in 0.3.11 (below).**
 
 ## Screenshot tests: app-hosted, `swift-snapshot-testing` (test-only)
 SwiftUI screenshot tests for the Timeline screen live in the **app-hosted `AuraTests` target**, not
@@ -676,3 +676,29 @@ the refactor step of those cycles. Shape decisions:
 - Deliberately **not** the request-coalescing client from the 0.3.1 known-cost note — the ≤3
   `/api/config` GETs per grid appearance remain; that consolidation stays on the roadmap, and the
   client is now the natural seam to add it behind.
+
+## Closing the two 0.3.9 exposures: capped review + wall-clock timeout (0.3.11)
+The 0.3.9 note logged two verified-but-rare exposures as candidates for a later pass; this is that
+pass. Neither is a live bug — both are hardening against pathological deployments/connections.
+
+- **`/api/review` now carries a required `limit`.** The builder (`FrigateReviewUrl.review`) took no
+  `limit`, so first paint's day-timeline markers fetched *every* review item in the 7-day span — an
+  unbounded payload on an event-dense server, gating the screen behind it. `limit` is now a
+  **required** parameter (no init default — a new call site must choose one), so the omission can't
+  recur silently: the day timeline caps at 1000 markers, the Cameras activity read at 100. Frigate
+  orders review items **severity asc then start_time desc**, so truncation drops the *oldest
+  detections* first — every alert and the newest activity survive, and overall density still reads
+  through the motion strip. Pinned by a repository test that routes the review body only to the
+  capped URL (an uncapped query falls through to a marker-less body — avoids racing the three
+  concurrent overlay fetches for one `lastRequest`) and an exact-URL activity test.
+- **`UrlSessionHttpClient` now bounds wall-clock transfer time.** The 0.3.7/0.3.9/0.3.10 timeouts
+  are all `URLRequest.timeoutInterval`, an **idle** timer — a proxy dribbling ≥1 byte per window
+  resets it forever and holds a gating load open. The client now builds its own `URLSession` from a
+  `.default` configuration with **`timeoutIntervalForResource = 600s`**, a whole-transfer ceiling the
+  idle timer can't evade. 600s is deliberately generous: it must never abort the largest legitimate
+  transfer on this session — a full event `clip.mp4` downloaded for playback over a slow remote link
+  — while still ending a genuine stall. (Scrub/live playback rides AVFoundation's own sessions, not
+  this one, so the cap doesn't touch HLS/VOD.) The injectable `session:` init param was dropped —
+  only the composition root constructs the client, and an injected `.shared` would have silently
+  bypassed the bound; `session` is now `internal` so a `CommonNetworkTests` test can pin the
+  configured resource timeout.

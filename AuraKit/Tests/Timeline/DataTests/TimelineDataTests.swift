@@ -51,6 +51,21 @@ struct FrigateCameraDayTimelineRepositoryTests {
         #expect(timeline.gaps.count == 1)
     }
 
+    // The review body is served only to a capped query; an uncapped one falls through to the
+    // motion body, which decodes no markers — so the assertion pins the limit without racing
+    // the three concurrent fetches for a single lastRequest.
+    @Test func `when fetching the day then the review query is capped`() async throws {
+        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: FakeHttpClient(routes: [
+            ("review/activity/motion", .response(status: 200, body: Data(motionJson.utf8))),
+            ("recordings/unavailable", .response(status: 200, body: Data(gapsJson.utf8))),
+            ("limit=1000", .response(status: 200, body: Data(reviewJson.utf8))),
+        ]))
+
+        let timeline = try await sut.dayTimeline(in: window)
+
+        #expect(timeline.markers.count == 2)
+    }
+
     @Test func `given a failing overlay endpoint when fetching the day then that overlay degrades to empty`() async throws {
         let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: FakeHttpClient(routes: [
             ("review/activity/motion", .response(status: 200, body: Data(motionJson.utf8))),

@@ -24,7 +24,8 @@ public struct FrigateCameraActivityRepository: CameraActivityRepository {
         let data = try await get(FrigateReviewUrl.review(
             base: config.baseUrl,
             after: after.timeIntervalSince1970,
-            before: before.timeIntervalSince1970
+            before: before.timeIntervalSince1970,
+            limit: activityLimit
         ))
         do {
             return try JSONDecoder().decode([ReviewItemDto].self, from: data).toActiveActivity()
@@ -45,3 +46,8 @@ public struct FrigateCameraActivityRepository: CameraActivityRepository {
 /// The lookback for in-progress activity — wide enough to catch an item that began a while ago but
 /// hasn't ended, small enough to keep the review payload light.
 private let activityWindow: TimeInterval = 6 * 3600
+
+/// Caps the review payload on an event-dense window. Server-side ordering (alerts before
+/// detections, newest first within each) keeps the items most likely to still be in progress
+/// well inside the cap.
+private let activityLimit = 100

@@ -93,8 +93,8 @@ struct FrigateUrlTests {
 
     @Test func `when building review timeline urls then they target review and recordings`() {
         #expect(
-            FrigateReviewUrl.review(base: base, after: 100, before: 200)
-                == URL(string: "http://frigate.local:5000/api/review?after=100&before=200")!
+            FrigateReviewUrl.review(base: base, after: 100, before: 200, limit: 300)
+                == URL(string: "http://frigate.local:5000/api/review?after=100&before=200&limit=300")!
         )
         #expect(
             FrigateReviewUrl.motionActivity(base: base, after: 100, before: 200, scale: 30)

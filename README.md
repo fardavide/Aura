@@ -40,6 +40,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.11 — 2026-07-23
+- Timeline first paint no longer downloads an unbounded activity list on busy servers: the review
+  markers behind the day timeline are now capped, so a camera setup with heavy history opens fast.
+- A stalled connection that keeps trickling bytes can no longer hold a screen loading forever —
+  every server transfer now has a 10-minute ceiling on top of the existing 15-second idle timeout,
+  generous enough never to interrupt a legitimate slow download.
+
 ### 0.3.10 — 2026-07-23
 - Every server read now gives up after 15 seconds instead of hanging for up to a minute on an
   unresponsive server: the camera grid's groups, storage and activity info, today's event tally,

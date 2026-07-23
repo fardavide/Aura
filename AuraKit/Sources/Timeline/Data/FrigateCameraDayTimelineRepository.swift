@@ -24,7 +24,10 @@ public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
         // Coarser buckets for wider spans so the motion strip stays light (~2000 points max).
         let scale = Swift.max(60, Int((before - after) / 2000))
 
-        async let markers = fetch(FrigateReviewUrl.review(base: base, after: after, before: before), as: ReviewMarkerDto.self)
+        async let markers = fetch(
+            FrigateReviewUrl.review(base: base, after: after, before: before, limit: reviewMarkerLimit),
+            as: ReviewMarkerDto.self
+        )
         async let motion = fetch(FrigateReviewUrl.motionActivity(base: base, after: after, before: before, scale: scale), as: MotionActivityDto.self)
         async let gaps = fetch(FrigateReviewUrl.recordingsUnavailable(base: base, after: after, before: before, scale: scale), as: RecordingGapDto.self)
 
@@ -46,3 +49,9 @@ public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
         return decoded
     }
 }
+
+/// Caps the review payload gating first paint — the full multi-day span can otherwise run to
+/// megabytes on an event-dense deployment. Server-side ordering (alerts before detections,
+/// newest first within each) means truncation drops the oldest detections; overall density
+/// still shows through the motion strip.
+private let reviewMarkerLimit = 1000
