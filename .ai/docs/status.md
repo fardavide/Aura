@@ -110,8 +110,15 @@
 - **Animated nav icons (0.3.2).** The root `TabView` moved to the selection-value `Tab` API (typed
   tab enum) and each tab's icon plays an SF Symbol bounce when selected — see `decisions.md` for
   the per-tab trigger and the custom-tab-bar rejection.
+- **Timeout hardening completed + shared `FrigateApiClient` (0.3.10).** Every Frigate read now
+  carries the 15s bounded timeout (the remaining Cameras reads — groups, storage, activity,
+  today-events, stills — and the whole Events data layer joined the Timeline/config reads of
+  0.3.7/0.3.9), each pinned by a request-level test. The duplicated authed-GET + status→error
+  ladder collapsed into `FrigateApiClient` in `CommonFrigate`; feature Data layers map its
+  transport error into their own domain errors at the boundary. See `decisions.md`. The
+  request-coalescing `/api/config` consolidation is still open (below).
 
-Package logic is covered by Swift Testing (253 tests). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (271 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
@@ -145,8 +152,9 @@ not snapshot-tested — they center on video players that can't render in a snap
 - A real **app icon** (current is a placeholder; the mac slots are `sips` downscales of the
   1024px source — regenerate them with the new artwork, and keep them filled: empty mac slots
   ship no macOS icon at all, see the App Store packaging decision).
-- **Refactor**: extract a shared `FrigateApiClient` in `CommonFrigate` — the authed-GET +
-  status→error mapping is now duplicated across the Cameras, Events, **and Timeline** repositories.
+- **Refactor**: consolidate the per-screen `/api/config` reads behind request coalescing in
+  `FrigateApiClient` (the grid still issues ≤3 config GETs per appearance — the 0.3.1 known cost;
+  the client, extracted in 0.3.10, is now the natural seam for it).
 - A **stream picker** when a camera exposes multiple go2rtc sources. (**PiP keep-alive** across
   navigation was implemented in 0.3.5 via a session retainer — needs the on-device check below.)
 - **Verify the reworked live player on device (0.3.5)** — the bare-`AVPlayerLayer` host can't be

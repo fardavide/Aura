@@ -40,6 +40,12 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.10 — 2026-07-23
+- Every server read now gives up after 15 seconds instead of hanging for up to a minute on an
+  unresponsive server: the camera grid's groups, storage and activity info, today's event tally,
+  camera stills, the events list, and event thumbnails/clips — completing the timeout hardening
+  the timeline got in 0.3.7/0.3.9.
+
 ### 0.3.9 — 2026-07-23
 - Timeline: fixed the screen getting stuck on its full-screen loading spinner — switching tabs
   could silently swap in a fresh, never-loaded screen that nothing would ever load (on the Mac
