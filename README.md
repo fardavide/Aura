@@ -40,6 +40,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.6 — 2026-07-23
+- Live camera: the LIVE badge and playback controls no longer tuck under the status bar / notch —
+  they now sit within the safe area while the video still fills the screen edge to edge.
+
 ### 0.3.5 — 2026-07-22
 - Live camera: pinch-to-zoom now scales **only the video** — the play, mute, and Picture-in-Picture
   controls stay put at their normal size instead of zooming along with the picture.

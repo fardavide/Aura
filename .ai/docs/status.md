@@ -58,7 +58,10 @@
   the picture), and PiP is app-owned via `AVPictureInPictureController`. This replaced the earlier
   `AVPlayerViewController` host, whose bundled controls scaled with the video and whose built-in
   aspect-fit↔fill pinch couldn't be reliably suppressed — both bugs are gone by construction. See
-  `decisions.md`.
+  `decisions.md`. **0.3.6**: controls respect the safe area (the LIVE badge no longer tucks under
+  the status bar) — the safe-area split lives in a shared `LiveVideoLayout`, now covered by a
+  `CameraDetailSnapshotTests` screenshot test (control chrome over a black placeholder, no live
+  player needed).
 
 - **Slice 6 — user-defined camera order (v0.2.0).** Drag-to-reorder editor in Settings ("Camera Order",
   `List` + `.onMove`, save-on-move, shown only once a connection exists); the order is a Settings

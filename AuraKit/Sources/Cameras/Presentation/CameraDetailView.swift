@@ -22,8 +22,6 @@ public struct CameraDetailView: View {
         switch viewModel.state {
         case .playing(let source):
             LiveVideoView(url: source.url, headers: source.headers)
-                .background(.black)
-                .ignoresSafeArea()
         case .unavailable:
             ContentUnavailableView(
                 "No live stream",

@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The live camera view: an autoplaying stream with pinch-zoom/pan and Picture-in-Picture. The
-/// video is wrapped in `ZoomableContainer` so only it scales and pans; the transport controls are
-/// an overlay *outside* that container, so they stay fixed at their normal size. Controls auto-hide
-/// after a few seconds of no interaction and reappear on a single tap.
+/// The live camera view: an autoplaying stream with pinch-zoom/pan and Picture-in-Picture. Composes
+/// the shared `LiveVideoLayout` (video in the zoom, controls fixed outside it) with the live
+/// `LivePlayerModel`. Controls auto-hide after a few seconds of no interaction and reappear on a
+/// single tap.
 public struct LiveVideoView: View {
     @State private var model: LivePlayerModel
     @State private var areControlsVisible = true
@@ -14,14 +14,24 @@ public struct LiveVideoView: View {
     }
 
     public var body: some View {
-        ZStack {
-            ZoomableContainer(onSingleTap: toggleControls) {
-                LivePlayerView(model: model)
-            }
-            LiveControlBar(model: model, onInteract: revealControls)
-                .opacity(areControlsVisible ? 1 : 0)
-                .allowsHitTesting(areControlsVisible)
-                .animation(.easeInOut(duration: 0.2), value: areControlsVisible)
+        LiveVideoLayout(
+            controls: LiveControlBar(
+                state: LiveControlState(
+                    isPlaying: model.isPlaying,
+                    isMuted: model.isMuted,
+                    isPictureInPictureSupported: model.isPictureInPictureSupported,
+                    isPictureInPictureActive: model.isPictureInPictureActive,
+                    isPictureInPicturePossible: model.isPictureInPicturePossible
+                ),
+                onPlayPause: model.togglePlayPause,
+                onMute: model.toggleMute,
+                onTogglePictureInPicture: model.togglePictureInPicture,
+                onInteract: revealControls
+            ),
+            areControlsVisible: areControlsVisible,
+            onSingleTap: toggleControls
+        ) {
+            LivePlayerView(model: model)
         }
         .onAppear {
             model.start()
