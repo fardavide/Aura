@@ -24,8 +24,15 @@ public struct FrigateCamerasRepository: CamerasRepository {
         }
     }
 
+    /// Bounds the config read like the timeline reads (`timelineRequestTimeout`): the Timeline
+    /// screen's first load gates its full-screen spinner on this fetch, so a server that accepts
+    /// the connection but never responds must fail into `.unreachable` (which auto-refresh
+    /// retries) instead of holding the spinner for URLSession's 60s default per attempt.
+    private static let requestTimeout: TimeInterval = 15
+
     private func get(_ endpoint: FrigateEndpoint) async throws(CamerasError) -> Data {
         var request = URLRequest(url: endpoint.url(base: config.baseUrl))
+        request.timeoutInterval = Self.requestTimeout
         if let header = AuthorizationHeader.basic(username: config.username, password: config.password) {
             request.setValue(header, forHTTPHeaderField: "Authorization")
         }

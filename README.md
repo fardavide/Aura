@@ -40,6 +40,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.9 — 2026-07-23
+- Timeline: fixed the screen getting stuck on its full-screen loading spinner — switching tabs
+  could silently swap in a fresh, never-loaded screen that nothing would ever load (on the Mac
+  this could hit on every visit). The Timeline now keeps the same loaded screen alive across tab
+  switches, like Cameras and Events always did, and the camera-list fetch that gates it now times
+  out instead of hanging on an unresponsive server.
+
 ### 0.3.8 — 2026-07-23
 - Live camera: pinch-to-zoom now reaches **10×** (up from 4×), so you can push in much further to
   read faces, plates, or distant detail. Panning, the double-tap toggle, and the controls staying

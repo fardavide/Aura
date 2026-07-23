@@ -41,6 +41,18 @@ struct FrigateCamerasRepositoryTests {
         #expect(http.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Basic YWRtaW46c2VjcmV0")
     }
 
+    @Test func `when fetching cameras then the request carries a bounded timeout`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(configJson.utf8)))
+        let sut = FrigateCamerasRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.cameras()
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+
     @Test func `given a 401 when fetching cameras then it throws not authorized`() async {
         await expect(status: 401, mapsTo: .notAuthorized)
     }

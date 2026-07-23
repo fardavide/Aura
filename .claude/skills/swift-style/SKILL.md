@@ -133,6 +133,16 @@ clear meaning, or its name makes intent substantially clearer.
   is per-device.
 - Use `@Observable` view models (modern Observation), injected via the view's init.
   No `ObservableObject`/`@Published` for new code.
+- **Pin an injected view model in `@State` when the view runs `.task` work against it** —
+  `@State private var viewModel` + `_viewModel = State(initialValue: viewModel)`, not a
+  plain `let`. The composition root builds view models inline in `RootView.body`, so every
+  parent re-evaluation hands the view a fresh, unloaded instance; a `let` swaps the
+  *displayed* model while the running `.task` closures (which rebind only on appearance)
+  keep driving the discarded one — the 0.3.9 permanent Timeline spinner. `@State` keeps
+  the first instance for the view's identity lifetime; rebuild deliberately via `.id(...)`
+  (as RootView does per connection). A plain `let` is fine only when the instance is
+  pinned upstream (`PreviewTileView` via `TileStore`) or the view does no async work
+  against it.
 - Keep views small and composable; push logic into the ViewModel. The camera grid is
   the centerpiece — keep it clean and minimal.
 - Embrace iOS 26 / Liquid Glass styling where it comes for free; don't fight the system.
