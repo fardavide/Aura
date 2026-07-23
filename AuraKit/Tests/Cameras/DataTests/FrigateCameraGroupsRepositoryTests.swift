@@ -35,6 +35,18 @@ struct FrigateCameraGroupsRepositoryTests {
         #expect(http.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Basic YWRtaW46c2VjcmV0")
     }
 
+    @Test func `when fetching groups then the request carries a bounded timeout`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(groupsConfigJson.utf8)))
+        let sut = makeSut(http)
+
+        // when
+        _ = try await sut.groups()
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+
     @Test func `given a 401 when fetching groups then it throws not authorized`() async {
         await expect(status: 401, mapsTo: .notAuthorized)
     }

@@ -47,6 +47,18 @@ struct FrigateCameraImageLoaderTests {
         #expect(await sut.previewImage(for: CameraName("driveway")) == nil)
     }
 
+    @Test func `when loading a preview then the request carries a bounded timeout`() async {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let sut = FrigateCameraImageLoader(config: .test, httpClient: http)
+
+        // when
+        _ = await sut.previewImage(for: CameraName("driveway"))
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+
     @Test func `given credentials when loading a preview then it targets latest.jpg with auth`() async {
         // given
         let http = FakeHttpClient(.response(status: 200, body: Data()))

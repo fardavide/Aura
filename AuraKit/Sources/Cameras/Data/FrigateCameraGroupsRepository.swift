@@ -26,6 +26,7 @@ public struct FrigateCameraGroupsRepository: CameraGroupsRepository {
 
     private func get(_ endpoint: FrigateEndpoint) async throws(CamerasError) -> Data {
         var request = URLRequest(url: endpoint.url(base: config.baseUrl))
+        request.timeoutInterval = 15
         if let header = AuthorizationHeader.basic(username: config.username, password: config.password) {
             request.setValue(header, forHTTPHeaderField: "Authorization")
         }

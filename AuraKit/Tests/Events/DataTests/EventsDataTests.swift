@@ -54,6 +54,18 @@ struct FrigateEventsRepositoryTests {
         #expect(events.map(\.id) == [EventId("ev1"), EventId("ev2")])
     }
 
+    @Test func `when fetching events then the request carries a bounded timeout`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(eventsJson.utf8)))
+        let sut = FrigateEventsRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.events(limit: 10)
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+
     @Test func `given a 401 when fetching events then it throws notAuthorized`() async {
         let sut = FrigateEventsRepository(
             config: .test, httpClient: FakeHttpClient(.response(status: 401, body: Data()))
@@ -69,6 +81,21 @@ struct FrigateEventsRepositoryTests {
     }
 }
 
+struct FrigateEventThumbnailLoaderTests {
+
+    @Test func `when loading a thumbnail then the request carries a bounded timeout`() async {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let sut = FrigateEventThumbnailLoader(config: .test, httpClient: http)
+
+        // when
+        _ = await sut.thumbnail(for: EventId("ev1"))
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+}
+
 struct FrigateEventClipLoaderTests {
 
     @Test func `given a 200 response when downloading a clip then it returns the bytes`() async {
@@ -81,6 +108,18 @@ struct FrigateEventClipLoaderTests {
 
         // when - then
         #expect(await sut.downloadClip(for: event(hasClip: true)) == bytes)
+    }
+
+    @Test func `when downloading a clip then the request carries a bounded timeout`() async {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let sut = FrigateEventClipLoader(config: .test, httpClient: http)
+
+        // when
+        _ = await sut.downloadClip(for: event(hasClip: true))
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
     }
 
     @Test func `given a non-success status when downloading a clip then it is nil`() async {

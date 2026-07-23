@@ -21,6 +21,7 @@ public struct FrigateCameraImageLoader: CameraImageLoading {
     public func previewImage(for camera: CameraName) async -> Data? {
         let url = FrigateMediaUrl.latestImage(base: config.baseUrl, camera: camera.value, height: height)
         var request = URLRequest(url: url)
+        request.timeoutInterval = 15
         if let auth = AuthorizationHeader.basic(username: config.username, password: config.password) {
             request.setValue(auth, forHTTPHeaderField: "Authorization")
         }

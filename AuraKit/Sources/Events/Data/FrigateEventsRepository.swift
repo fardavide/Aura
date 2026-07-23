@@ -25,6 +25,7 @@ public struct FrigateEventsRepository: EventsRepository {
 
     private func get(_ endpoint: FrigateEndpoint) async throws(EventsError) -> Data {
         var request = URLRequest(url: endpoint.url(base: config.baseUrl))
+        request.timeoutInterval = 15
         if let auth = AuthorizationHeader.basic(username: config.username, password: config.password) {
             request.setValue(auth, forHTTPHeaderField: "Authorization")
         }

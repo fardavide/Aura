@@ -17,6 +17,7 @@ public struct FrigateEventThumbnailLoader: EventThumbnailLoading {
     public func thumbnail(for event: EventId) async -> Data? {
         let url = FrigateMediaUrl.thumbnail(base: config.baseUrl, eventId: event.value)
         var request = URLRequest(url: url)
+        request.timeoutInterval = 15
         if let auth = AuthorizationHeader.basic(username: config.username, password: config.password) {
             request.setValue(auth, forHTTPHeaderField: "Authorization")
         }
