@@ -36,6 +36,18 @@ struct FrigateCameraActivityRepositoryTests {
         #expect(http.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Basic YWRtaW46c2VjcmV0")
     }
 
+    @Test func `when fetching activity then the request carries a bounded timeout`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(reviewJson.utf8)))
+        let sut = makeSut(http)
+
+        // when
+        _ = try await sut.activeActivity()
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+
     @Test func `given a 401 when fetching activity then it throws not authorized`() async {
         await expect(status: 401, mapsTo: .notAuthorized)
     }

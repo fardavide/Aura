@@ -9,12 +9,12 @@ import CommonNetwork
 /// rest of the app depends on.
 public struct FrigateCameraActivityRepository: CameraActivityRepository {
     private let config: ServerConfig
-    private let httpClient: any HttpClient
+    private let api: FrigateApiClient
     private let now: @Sendable () -> Date
 
     public init(config: ServerConfig, httpClient: any HttpClient, now: @escaping @Sendable () -> Date) {
         self.config = config
-        self.httpClient = httpClient
+        api = FrigateApiClient(config: config, httpClient: httpClient)
         self.now = now
     }
 
@@ -34,24 +34,10 @@ public struct FrigateCameraActivityRepository: CameraActivityRepository {
     }
 
     private func get(_ url: URL) async throws(CamerasError) -> Data {
-        var request = URLRequest(url: url)
-        if let header = AuthorizationHeader.basic(username: config.username, password: config.password) {
-            request.setValue(header, forHTTPHeaderField: "Authorization")
-        }
-
-        let data: Data
-        let response: HTTPURLResponse
         do {
-            (data, response) = try await httpClient.data(for: request)
+            return try await api.get(url)
         } catch {
-            throw CamerasError.unreachable
-        }
-
-        switch response.statusCode {
-        case 200...299: return data
-        case 401, 403: throw CamerasError.notAuthorized
-        case 500...599: throw CamerasError.serverUnavailable
-        default: throw CamerasError.unknown
+            throw CamerasError(error)
         }
     }
 }

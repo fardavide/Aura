@@ -649,3 +649,30 @@ the package or snapshot tests): confirm PiP survives a manual start followed by 
 and that auto-PiP-on-background still hands back cleanly. The pure `ZoomTransform` math and its
 `CommonPlayerTests` are unchanged; the new host is thin platform glue and stays untested by the same
 rule as the old wrapper.
+
+## Every Frigate read bounded (15s) through one shared FrigateApiClient (0.3.10)
+The 0.3.7/0.3.9 hardening bounded the Timeline reads and the cameras config read; the other five
+Cameras data types (groups, storage, activity, today-events, stills) and the whole Events data layer
+still rode URLSession's 60s default. First, each remaining read gained the same 15s timeout via TDD —
+one `lastRequest.timeoutInterval` test per repository/loader against the shared `FakeHttpClient`.
+Then the thrice-duplicated authed-GET ladder (Basic auth + timeout + status→error mapping) was
+extracted into **`FrigateApiClient` in `CommonFrigate`** — the standing status.md refactor, done as
+the refactor step of those cycles. Shape decisions:
+
+- The client throws a **transport-vocabulary `FrigateApiError`** (unreachable / notAuthorized /
+  serverUnavailable / unknown); each feature's Data layer maps it into its own domain error with an
+  exhaustive-switch initializer at the boundary (shared internal mapper in `CamerasData` — six
+  consumers; file-private in the single Events/Timeline consumer files). Domains keep owning their
+  errors; Frigate vocabulary still never crosses the Data boundary. Best-effort media loaders just
+  `try?` the client, which collapses their hand-rolled status checks.
+- Repository/loader **init signatures are unchanged** (`config:httpClient:` — each builds its client
+  internally), so the composition root and every existing test stood still; the per-repo timeout,
+  auth-header, and status-mapping tests keep pinning the behavior through the public APIs.
+- `CommonFrigate` gained the **`CommonNetwork` dependency edge** the architecture docs had always
+  drawn (`Data → CommonFrigate → CommonNetwork`) but the manifest never needed until now.
+  `TimelineHttp.swift` dissolved into the client and its two consumers.
+- The timeout is an **idle** timeout (resets whenever bytes arrive), so it also guards the media
+  loads (stills, thumbnails, clip downloads) without capping a large clip on a slow link.
+- Deliberately **not** the request-coalescing client from the 0.3.1 known-cost note — the ≤3
+  `/api/config` GETs per grid appearance remain; that consolidation stays on the roadmap, and the
+  client is now the natural seam to add it behind.

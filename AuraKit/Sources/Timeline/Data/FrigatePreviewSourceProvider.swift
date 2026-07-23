@@ -8,11 +8,11 @@ import TimelineDomain
 /// Fetches a camera's preview material and resolves a clip's playable (authed) source.
 public struct FrigatePreviewSourceProvider: CameraPreviewProviding {
     private let config: ServerConfig
-    private let httpClient: any HttpClient
+    private let api: FrigateApiClient
 
     public init(config: ServerConfig, httpClient: any HttpClient) {
         self.config = config
-        self.httpClient = httpClient
+        api = FrigateApiClient(config: config, httpClient: httpClient)
     }
 
     public func clips(for camera: CameraName, in range: TimeRange) async throws(TimelineError) -> [PreviewClip] {
@@ -20,7 +20,7 @@ public struct FrigatePreviewSourceProvider: CameraPreviewProviding {
             base: config.baseUrl, camera: camera.value,
             after: range.start.timeIntervalSince1970, before: range.end.timeIntervalSince1970
         )
-        let data = try await authorizedData(url: url, config: config, httpClient: httpClient)
+        let data = try await get(url)
         do {
             return try JSONDecoder().decode([PreviewClipDto].self, from: data).toClips()
         } catch {
@@ -33,7 +33,7 @@ public struct FrigatePreviewSourceProvider: CameraPreviewProviding {
             base: config.baseUrl, camera: camera.value,
             after: range.start.timeIntervalSince1970, before: range.end.timeIntervalSince1970
         )
-        let data = try await authorizedData(url: url, config: config, httpClient: httpClient)
+        let data = try await get(url)
         do {
             return try JSONDecoder().decode([String].self, from: data).toFrames(camera: camera)
         } catch {
@@ -42,9 +42,34 @@ public struct FrigatePreviewSourceProvider: CameraPreviewProviding {
     }
 
     public func clipSource(_ clip: PreviewClip) -> CameraStreamSource {
-        CameraStreamSource(
+        var headers: [String: String] = [:]
+        if let auth = AuthorizationHeader.basic(username: config.username, password: config.password) {
+            headers["Authorization"] = auth
+        }
+        return CameraStreamSource(
             url: FrigatePreviewUrl.clipMedia(base: config.baseUrl, path: clip.path),
-            headers: authorizationHeaders(for: config)
+            headers: headers
         )
+    }
+
+    private func get(_ url: URL) async throws(TimelineError) -> Data {
+        do {
+            return try await api.get(url)
+        } catch {
+            throw TimelineError(error)
+        }
+    }
+}
+
+private extension TimelineError {
+    /// Translates the shared Frigate transport error into the feature's domain error at the Data
+    /// boundary, so the Domain never sees Frigate vocabulary.
+    init(_ error: FrigateApiError) {
+        switch error {
+        case .unreachable: self = .unreachable
+        case .notAuthorized: self = .notAuthorized
+        case .serverUnavailable: self = .serverUnavailable
+        case .unknown: self = .unknown
+        }
     }
 }

@@ -54,10 +54,14 @@ let package = Package(
             path: "Tests/Common/NetworkTests"
         ),
 
-        .target(name: "CommonFrigate", path: "Sources/Common/Frigate"),
+        .target(
+            name: "CommonFrigate",
+            dependencies: ["CommonNetwork"],
+            path: "Sources/Common/Frigate"
+        ),
         .testTarget(
             name: "CommonFrigateTests",
-            dependencies: ["CommonFrigate"],
+            dependencies: ["CommonFrigate", "CommonNetwork", "TestDoubles"],
             path: "Tests/Common/FrigateTests"
         ),
 

@@ -33,6 +33,18 @@ struct FrigateTodayEventsRepositoryTests {
         #expect(url.contains("after=1000000"))
     }
 
+    @Test func `when fetching labels then the request carries a bounded timeout`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(todayEventsJson.utf8)))
+        let sut = FrigateTodayEventsRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.labels(since: since)
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+
     @Test func `given a 401 when fetching labels then it throws not authorized`() async {
         // given
         let sut = makeSut(FakeHttpClient(.response(status: 401, body: Data())))

@@ -42,6 +42,21 @@ struct FrigateRecordingStorageRepositoryTests {
         #expect(http.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Basic YWRtaW46c2VjcmV0")
     }
 
+    @Test func `when fetching storage then the request carries a bounded timeout`() async throws {
+        // given
+        let http = FakeHttpClient(routes: [
+            ("api/stats", .response(status: 200, body: Data(statsJson.utf8))),
+            ("api/config", .response(status: 200, body: Data(recordConfigJson.utf8))),
+        ])
+        let sut = FrigateRecordingStorageRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.storage()
+
+        // then
+        #expect(http.lastRequest?.timeoutInterval == 15)
+    }
+
     @Test func `given a 401 when fetching storage then it throws not authorized`() async {
         // given
         let sut = makeSut(FakeHttpClient(.response(status: 401, body: Data())))

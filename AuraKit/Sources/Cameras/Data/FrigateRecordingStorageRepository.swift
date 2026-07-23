@@ -12,11 +12,11 @@ import CommonNetwork
 /// the per-screen config reads behind a shared, request-coalescing client is the standing follow-up.
 public struct FrigateRecordingStorageRepository: RecordingStorageRepository {
     private let config: ServerConfig
-    private let httpClient: any HttpClient
+    private let api: FrigateApiClient
 
     public init(config: ServerConfig, httpClient: any HttpClient) {
         self.config = config
-        self.httpClient = httpClient
+        api = FrigateApiClient(config: config, httpClient: httpClient)
     }
 
     public func storage() async throws(CamerasError) -> RecordingStorage {
@@ -32,24 +32,10 @@ public struct FrigateRecordingStorageRepository: RecordingStorageRepository {
     }
 
     private func get(_ endpoint: FrigateEndpoint) async throws(CamerasError) -> Data {
-        var request = URLRequest(url: endpoint.url(base: config.baseUrl))
-        if let header = AuthorizationHeader.basic(username: config.username, password: config.password) {
-            request.setValue(header, forHTTPHeaderField: "Authorization")
-        }
-
-        let data: Data
-        let response: HTTPURLResponse
         do {
-            (data, response) = try await httpClient.data(for: request)
+            return try await api.get(endpoint.url(base: config.baseUrl))
         } catch {
-            throw CamerasError.unreachable
-        }
-
-        switch response.statusCode {
-        case 200...299: return data
-        case 401, 403: throw CamerasError.notAuthorized
-        case 500...599: throw CamerasError.serverUnavailable
-        default: throw CamerasError.unknown
+            throw CamerasError(error)
         }
     }
 }
