@@ -591,6 +591,112 @@ struct PreviewTileViewModelTests {
         // then
         #expect(isFrame(sut.display))
     }
+
+    // MARK: Following the live edge (a trigger separate from the first load)
+
+    @Test func `given a tile still on its first load when following the live edge then it is left untouched`() async {
+        // given — a fresh tile whose first load has not run yet (still on the spinner)
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let sut = makeTile(provider: provider, loader: FakePreviewImageLoader(image: pngData))
+
+        // when — the live-edge follow fires (as it does on appear) while nothing is loaded yet
+        await sut.followLiveEdge(to: tileWindow, at: at(85))
+
+        // then — it neither fetched nor resolved the display: the first load still owns the material
+        #expect(isLoading(sut.display))
+        #expect(provider.clipsCallCount == 0)
+    }
+
+    @Test func `given the first load in flight when the live edge grows then the load finishes instead of stranding`() async {
+        // given — a first load held mid-fetch (a slow server), so the tile sits on its spinner
+        let gate = Gate()
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        provider.onClips = { await gate.wait() }
+        let sut = makeTile(provider: provider, loader: FakePreviewImageLoader(image: pngData))
+        let firstLoad = Task { await sut.prepare(range: tileWindow, at: at(85)) }
+        await settle { provider.clipsCallCount == 1 }
+
+        // when — the 30s live-edge refresh grows the span while the first load is still in flight
+        await sut.followLiveEdge(to: TimeRange(start: at(0), end: at(160)), at: at(155))
+
+        // then — the follow left the in-flight load alone: it neither restarted nor duplicated it
+        #expect(isLoading(sut.display))
+        #expect(provider.clipsCallCount == 1)
+
+        // and when the load finally lands it resolves the tile, rather than spinning forever
+        await gate.open()
+        await firstLoad.value
+        await settle { isFrame(sut.display) }
+        #expect(isFrame(sut.display))
+    }
+
+    @Test func `given a loaded tile when the live edge grows then following it refreshes the material in place`() async {
+        // given — a loaded tile showing the live-hour frame
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // when — newer footage exists and the live edge grows past it
+        provider.framesResult = .success([frame(70), frame(80), frame(140), frame(150)])
+        await sut.followLiveEdge(to: TimeRange(start: at(0), end: at(160)), at: at(155))
+        await settle { loader.requestedFrames.last == frame(150) }
+
+        // then — the freshest frame is shown, not the stale pre-refresh one
+        #expect(loader.requestedFrames.last == frame(150))
+        #expect(isFrame(sut.display))
+    }
+
+    @Test func `given a failed tile when the live edge grows then following it retries from scratch`() async {
+        // given — the first load failed outright
+        let provider = FakeCameraPreviewProvider()
+        provider.clipsResult = .failure(.unreachable)
+        let loader = FakePreviewImageLoader(image: pngData)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+        #expect(isFailed(sut.display))
+
+        // when — the server recovers and the next extension follows the live edge
+        provider.clipsResult = .success([clip(0, 60)])
+        provider.framesResult = .success([frame(70), frame(80)])
+        await sut.followLiveEdge(to: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // then — the tile self-recovers with the screen
+        #expect(isFrame(sut.display))
+    }
+
+    @Test func `given the first load's frame image fails then the tile resolves to a placeholder, not a stuck spinner`() async {
+        // given — live-hour frames exist, but the frame image can't be decoded (nil)
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let sut = makeTile(provider: provider, loader: FakePreviewImageLoader(image: nil))
+
+        // when — the first load runs at the live edge, past the last clip
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { !isLoading(sut.display) }
+
+        // then — it leaves the spinner for a definite placeholder, so followLiveEdge (which skips
+        // `.loading`) can retry it, rather than reading it as a still-in-flight load forever
+        #expect(isUnavailable(sut.display))
+    }
+
+    @Test func `given a placeholder from a failed first-load frame image when following the live edge then it retries`() async {
+        // given — a first load whose frame image failed, so the tile shows the placeholder
+        let provider = FakeCameraPreviewProvider(clips: [clip(0, 60)], frames: [frame(70), frame(80)])
+        let loader = FakePreviewImageLoader(image: nil)
+        let sut = makeTile(provider: provider, loader: loader)
+        await sut.prepare(range: tileWindow, at: at(85))
+        await settle { isUnavailable(sut.display) }
+
+        // when — the image endpoint recovers and the next extension follows the live edge
+        loader.image = pngData
+        await sut.followLiveEdge(to: tileWindow, at: at(85))
+        await settle { isFrame(sut.display) }
+
+        // then — the tile self-recovers instead of spinning behind the live edge
+        #expect(isFrame(sut.display))
+    }
 }
 
 // MARK: - Helpers
@@ -644,6 +750,14 @@ private func isLoading(_ display: PreviewTileViewModel.Display) -> Bool {
     if case .loading = display { true } else { false }
 }
 
+private func isFailed(_ display: PreviewTileViewModel.Display) -> Bool {
+    if case .failed = display { true } else { false }
+}
+
+private func isUnavailable(_ display: PreviewTileViewModel.Display) -> Bool {
+    if case .unavailable = display { true } else { false }
+}
+
 private func player(of display: PreviewTileViewModel.Display) -> AVPlayer? {
     if case let .clip(player) = display { player } else { nil }
 }
@@ -689,6 +803,24 @@ private func makeObserveCameras(
 private final class TestClock {
     var value: Date
     init(_ value: Date) { self.value = value }
+}
+
+/// A one-shot async gate: `wait()` suspends until `open()` is called (returning at once if already
+/// open). Lets a test hold a fake fetch in flight, then release it to run to completion.
+private actor Gate {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        for waiter in waiters { waiter.resume() }
+        waiters.removeAll()
+    }
 }
 
 @MainActor

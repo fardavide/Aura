@@ -17,6 +17,9 @@ public struct FrigatePreviewImageLoader: PreviewImageLoading {
     public func frameImage(_ frame: PreviewFrame) async -> Data? {
         let url = FrigatePreviewUrl.frameThumbnail(base: config.baseUrl, fileName: frame.fileName)
         var request = URLRequest(url: url)
+        // Bounded like the other timeline reads: a hung frame load must not leave a first-load tile
+        // stuck on its spinner (the frame resolves the display) — it fails and retries next extension.
+        request.timeoutInterval = timelineRequestTimeout
         if let auth = AuthorizationHeader.basic(username: config.username, password: config.password) {
             request.setValue(auth, forHTTPHeaderField: "Authorization")
         }
