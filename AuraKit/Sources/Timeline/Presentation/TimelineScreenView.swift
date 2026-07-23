@@ -5,7 +5,16 @@ import CamerasEntities
 import TimelineDomain
 
 public struct TimelineScreenView: View {
-    private let viewModel: TimelineScreenViewModel
+    // @State-pinned, like the sibling tabs (CameraGridView, EventsListView): RootView builds a
+    // fresh view model on every body re-evaluation (tab switches alone produce two), while the
+    // `.task` closures below only rebind on an appearance. A plain `let` let a re-evaluation swap
+    // the *displayed* model for a never-loaded one whose only exit from `.loading` — the
+    // appearance-driven `loadIfNeeded` — stayed bound to the discarded instance: a permanent
+    // full-screen spinner (`shouldRefreshNow` gates every refresh path off while `.loading`).
+    // Pinning keeps the first instance for the view's identity lifetime, so the displayed and
+    // task-driven model are always the same object; a connection change still rebuilds it via
+    // RootView's `.id`.
+    @State private var viewModel: TimelineScreenViewModel
     private let makeTileViewModel: (Camera) -> PreviewTileViewModel
     private let onOpenRecording: (Camera, Date) -> Void
 
@@ -46,7 +55,7 @@ public struct TimelineScreenView: View {
         makeTileViewModel: @escaping (Camera) -> PreviewTileViewModel,
         onOpenRecording: @escaping (Camera, Date) -> Void
     ) {
-        self.viewModel = viewModel
+        _viewModel = State(initialValue: viewModel)
         self.makeTileViewModel = makeTileViewModel
         self.onOpenRecording = onOpenRecording
     }

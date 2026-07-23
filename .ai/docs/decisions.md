@@ -197,6 +197,44 @@ held-in-flight regression scenario — refreshes a loaded tile, retries a failed
 trigger lines themselves stay uncovered for the reason above (package tests can't exercise SwiftUI
 task re-keying), so the comments at both sites are the guard.
 
+### Timeline screen stuck on the full-screen spinner: unpinned view model (0.3.9)
+Reported: the timeline still "stays loading forever" after the 0.3.7 tile fix. Root cause was
+**screen-level**, not tile-level: RootView builds each tab's view model inline in its body, so every
+RootView body re-evaluation mints a fresh `TimelineScreenViewModel` born `.loading` — and since the
+tab-icon bounce (0.3.2), every tab switch guarantees two body passes (`selectedTab` write, then the
+`onChange` bounce-counter bump). `TimelineScreenView` held the model as a plain `let`, so a body pass
+landing after the appearance `.task`s started swapped the *displayed* model for a never-loaded one
+while `loadIfNeeded`/`autoRefresh` kept driving the discarded instance (an un-keyed `.task` rebinds
+only on an appearance, not on a view-value change). The stranded `.loading` model is absorbing: the
+periodic tick never reaches it — the un-keyed autoRefresh task keeps ticking against the discarded,
+invisibly-`.ready` instance — and the scene-activation catch-up, the one task that *does* rebind
+(keyed off `scenePhase`), is gated off exactly in the stuck state because `shouldRefreshNow`
+returns false for `.loading`; only an app relaunch recovered. Adversarial verification reproduced it in a minimal
+harness: on **macOS** the task/onChange ordering strands the screen on every visit including the
+first; on iOS the passes usually coalesce before the task starts, degrading to a spinner-flash +
+full refetch per revisit (silently defeating `loadIfNeeded`'s purpose). Cameras and Events were
+immune all along — they pin their view model with `@State(initialValue:)`.
+
+Fix: pin the view model in `@State` in `TimelineScreenView`, exactly like the sibling tabs — the
+first instance survives for the view's identity lifetime, so the displayed and task-driven model are
+always the same object; a connection change still rebuilds it through RootView's `.id`. **The rule
+is general: a view that receives an `@Observable` view model and runs `.task` work against it must
+pin it in `@State`** (recorded in the swift-style skill). Deliberately *not* changed:
+`shouldRefreshNow` still excludes `.loading` (with the pin, `loadIfNeeded` is again the guaranteed
+exit, and letting refresh race the initial load would double-fetch), and RootView still mints
+throwaway models per body pass (the sibling tabs accept the same cost; caching in the composition
+root would add lifecycle concerns for no user-visible gain). Also hardened for parity with 0.3.7:
+the cameras `/api/config` read — which gates the Timeline's first paint ahead of the timeline
+fetches — now carries the same 15s request timeout (pinned by a repository test), so an
+accepting-but-unresponsive server fails into `.failed` (which auto-refresh retries) instead of
+holding the spinner for URLSession's 60s default per attempt.
+
+Known, accepted exposures (verified real but rare, not this bug): `URLRequest.timeoutInterval` is an
+*idle* timer, so a proxy dribbling ≥1 byte per window evades both this and the 0.3.7 timeouts
+(bounding wall-clock needs a session-level `timeoutIntervalForResource`); and `/api/review` is
+queried over the full 7-day span with no `limit`, so first paint pays for an unbounded review payload
+on event-dense deployments. Both are candidates for a later hardening pass.
+
 ## Screenshot tests: app-hosted, `swift-snapshot-testing` (test-only)
 SwiftUI screenshot tests for the Timeline screen live in the **app-hosted `AuraTests` target**, not
 the `AuraKit` package. Reason (verified, not assumed): only an app-hosted target gives the tests a

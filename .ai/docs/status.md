@@ -50,6 +50,12 @@
   re-keyed off the whole span), stranding it. The first load is now keyed off the **fixed span start**
   with the live-edge follow on a **separate trigger** (`followLiveEdge`), and timeline reads carry a
   request timeout so an unresponsive server can't hang a load. See `decisions.md`.
+  Since **0.3.9** the *screen* no longer gets stuck on its full-screen spinner either: the view model
+  is now **`@State`-pinned** in `TimelineScreenView` (like Cameras/Events always were), so RootView's
+  per-body-pass rebuilds can't swap the displayed screen for a never-loaded one whose `.task`s drive
+  a discarded instance (permanent on macOS, spinner-flash + refetch per tab revisit on iOS), and the
+  cameras `/api/config` read that gates first paint carries the same 15s timeout as the timeline
+  reads. See `decisions.md`.
 
 - **Pinch-to-zoom on the live view (v0.1.10).** Digital zoom + pan (1x–10x) on the live camera detail, both
   platforms: pinch (touch / trackpad magnify) zooms about the pinch point, drag pans with the
