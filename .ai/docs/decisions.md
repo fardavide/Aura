@@ -320,7 +320,7 @@ Pinch-to-zoom + pan on the live camera detail is a SwiftUI **gesture container i
 wrapped around the untouched platform players** — not a custom `AVPlayerLayer` host (which would
 forfeit `AVPlayerViewController`'s free PiP) and not per-platform recognizers. One platform-neutral
 implementation covers touch pinch (iOS) and trackpad magnify (macOS). The zoom/pan geometry is a
-**pure, clamped value type** — anchor-preserving magnify (1x–4x), pan bounded so the content edges
+**pure, clamped value type** — anchor-preserving magnify (1x–10x), pan bounded so the content edges
 never pull inside the viewport, double-tap toggling 1x↔2x at the tap point — unit-tested in the
 package (`CommonPlayerTests`, the target's first test suite); the gesture wiring stays thin and
 untested. All gestures attach as `simultaneousGesture` so the player's own tap-to-toggle-controls

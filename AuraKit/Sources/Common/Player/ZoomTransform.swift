@@ -18,7 +18,7 @@ public struct ZoomTransform: Equatable, Sendable {
     }
 
     public static func standard() -> ZoomTransform {
-        ZoomTransform(scaleRange: 1...4)
+        ZoomTransform(scaleRange: 1...10)
     }
 
     public var isZoomed: Bool { scale > scaleRange.lowerBound }
