@@ -51,7 +51,7 @@
   with the live-edge follow on a **separate trigger** (`followLiveEdge`), and timeline reads carry a
   request timeout so an unresponsive server can't hang a load. See `decisions.md`.
 
-- **Pinch-to-zoom on the live view (v0.1.10).** Digital zoom + pan (1x–4x) on the live camera detail, both
+- **Pinch-to-zoom on the live view (v0.1.10).** Digital zoom + pan (1x–10x) on the live camera detail, both
   platforms: pinch (touch / trackpad magnify) zooms about the pinch point, drag pans with the
   content edges clamped to the viewport, double-tap toggles 1x↔2x at the tap point. The pinch
   anchor comes from `MagnifyGesture`'s start **location** (v0.2.3) — its `startAnchor` reports

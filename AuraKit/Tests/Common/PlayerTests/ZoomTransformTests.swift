@@ -27,10 +27,10 @@ struct ZoomTransformTests {
         let sut = ZoomTransform.standard()
 
         // when
-        let result = sut.magnified(by: 10, anchor: .center, viewport: viewport)
+        let result = sut.magnified(by: 20, anchor: .center, viewport: viewport)
 
         // then
-        #expect(result.scale == 4)
+        #expect(result.scale == 10)
         #expect(result.offset == .zero)
     }
 

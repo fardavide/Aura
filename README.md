@@ -40,6 +40,11 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.8 — 2026-07-23
+- Live camera: pinch-to-zoom now reaches **10×** (up from 4×), so you can push in much further to
+  read faces, plates, or distant detail. Panning, the double-tap toggle, and the controls staying
+  put are all unchanged.
+
 ### 0.3.7 — 2026-07-23
 - Timeline: fixed the camera tiles getting stuck on their loading spinner and never showing footage
   — the periodic live-edge refresh was cancelling each tile's first load before it could finish. The
@@ -116,7 +121,7 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
   consolidated into a shared target.
 
 ### 0.1.10 — 2026-07-02
-- Pinch-to-zoom + pan (1x–4x) on the live camera view, on both platforms.
+- Pinch-to-zoom + pan (1x–10x) on the live camera view, on both platforms.
 
 ### 0.1.9 — 2026-06-30
 - iPhone-landscape timeline layout: camera tiles on the left, a full-height vertical scrubber on
