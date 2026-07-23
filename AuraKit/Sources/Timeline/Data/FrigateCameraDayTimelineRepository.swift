@@ -10,11 +10,11 @@ import TimelineDomain
 /// the camera scrub-grid must still load even if an activity endpoint is unavailable.
 public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
     private let config: ServerConfig
-    private let httpClient: any HttpClient
+    private let api: FrigateApiClient
 
     public init(config: ServerConfig, httpClient: any HttpClient) {
         self.config = config
-        self.httpClient = httpClient
+        api = FrigateApiClient(config: config, httpClient: httpClient)
     }
 
     public func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline {
@@ -38,7 +38,7 @@ public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
     /// Best-effort GET + decode of a JSON array; any failure yields an empty array.
     private func fetch<Element: Decodable>(_ url: URL, as element: Element.Type) async -> [Element] {
         guard
-            let data = try? await authorizedData(url: url, config: config, httpClient: httpClient),
+            let data = try? await api.get(url),
             let decoded = try? JSONDecoder().decode([Element].self, from: data)
         else {
             return []
