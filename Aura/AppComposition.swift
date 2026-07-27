@@ -141,6 +141,9 @@ final class AppComposition {
             previews: GetCameraPreviews(
                 provider: FrigatePreviewSourceProvider(config: config, httpClient: httpClient)
             ),
+            recordings: GetCameraRecordings(
+                repository: FrigateCameraRecordingsRepository(config: config, httpClient: httpClient)
+            ),
             imageLoader: FrigatePreviewImageLoader(config: config, httpClient: httpClient)
         )
     }

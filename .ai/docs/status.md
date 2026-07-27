@@ -133,8 +133,20 @@
   paint can't hang on an unreachable server, resolving to an empty slot on the first failure and
   leaving on-screen values alone on later ones. See `decisions.md`.
 
-Package logic is covered by Swift Testing (287 tests). All four main screens — **Timeline**
-(ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
+- **Timeline transport + full-resolution tiles (0.4.0).** The scrubber card carries the design's
+  transport — skip ±10s, play/pause, 1× / 2× / 4× / 8× (the slim landscape card steps through the
+  ladder with one button) — and playing swaps **every** tile from the low-res scrub material to that
+  camera's own recording, reusing 0.3.13's window/mapping machinery. Playback is a *clock*: a
+  `TimelineTransport` advances the one shared `ScrubClock`, tiles follow and correct their own drift,
+  and the histogram scrolls under the fixed playhead (the scroll→clock direction is off while
+  playing). Gaps are stepped over, the live edge stops playback, and play from the edge rewinds a
+  minute — which closes the "resuming at the live edge" follow-up. Taking hold of the scrubber
+  pauses. A tile whose hour holds nothing (or fails) stays on its previews and rejoins at the next
+  hour with footage. **Reverses** the 0.3.13 "the grid keeps its previews" decision — see
+  `decisions.md` and `.ai/plan/no-ticket_timeline-transport-fullres/`.
+
+Package logic is covered by Swift Testing (382 tests). All four main screens — **Timeline**
+(ready busy / gappy / quiet / **playing**, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
 iPhone + iPad (portrait + landscape) × light + dark on the simulator.
@@ -163,12 +175,12 @@ not snapshot-tested — they center on video players that can't render in a snap
   the clock claims (this is the wall-clock ↔ player-time mapping); 4×/8× hold up on real camera
   bitrates; and, if the server is behind a Basic-auth proxy, that HLS **segment** requests carry the
   auth header (headers are not guaranteed to reach sub-requests — port 5000 is unaffected).
-- **Resuming at the live edge.** Playback stops when the stream runs out at the present (correct),
-  but Play then does nothing until the screen is reopened — more footage has been recorded by then
-  and the window could simply be reloaded. Small, self-contained follow-up.
-- **Timeline transport for the multi-cam grid.** The design (`Timeline.dc.html`, Option A) also puts
-  play/pause + 1–8× on the scrubber card, running every tile's *preview* forward together and
-  skipping gaps. Deliberately a separate slice from the full-res player above.
+- **Verify the Timeline transport on the real server (0.4.0)** — playing opens **one full-res HLS
+  stream per camera at once**, which no test can exercise. Check on the running instance: total
+  bitrate at the real camera count (this is the first thing expected to hurt); whether 4×/8×
+  actually plays smoothly or degrades to stepping (nginx-vod-module isn't known to publish
+  I-frame-only playlists); whether tiles stay close enough to each other to read as synchronised;
+  and that the hour swap mid-playback doesn't stall every tile at once.
 - **Timeline follow-ups**: auto-load ranges older than the current ~7-day span as you scroll; the
   `camera=all` batch clip-list optimization; richer markers. (The tile live-follow gap — frames
   fetched once per tile on appear — was closed in 0.3.3: tiles refresh their material in place on

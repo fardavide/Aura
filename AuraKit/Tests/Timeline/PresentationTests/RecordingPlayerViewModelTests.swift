@@ -16,6 +16,10 @@ struct PlaybackSpeedTests {
     @Test func `given the speeds then they read as multipliers in ascending order`() {
         #expect(PlaybackSpeed.allCases.map(\.title) == ["1×", "2×", "4×", "8×"])
     }
+
+    @Test func `when stepping through the ladder then it climbs and wraps back to the slowest`() {
+        #expect(PlaybackSpeed.allCases.map(\.next) == [.twoX, .fourX, .eightX, .oneX])
+    }
 }
 
 @MainActor

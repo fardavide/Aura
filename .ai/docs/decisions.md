@@ -800,3 +800,54 @@ Snapshot-tested the way the live player already is: recorded video can't render 
 transport is split into a `RecordingControlState` value + a bar that is a pure function of it, and
 the layout is captured over a black placeholder with no `AVPlayer` built. Three states (playing,
 paused at 8×, an hour with no footage) across the device + light/dark matrix.
+
+## Timeline transport + full-resolution tiles — reverses "the grid keeps its previews" (0.4.0)
+The scrubber card gained the transport the design has always carried (`Timeline.dc.html`, Option A:
+skip ±10s, play/pause, the 1–8× ladder), and pressing play now swaps **every** tile from the low-res
+scrub material to that camera's own recording. This **reverses** the 0.3.13 decision above, which
+kept full resolution on the pushed single-camera screen because "a wall of full-res HLS streams is
+not viable on a phone". That reasoning was written against an unbounded camera count; the user chose
+the literal behaviour with the cost understood (`.ai/plan/no-ticket_timeline-transport-fullres/`,
+Option 1 of three — the alternatives were a single focused tile, or a cap on how many tiles stream).
+
+Four decisions carry it:
+
+- **Playback is a clock, not a player.** `TimelineTransport` advances the one shared `ScrubClock`
+  that the histogram, the readout and every tile already follow; nothing about it streams anything.
+  The grid therefore stays synchronised **by construction** rather than by keeping N players in step
+  with one another — the alternative (a designated master player others chase) would have made the
+  readout disagree with the picture whenever the master stalled. Tiles are followers: each corrects
+  its own stream when it drifts more than a second from the clock, and swaps hours when the playhead
+  leaves the one it is streaming. Drift between tiles is real and accepted; drift between the clock
+  and what the card *says* is not possible.
+- **Playing scrolls the histogram; it does not move the playhead.** The playhead is fixed at the
+  centre by design, so "the clock advanced" and "the track slid past" are the same event. While
+  playing, the clock leads and the scroll follows it, and the scroll→clock direction is switched
+  off — reading the time back out of an offset we just wrote fed rounding error into the playhead.
+  The user taking hold of the scrubber pauses playback (on the gesture-driven scroll phases only:
+  `.animating` is our own re-anchor and must not pause itself).
+- **Gaps are stepped over, the live edge stops playback, and play from the edge rewinds a minute.**
+  Sitting inside a gap would show every tile the same frozen frame for as long as it lasts, which
+  reads as a hung player, so `TimelinePlayhead` (pure) jumps to the far side — ascending order, so
+  adjacent gaps clear in one pass. Nothing is recorded past the live edge, so playback stops there;
+  pressing play while parked on it backs up a minute rather than stopping again on the first tick,
+  which also closes the "Play does nothing at the live edge" follow-up left open in 0.3.13.
+- **An hour with no footage is not a tile failure.** A tile whose hour holds nothing playable — or
+  whose read failed — falls back to its preview material and records that hour as abandoned, so the
+  follow doesn't refetch it on every one of the ~10 ticks a second; it rejoins full resolution at the
+  next hour that has footage. Playback carries on around it either way. The tile keeps `isPlaying`
+  separately from "is streaming" for exactly this reason.
+
+`RecordingWindow`/`RecordingTimeline`/`GetCameraRecordings` are reused unchanged from 0.3.13 — the
+tile is a second consumer of the same wall-clock↔player-time machinery, so the hour-window rules and
+the gap mapping have one implementation, not two.
+
+The 0.3.13 risk carries over **multiplied**: AVPlayer against Frigate's VOD HLS is still unproven on
+a real server, and this now opens N of those streams at once rather than one. Two things to watch on
+the running instance: total bitrate at the real camera count, and whether 4×/8× produces smooth
+playback at all (nginx-vod-module is not known to publish I-frame-only playlists, so a high `rate`
+may degrade to stepping). The transport clock is correct regardless of what the streams manage.
+
+Snapshot coverage adds a **playing** state (transport showing pause at 4×) to the timeline suite.
+It is deterministic because `now` is injected and frozen: `run()` measures real elapsed time, which
+is zero against a frozen clock, so the tick loop can't advance the playhead mid-capture.

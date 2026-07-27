@@ -10,11 +10,16 @@ import TimelineDomain
 /// Laid out along `axis`: horizontal (a wide card floated at the bottom) or vertical (a tall card
 /// on the right, for iPhone landscape). Time always reads start→end along the scroll axis — left→
 /// right when horizontal, top→bottom when vertical — with the newest end anchored under the playhead.
+///
+/// The card also carries the transport, and playback scrolls the histogram rather than moving the
+/// playhead: the playhead is fixed at the centre by design, so "the clock advanced" and "the track
+/// slid past" are the same thing.
 struct ScrollableTimelineView: View {
     let axis: Axis
     let span: TimeRange
     let timeline: DayTimeline
     let clock: ScrubClock
+    let transport: TimelineTransport
     let onScrub: (Date) -> Void
 
     @State private var pointsPerHour: CGFloat = TimelineZoom.day.pointsPerHour
@@ -37,6 +42,7 @@ struct ScrollableTimelineView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     header
                     histogram
+                    TimelineTransportControls(axis: .vertical, transport: transport)
                 }
                 .padding(16)
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
@@ -46,6 +52,7 @@ struct ScrollableTimelineView: View {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 histogram
+                TimelineTransportControls(axis: .horizontal, transport: transport)
                 legend
             }
             .padding(16)
@@ -94,12 +101,36 @@ struct ScrollableTimelineView: View {
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 isVertical ? geometry.contentOffset.y : geometry.contentOffset.x
             } action: { _, offset in
-                guard scale.contentLength > 0 else { return }
+                // While playing, the clock leads and the scroll follows it — reading the time back
+                // out of the offset we just wrote would feed rounding error into the playhead.
+                guard scale.contentLength > 0, !transport.isPlaying else { return }
                 onScrub(scale.instant(atOffset: offset))
             }
-            // Pause auto-refresh while the user is panning so a tick can't yank the histogram.
+            // Playback slides the track under the fixed playhead. Nothing to do while parked: the
+            // scroll is then the thing driving the clock, not the other way round.
+            .onChange(of: clock.instant) { _, instant in
+                guard transport.isPlaying, scale.contentLength > 0 else { return }
+                if isVertical {
+                    scrollPosition.scrollTo(y: scale.offset(for: instant))
+                } else {
+                    scrollPosition.scrollTo(x: scale.offset(for: instant))
+                }
+            }
             .onScrollPhaseChange { _, phase in
-                if phase == .idle { clock.endScrub() } else { clock.beginScrub() }
+                switch phase {
+                case .idle:
+                    clock.endScrub()
+                // Our own re-anchoring while playing — not the user, so it must neither pause
+                // playback nor block the auto-refresh.
+                case .animating:
+                    break
+                // Pause auto-refresh while the user is panning so a tick can't yank the histogram,
+                // and hand the playhead over: the drag and the transport would otherwise both be
+                // driving the same clock.
+                case .tracking, .interacting, .decelerating:
+                    clock.beginScrub()
+                    transport.pause()
+                }
             }
             // Guard against isScrubbing getting stuck if the view disappears mid-deceleration.
             .onDisappear { clock.endScrub() }

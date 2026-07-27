@@ -8,6 +8,7 @@ import TimelineDomain
 struct PreviewTileView: View {
     let viewModel: PreviewTileViewModel
     let clock: ScrubClock
+    let transport: TimelineTransport
     let range: TimeRange
 
     var body: some View {
@@ -40,13 +41,25 @@ struct PreviewTileView: View {
             .onChange(of: clock.instant) { _, instant in
                 viewModel.scrub(to: instant)
             }
+            // Entering playback swaps the low-res scrub material for the camera's own recording;
+            // leaving it puts the tile back on the previews at wherever the playhead stopped.
+            .task(id: transport.isPlaying) {
+                if transport.isPlaying {
+                    await viewModel.beginPlayback(at: clock.instant, speed: transport.speed)
+                } else {
+                    viewModel.endPlayback(at: clock.instant)
+                }
+            }
+            .onChange(of: transport.speed) { _, speed in
+                viewModel.select(speed)
+            }
     }
 
     @ViewBuilder private var content: some View {
         switch viewModel.display {
         case .loading:
             ProgressView()
-        case .clip(let player):
+        case .clip(let player), .recording(let player):
             ScrubbingPlayerView(player: player, videoGravity: .resizeAspectFill)
         case .frame(let image):
             image

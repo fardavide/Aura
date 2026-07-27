@@ -97,7 +97,8 @@ func gappyTimelineFixture() -> DayTimeline {
 @MainActor
 func timelineScreen(
     cameras: Result<[Camera], CamerasError>,
-    timeline: Result<DayTimeline, TimelineError>
+    timeline: Result<DayTimeline, TimelineError>,
+    playing: Bool = false
 ) async -> some View {
     let viewModel = TimelineScreenViewModel(
         observeCameras: ObserveCameras(
@@ -109,14 +110,25 @@ func timelineScreen(
         days: snapshotDays
     )
     await viewModel.load()
+    if playing {
+        viewModel.transport.select(.fourX)
+        viewModel.transport.togglePlayPause()
+    }
 
-    // No preview material — every tile resolves to the `.unavailable` placeholder.
+    // No preview material and no recordings — every tile resolves to the `.unavailable`
+    // placeholder, playing or not, since video never renders in a snapshot.
     let previews = GetCameraPreviews(provider: FakeCameraPreviewProvider())
+    let recordings = GetCameraRecordings(repository: FakeCameraRecordingsRepository(.success([])))
     let imageLoader = FakePreviewImageLoader()
     var tiles: [CameraName: PreviewTileViewModel] = [:]
     if case let .success(all) = cameras {
         for camera in all where camera.isEnabled {
-            let tile = PreviewTileViewModel(camera: camera, previews: previews, imageLoader: imageLoader)
+            let tile = PreviewTileViewModel(
+                camera: camera,
+                previews: previews,
+                recordings: recordings,
+                imageLoader: imageLoader
+            )
             await tile.prepare(range: viewModel.span, at: viewModel.clock.instant)
             tiles[camera.name] = tile
         }
@@ -124,7 +136,14 @@ func timelineScreen(
 
     return TimelineScreenView(
         viewModel: viewModel,
-        makeTileViewModel: { tiles[$0.name] ?? PreviewTileViewModel(camera: $0, previews: previews, imageLoader: imageLoader) },
+        makeTileViewModel: {
+            tiles[$0.name] ?? PreviewTileViewModel(
+                camera: $0,
+                previews: previews,
+                recordings: recordings,
+                imageLoader: imageLoader
+            )
+        },
         // Never invoked in a snapshot — the destination is only built once a tile is tapped.
         makeRecordingPlayerViewModel: { camera, instant in
             RecordingPlayerViewModel(
