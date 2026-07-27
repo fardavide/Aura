@@ -338,10 +338,13 @@ Three changes, in payoff order:
   Python pass over its JSON, which sorts runtimes numerically (so `26.10` beats `26.2`) and matches
   the device name exactly (so `iPhone 17 Pro` can't stand in for `iPhone 17`); it emits the same
   two `::error::` annotations when the image lacks the runtime or the device.
-- **Cache DerivedData**, keyed on the sources with looser restore-keys, so the swift-syntax macro
-  build — the expensive part of a cold compile — is not repeated. `Index.noindex` is excluded and
-  `COMPILER_INDEX_STORE_ENABLE=NO` stops populating it: CI never queries the index, and it was the
-  bulk of the cache payload (a cache that costs more to transfer than the build it saves is a loss).
+- **`COMPILER_INDEX_STORE_ENABLE=NO`** on the build. CI never queries the index store, and not
+  populating it is free speed.
+- **Rejected — do not add a DerivedData cache.** Caching the compiled tree to skip the swift-syntax
+  macro build looks obvious and measures as a **net loss of ~160s/run**: restoring it cost **107s**,
+  and the build that followed took **191s against 134s from cold** — a restored tree makes Xcode
+  re-validate and rebuild much of it anyway, so you pay the download *and* a slower compile. The
+  cold `build-for-testing` is only ~2min; there is not enough there to buy back a cache transfer.
 **Rejected — do not retry as-is: warming up once per size + appearance instead of once per capture.**
 `warmUpRender` runs for every one of the ~200 captures, each building a throwaway hosting controller
 and spinning the runloop 0.2s, and its doc comment describes priming *process-global* caches (glass

@@ -112,21 +112,7 @@ jobs:
           path: SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
-      # Compiled output, so the swift-syntax macro build (the expensive part of a cold compile) is
-      # not repeated per run. Keyed on the sources so a hit is exact; the restore-keys fall back to
-      # a warm-but-stale tree that Xcode rebuilds incrementally. `Index.noindex` is excluded — it is
-      # the largest directory by far and CI never queries the index (COMPILER_INDEX_STORE_ENABLE=NO
-      # below stops populating it at all).
-      - name: Cache DerivedData
-        uses: actions/cache@v4
-        with:
-          path: |
-            DerivedData
-            !DerivedData/Index.noindex
-          key: dd-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ hashFiles('Aura.xcodeproj/project.pbxproj', 'AuraKit/Package.swift', 'Aura/**/*.swift', 'AuraTests/**/*.swift', 'AuraKit/**/*.swift') }}
-          restore-keys: |
-            dd-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-
-            dd-${{ runner.os }}-
+      # NOTE: DerivedData is deliberately NOT cached — measured, it is a net loss. See decisions.md.
       - name: Resolve packages
         run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages
       # Split from the run below so the compile overlaps the simulator boot. Built against the
