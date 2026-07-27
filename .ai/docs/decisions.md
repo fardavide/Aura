@@ -748,3 +748,55 @@ Shape decisions, several of them forced by adversarial reasoning about failure p
 Accepted cost, unchanged from before: `RootView` still mints a throwaway view model — and now a
 throwaway provider — per body pass. A provider does no work until something subscribes, so an
 unused one is inert.
+
+## Full-resolution recordings playback: wall-clock ↔ player-time mapping (v0.3.13)
+Tapping a Timeline tile now pushes a single-camera player over the recorded stream
+(`/vod/{camera}/start/{s}/end/{e}/master.m3u8`), closing the "deferred to 0.1.5" item above. The
+grid keeps its low-res preview scrubbing — that is what Frigate's own web client does, and a wall of
+full-res HLS streams is not viable on a phone; full resolution lives on the pushed screen.
+
+Three decisions carry the feature:
+
+- **Player time is not wall-clock time, and the gap between them is computed, not guessed.** The
+  server welds a window's recordings into one continuous stream with the gaps removed (verified
+  against the v0.17.2 VOD handler: one `sequences` entry, `discontinuity` off). So a seek to
+  "14:32:10" has to be converted by summing the footage before it. `RecordingTimeline` (pure,
+  Domain) owns that in both directions and replicates the server's own clip rules — trim each
+  segment's **reported duration** by the window overhang, then drop what falls under 100 ms or
+  reaches 600 s (`MAX_SEGMENT_DURATION`). It follows the reported `duration`, never
+  `end - start`: the server builds each clip from the duration, and the two differ in practice.
+  Both mappings are **total** — an instant inside a gap resolves to the gap's trailing edge, since
+  that is genuinely where playback resumes — with `hasFootage(at:)` as the separate question the UI
+  asks so it can say "no footage" instead of silently showing a different moment.
+- **One clock hour per window, and the hour is also the window's *identity*.** `MAX_PLAYLIST_SECONDS`
+  is 7200, so a whole day in one playlist is out; Frigate's client chunks by the hour and this does
+  the same. Crucially `RecordingWindow.containing` takes **no clock** — it returns the whole hour,
+  never one clamped to the present. The first draft clamped the end to `now`, which made the
+  in-progress hour a *different window every second*: an adversarial review caught that every skip
+  then refetched and rebuilt the player, and that reaching the end of the stream reloaded the same
+  hour and **rewound to the top of it**, forever. The unit tests all passed because they froze the
+  clock — the regressions now drive a clock the test winds forward, and the live edge is recognised
+  by "the next hour hasn't happened yet" rather than by the window looking different.
+- **Skipping moves in stream time, not wall-clock time.** Ten seconds back means ten seconds of
+  footage back, so a skip steps over a gap instead of stalling at its near edge — mapping a
+  wall-clock target that lands inside a gap resolves *forward*, which made backward skips out of a
+  gap a no-op. Running off either end of the window continues into the neighbouring hour.
+- **Transport drives `rate`, not `play()`/`pause()`.** Resuming at 4× would otherwise briefly run at
+  1× before the rate reapplied. Play intent is read when a load *lands*, not captured when it is
+  issued, so a pause taken while a window was fetching isn't undone; loads carry a generation stamp
+  so a slow one that lands after a newer seek is dropped rather than yanking the playhead back.
+
+Unverifiable here, and the one real risk: **AVPlayer against Frigate's VOD HLS is still unproven.**
+Frigate's client sets `USE_NATIVE_HLS = false` on every platform and always uses hls.js, so nothing
+upstream exercises the native path. Everything above is source-accurate and unit-tested, but whether
+`AVURLAsset` loads the playlist, seeks exactly within it, and honours a pre-roll seek needs a check
+against the running server. Two smaller unknowns ride along: HLS **segment** sub-requests may not
+carry `AVURLAssetHTTPHeaderFieldsKey` (moot on the unauthenticated port 5000 default, not moot
+behind a Basic-auth proxy), and the server snaps a head-trimmed clip back to the preceding keyframe
+and adds the gained milliseconds to its duration — a blind spot the client cannot see and Frigate's
+own client shares, bounded by one GOP and reset at each window.
+
+Snapshot-tested the way the live player already is: recorded video can't render offscreen, so the
+transport is split into a `RecordingControlState` value + a bar that is a pure function of it, and
+the layout is captured over a black placeholder with no `AVPlayer` built. Three states (playing,
+paused at 8×, an hour with no footage) across the device + light/dark matrix.

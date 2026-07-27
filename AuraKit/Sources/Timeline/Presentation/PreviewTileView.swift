@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 import CommonPlayer
@@ -46,7 +47,7 @@ struct PreviewTileView: View {
         case .loading:
             ProgressView()
         case .clip(let player):
-            ScrubbingPlayerView(player: player)
+            ScrubbingPlayerView(player: player, videoGravity: .resizeAspectFill)
         case .frame(let image):
             image
                 .resizable()

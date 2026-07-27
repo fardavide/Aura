@@ -156,10 +156,19 @@ not snapshot-tested — they center on video players that can't render in a snap
   hits the app-container limitation on Xcode Cloud — both test actions fail with "1 error,
   0 test failures" before any test runs (see `decisions.md`). All testing is carried by the
   PR gate on `main`, so archives only ever see verified commits.
-- **Single-cam recordings scrubber.** Tap a Timeline tile → that camera's full-res recordings
-  scrubber via the VOD HLS URL (`/vod/{camera}/start/{s}/end/{e}/master.m3u8`). **Start with an
-  on-device spike**: AVPlayer scrubbing Frigate's VOD HLS is unproven (the web UI uses hls.js on
-  every platform, never native). Bound playback windows to ~1h (nginx-vod segment cap).
+- **Verify full-res recordings playback on the real server (0.3.13).** The single-cam player is
+  built and unit-tested, but AVPlayer against Frigate's VOD HLS has still never been run — the web
+  UI uses hls.js on every platform, never native. Confirm on the running instance: the
+  `/vod/{camera}/start/{s}/end/{e}/master.m3u8` playlist loads at all; a seek lands on the instant
+  the clock claims (this is the wall-clock ↔ player-time mapping); 4×/8× hold up on real camera
+  bitrates; and, if the server is behind a Basic-auth proxy, that HLS **segment** requests carry the
+  auth header (headers are not guaranteed to reach sub-requests — port 5000 is unaffected).
+- **Resuming at the live edge.** Playback stops when the stream runs out at the present (correct),
+  but Play then does nothing until the screen is reopened — more footage has been recorded by then
+  and the window could simply be reloaded. Small, self-contained follow-up.
+- **Timeline transport for the multi-cam grid.** The design (`Timeline.dc.html`, Option A) also puts
+  play/pause + 1–8× on the scrubber card, running every tile's *preview* forward together and
+  skipping gaps. Deliberately a separate slice from the full-res player above.
 - **Timeline follow-ups**: auto-load ranges older than the current ~7-day span as you scroll; the
   `camera=all` batch clip-list optimization; richer markers. (The tile live-follow gap — frames
   fetched once per tile on appear — was closed in 0.3.3: tiles refresh their material in place on

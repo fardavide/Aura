@@ -128,6 +128,34 @@ public enum FrigatePreviewUrl {
     }
 }
 
+/// Builders for full-resolution recordings playback. Both take the **same** window bounds — the
+/// mapping from wall clock onto player time is only correct while the segments described and the
+/// stream served cover exactly the same seconds, so both floor identically.
+public enum FrigateRecordingsUrl {
+
+    /// The recording segments covering the window — the ground truth for what is playable.
+    public static func segments(base: URL, camera: String, after: Double, before: Double) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/\(camera)/recordings",
+            queryItems: [
+                URLQueryItem(name: "after", value: epochSeconds(after.rounded(.down))),
+                URLQueryItem(name: "before", value: epochSeconds(before.rounded(.down))),
+            ]
+        )
+    }
+
+    /// The window's HLS playlist. Served by the media module at the **root** — unlike every other
+    /// endpoint here it carries no `api/` prefix, and the `api/vod/…` route answers with a JSON
+    /// manifest instead of a playlist.
+    public static func playlist(base: URL, camera: String, after: Double, before: Double) -> URL {
+        makeUrl(
+            base: base,
+            path: "vod/\(camera)/start/\(epochSeconds(after.rounded(.down)))/end/\(epochSeconds(before.rounded(.down)))/master.m3u8"
+        )
+    }
+}
+
 /// Appends a path (and optional query) to a base URL. The inputs come from validated
 /// config, so a nil here is an impossible state rather than a runtime failure path.
 func makeUrl(base: URL, path: String, queryItems: [URLQueryItem] = []) -> URL {
