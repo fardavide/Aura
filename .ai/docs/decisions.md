@@ -321,6 +321,53 @@ solid one and the failing signal is precise:
 This required **sharing the `Aura` scheme** (`xcshareddata/xcschemes/Aura.xcscheme`, committed): it
 previously lived only in gitignored `xcuserdata/`, so a fresh CI checkout couldn't resolve `-scheme Aura`.
 
+## Snapshot CI is slow, and three obvious fixes all measured *worse*
+The snapshot job gates CI at ~10-12min while the other three finish in ~2. Reading the job logs
+pinned most of that on simulator boot + install + launch: between the last compile line and the app's
+first log line sat **117-346s of silence**, and `xcodebuild`'s own accounting agreed (`616s elapsed`
+against a `264s` test run). Three fixes aimed at that gap were built and measured on CI; **all three
+lost to the untouched job**. Recorded because each is the first idea anyone will have again:
+
+- **Overlapping the boot with the build** — `simctl boot` early, `xcodebuild test` split into
+  `build-for-testing` (generic destination) + `test-without-building` (pinned UDID) — is a **net
+  regression**: **779s against `main`'s 611s** on the same 26 tests twenty minutes apart, with every
+  branch run landing 779-843s. The boot is heavily I/O-bound and takes from whatever runs beside it
+  roughly what the overlap gives back. Booting *first* starved the cache extraction (SwiftPM restore
+  **91-249s against 6s** on `main`); moving the boot to just before the build fixed that and inflated
+  the build instead (**134-165s → 274s**), with an 85s boot wait still to pay. `xcodebuild test`'s own
+  internal sequencing beats an explicit split. The trap worth remembering: **the isolated metric
+  improved 352s → 82s while the job as a whole got slower** — measure the job total, not the window
+  being optimised.
+- **Caching DerivedData** costs ~160s/run — 107s to restore, and the build after it took **191s
+  against 134s cold**, because Xcode re-validates and rebuilds much of a restored tree. A ~2min cold
+  build has nothing in it to buy back a cache transfer.
+- **Sharding the suite across runners** re-pays the whole boot + build per shard.
+
+Unattempted, and the only lever that touches the dominant cost: the test phase is ~300s for 26 tests
+× 8 captures (4 devices × 2 schemes). Trimming the matrix on PRs while `main` keeps the full one is a
+strict *subset* of the committed baselines, so it needs no re-recording — at the price of a PR going
+green on a config it skipped.
+
+## Known flaky on CI: `ready-playing.iPhone-portrait.light`
+The transport-playing snapshot intermittently fails on the hosted runner at `0.9764099` pixel match /
+`0.6478125` perceptual, against its `0.98` / `0.95` floors. Those figures are **identical to seven
+decimals on every failure**, so this is not drift and not tolerance noise — the capture lands on one
+of *two* deterministic frames, and which one is timing-dependent. That it is environmental rather
+than a code regression is settled by the **same commit producing a red run and a green run six
+minutes apart** (runs `30303158486` vs `30303599117`, both on tree `7c394e4`). It is the matrix's
+*first* capture — light and iPhone-portrait are each first in their loop — which is where a
+not-yet-settled first frame would surface. The playback clock is correctly pinned (the injected fixed
+`now` makes `advance(byRealSeconds:)` a no-op), so whatever is still settling is something else and is
+**not yet identified**. Diagnosing it needs a local repro; a fix belongs in the test, never in a CI
+re-record.
+
+The flake also makes any single CI run useless as a verdict on a rendering change. Hoisting
+`warmUpRender` out of the per-capture loop (it runs ~200 times, each building a throwaway hosting
+controller and spinning the runloop 0.2s, while its doc comment describes priming *process-global*
+caches) was tried, failed on this snapshot, and was reverted on that evidence — **which the
+same-commit pass/fail then invalidated**. That idea is therefore **untested, not rejected**: evaluate
+it only against a green-stable suite, over repeated local runs.
+
 ## Timeline: vertical scrubber on iPhone landscape (compact height)
 On iPhone landscape the bottom-floating glass scrubber ate the scarce vertical height and squeezed
 the camera grid. There, and only there, the screen splits side-by-side and **hides the nav bar** to
