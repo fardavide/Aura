@@ -342,13 +342,19 @@ Three changes, in payoff order:
   build — the expensive part of a cold compile — is not repeated. `Index.noindex` is excluded and
   `COMPILER_INDEX_STORE_ENABLE=NO` stops populating it: CI never queries the index, and it was the
   bulk of the cache payload (a cache that costs more to transfer than the build it saves is a loss).
-- **Warm up once per size + appearance, not once per capture** (`warmUpRenderIfNeeded`). The caches
-  the warm-up primes — Liquid Glass shader pipelines, the glyph atlas — are process-global, so the
-  ~200 warm-up renders (each with a fixed 0.2s settle) collapse to the eight distinct (size, style)
-  pairs the matrix actually uses. Baselines are unchanged. If cold-render drift ever reappears on a
-  *later* screen rather than the first one, widening this scoping is the first thing to try.
+**Rejected — do not retry as-is: warming up once per size + appearance instead of once per capture.**
+`warmUpRender` runs for every one of the ~200 captures, each building a throwaway hosting controller
+and spinning the runloop 0.2s, and its doc comment describes priming *process-global* caches (glass
+shader pipelines, the glyph atlas) — which suggested collapsing it to the eight distinct (size, style)
+pairs the matrix uses. **Measured, it breaks the suite**: the transport-over-full-res-tile screen
+dropped to `0.648` perceptual precision against its `0.95` floor (`ready-playing.iPhone-portrait.light`),
+on a runner where `main` had passed with the same baselines minutes earlier. A gap that large is a
+structurally different frame, not tolerance noise, so the per-capture warm-up is **not** purely
+cache-priming: the 0.2s spin also lets *that view's* own async work settle, which the newest and most
+async-heavy screen depends on. Any future attempt has to keep a per-capture settle and can at best
+drop the duplicate render — and must be measured, not reasoned about.
 
-Sharding the suite across runners was **rejected** for now: while boot costs minutes, every shard
+Sharding the suite across runners was also **rejected** for now: while boot costs minutes, every shard
 re-pays it, so it loses to fixing the boot. Reconsider only once the gap above is gone.
 
 ## Timeline: vertical scrubber on iPhone landscape (compact height)
