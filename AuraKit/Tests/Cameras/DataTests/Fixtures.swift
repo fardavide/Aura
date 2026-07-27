@@ -54,6 +54,15 @@ let groupsConfigJson = """
 }
 """
 
+/// A second `camera_groups` slice, for asserting that a re-read reaches the chips.
+let singleGroupConfigJson = """
+{
+  "camera_groups": {
+    "Garden": { "cameras": ["greenhouse"], "order": 0 }
+  }
+}
+"""
+
 /// A representative `/api/stats` body: the recordings mount plus another volume. Values are MiB.
 let statsJson = """
 {

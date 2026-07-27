@@ -99,12 +99,12 @@ private func cameraGridScreen(
             observeCameraOrder: ObserveCameraOrder(repository: FakeSettingsRepository())
         ),
         getCameraActivity: GetCameraActivity(repository: FakeCameraActivityRepository(.success(activity))),
-        getCameraGroups: GetCameraGroups(repository: FakeCameraGroupsRepository(.success(groups))),
+        observeCameraGroups: ObserveCameraGroups(repository: FakeCameraGroupsRepository(groups)),
         getTodayEventCounts: GetTodayEventCounts(
             repository: FakeTodayEventsRepository(.success(today)), now: { snapshotNow }
         ),
-        getRecordingStorage: GetRecordingStorage(
-            repository: FakeRecordingStorageRepository(storage.map { .success($0) } ?? .failure(.unreachable))
+        observeRecordingStorage: ObserveRecordingStorage(
+            repository: FakeRecordingStorageRepository(storage)
         ),
         imageLoader: FakeCameraImageLoader(image: reachable ? Data([0x01]) : nil)
     )

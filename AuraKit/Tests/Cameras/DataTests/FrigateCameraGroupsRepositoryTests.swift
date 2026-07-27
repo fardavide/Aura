@@ -9,74 +9,95 @@ import TestDoubles
 
 struct FrigateCameraGroupsRepositoryTests {
 
-    @Test func `given a 200 response when fetching groups then they are decoded`() async throws {
+    @Test func `given a 200 response when observing groups then they are decoded`() async throws {
         // given
         let sut = makeSut(FakeHttpClient(.response(status: 200, body: Data(groupsConfigJson.utf8))))
 
         // when
-        let groups = try await sut.groups()
+        var stream = sut.observeGroups().makeAsyncIterator()
 
         // then
-        #expect(Set(groups.map(\.name)) == ["Outdoor", "Indoor", "Overview"])
+        #expect(Set(try #require(await stream.next()).map(\.name)) == ["Outdoor", "Indoor", "Overview"])
     }
 
-    @Test func `given credentials when fetching groups then a basic auth header is sent`() async throws {
+    @Test func `given credentials when observing groups then a basic auth header is sent`() async throws {
         // given
         let http = FakeHttpClient(.response(status: 200, body: Data(groupsConfigJson.utf8)))
         let config = ServerConfig(
             scheme: .http, host: "frigate.test", port: 5000, username: "admin", password: "secret"
         )
-        let sut = FrigateCameraGroupsRepository(config: config, httpClient: http)
+        let sut = FrigateCameraGroupsRepository(configProvider: makeProvider(config: config, http: http))
 
         // when
-        _ = try await sut.groups()
+        var stream = sut.observeGroups().makeAsyncIterator()
+        _ = await stream.next()
 
         // then
         #expect(http.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Basic YWRtaW46c2VjcmV0")
     }
 
-    @Test func `when fetching groups then the request carries a bounded timeout`() async throws {
+    @Test func `when observing groups then the request carries a bounded timeout`() async throws {
         // given
         let http = FakeHttpClient(.response(status: 200, body: Data(groupsConfigJson.utf8)))
         let sut = makeSut(http)
 
         // when
-        _ = try await sut.groups()
+        var stream = sut.observeGroups().makeAsyncIterator()
+        _ = await stream.next()
 
         // then
         #expect(http.lastRequest?.timeoutInterval == 15)
     }
 
-    @Test func `given a 401 when fetching groups then it throws not authorized`() async {
-        await expect(status: 401, mapsTo: .notAuthorized)
-    }
-
-    @Test func `given a 503 when fetching groups then it throws server unavailable`() async {
-        await expect(status: 503, mapsTo: .serverUnavailable)
-    }
-
-    @Test func `given malformed json when fetching groups then it throws invalid data`() async {
+    @Test func `given malformed json when observing groups then no chips are emitted`() async throws {
         // given
         let sut = makeSut(FakeHttpClient(.response(status: 200, body: Data("not json".utf8))))
 
-        // when - then
-        await #expect(throws: CamerasError.invalidData) { try await sut.groups() }
+        // when
+        var stream = sut.observeGroups().makeAsyncIterator()
+
+        // then — resolves rather than hanging, so the screen isn't gated on a broken read
+        #expect(await stream.next() == [])
     }
 
-    @Test func `given a transport failure when fetching groups then it throws unreachable`() async {
+    @Test func `given a transport failure when observing groups then no chips are emitted`() async throws {
         // given
         let sut = makeSut(FakeHttpClient(.failure(URLError(.notConnectedToInternet))))
 
-        // when - then
-        await #expect(throws: CamerasError.unreachable) { try await sut.groups() }
+        // when
+        var stream = sut.observeGroups().makeAsyncIterator()
+
+        // then
+        #expect(await stream.next() == [])
+    }
+
+    @Test func `given a later failure when observing groups then it is skipped, not emitted as empty`() async throws {
+        // given
+        let provider = makeProvider(http: FakeHttpClient(sequence: [
+            .response(status: 200, body: Data(groupsConfigJson.utf8)),
+            .response(status: 500, body: Data()),
+            .response(status: 200, body: Data(singleGroupConfigJson.utf8)),
+        ]))
+        let sut = FrigateCameraGroupsRepository(configProvider: provider)
+        var stream = sut.observeGroups().makeAsyncIterator()
+        _ = await stream.next()
+
+        // when
+        await provider.refresh()
+        await provider.refresh()
+
+        // then — the failed round emitted nothing, so the next value is the third read's groups
+        #expect(await stream.next()?.map(\.name) == ["Garden"])
     }
 
     private func makeSut(_ http: FakeHttpClient) -> FrigateCameraGroupsRepository {
-        FrigateCameraGroupsRepository(config: .test, httpClient: http)
+        FrigateCameraGroupsRepository(configProvider: makeProvider(http: http))
     }
 
-    private func expect(status: Int, mapsTo error: CamerasError) async {
-        let sut = makeSut(FakeHttpClient(.response(status: status, body: Data())))
-        await #expect(throws: error) { try await sut.groups() }
+    private func makeProvider(
+        config: ServerConfig = .test,
+        http: FakeHttpClient
+    ) -> FrigateConfigProvider {
+        FrigateConfigProvider(config: config, httpClient: http, refreshInterval: .seconds(120))
     }
 }

@@ -2,33 +2,31 @@ import Foundation
 
 import CamerasDomain
 import CommonFrigate
-import CommonNetwork
 
 /// Reads cameras from a Frigate server. The name carries the implementation detail —
 /// `CamerasRepository` is the abstraction the rest of the app depends on.
+///
+/// Deliberately re-reads the config rather than accepting the shared cached copy: this is the read
+/// behind a pull-to-refresh, so it must reflect the server as of now. It still coalesces with the
+/// summary's reads, so a screen load costs one `/api/config` request in total.
 public struct FrigateCamerasRepository: CamerasRepository {
-    private let config: ServerConfig
-    private let api: FrigateApiClient
+    private let configProvider: FrigateConfigProvider
 
-    public init(config: ServerConfig, httpClient: any HttpClient) {
-        self.config = config
-        api = FrigateApiClient(config: config, httpClient: httpClient)
+    public init(configProvider: FrigateConfigProvider) {
+        self.configProvider = configProvider
     }
 
     public func cameras() async throws(CamerasError) -> [Camera] {
-        let data = try await get(.config)
+        let data: Data
+        do throws(FrigateApiError) {
+            data = try await configProvider.reloadConfig()
+        } catch {
+            throw CamerasError(error)
+        }
         do {
             return try JSONDecoder().decode(ConfigDto.self, from: data).toCameras()
         } catch {
             throw CamerasError.invalidData
-        }
-    }
-
-    private func get(_ endpoint: FrigateEndpoint) async throws(CamerasError) -> Data {
-        do {
-            return try await api.get(endpoint.url(base: config.baseUrl))
-        } catch {
-            throw CamerasError(error)
         }
     }
 }

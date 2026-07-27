@@ -12,10 +12,7 @@ struct FrigateCamerasRepositoryTests {
 
     @Test func `given a 200 response when fetching cameras then they are decoded`() async throws {
         // given
-        let sut = FrigateCamerasRepository(
-            config: .test,
-            httpClient: FakeHttpClient(.response(status: 200, body: Data(configJson.utf8)))
-        )
+        let sut = makeSut(FakeHttpClient(.response(status: 200, body: Data(configJson.utf8))))
 
         // when
         let cameras = try await sut.cameras()
@@ -32,7 +29,7 @@ struct FrigateCamerasRepositoryTests {
         let config = ServerConfig(
             scheme: .http, host: "frigate.test", port: 5000, username: "admin", password: "secret"
         )
-        let sut = FrigateCamerasRepository(config: config, httpClient: http)
+        let sut = makeSut(http, config: config)
 
         // when
         _ = try await sut.cameras()
@@ -44,7 +41,7 @@ struct FrigateCamerasRepositoryTests {
     @Test func `when fetching cameras then the request carries a bounded timeout`() async throws {
         // given
         let http = FakeHttpClient(.response(status: 200, body: Data(configJson.utf8)))
-        let sut = FrigateCamerasRepository(config: .test, httpClient: http)
+        let sut = makeSut(http)
 
         // when
         _ = try await sut.cameras()
@@ -67,10 +64,7 @@ struct FrigateCamerasRepositoryTests {
 
     @Test func `given malformed json when fetching cameras then it throws invalid data`() async {
         // given
-        let sut = FrigateCamerasRepository(
-            config: .test,
-            httpClient: FakeHttpClient(.response(status: 200, body: Data("not json".utf8)))
-        )
+        let sut = makeSut(FakeHttpClient(.response(status: 200, body: Data("not json".utf8))))
 
         // when - then
         await #expect(throws: CamerasError.invalidData) { try await sut.cameras() }
@@ -78,20 +72,25 @@ struct FrigateCamerasRepositoryTests {
 
     @Test func `given a transport failure when fetching cameras then it throws unreachable`() async {
         // given
-        let sut = FrigateCamerasRepository(
-            config: .test,
-            httpClient: FakeHttpClient(.failure(URLError(.notConnectedToInternet)))
-        )
+        let sut = makeSut(FakeHttpClient(.failure(URLError(.notConnectedToInternet))))
 
         // when - then
         await #expect(throws: CamerasError.unreachable) { try await sut.cameras() }
     }
 
     private func expect(status: Int, mapsTo error: CamerasError) async {
-        let sut = FrigateCamerasRepository(
-            config: .test,
-            httpClient: FakeHttpClient(.response(status: status, body: Data()))
-        )
+        let sut = makeSut(FakeHttpClient(.response(status: status, body: Data())))
         await #expect(throws: error) { try await sut.cameras() }
+    }
+
+    private func makeSut(
+        _ http: FakeHttpClient,
+        config: ServerConfig = .test
+    ) -> FrigateCamerasRepository {
+        FrigateCamerasRepository(
+            configProvider: FrigateConfigProvider(
+                config: config, httpClient: http, refreshInterval: .seconds(120)
+            )
+        )
     }
 }

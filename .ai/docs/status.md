@@ -101,8 +101,8 @@
   crash in the snapshot renderer (see `decisions.md`).
 - **Cameras v2 finished (0.3.1).** The rest of `Cameras.dc.html` shipped: a **summary card** (RIGHT
   NOW active object, tap-to-open · TODAY event count + breakdown · RECORDING disk-free + days-kept) and
-  **camera-group filter chips**. Three new Cameras-local reads — `GetCameraGroups` (`camera_groups`),
-  `GetTodayEventCounts` (`/api/events?after=`), `GetRecordingStorage` (`/api/stats` + `record`) — each
+  **camera-group filter chips**. Three new Cameras-local reads — camera groups (`camera_groups`),
+  today's event tally (`/api/events?after=`), recording storage (`/api/stats` + `record`) — each
   best-effort and load-time; the still refresh dropped to **2 s**. Endpoints were verified against
   Frigate v0.17.2 source and recorded in `/frigate-rest`. IR and the mock's tile drift stay dropped (no
   verified signal / the design is deliberately calm). Cameras grid snapshots: loaded / **activity** /
@@ -122,8 +122,18 @@
   payload on event-dense servers; and `UrlSessionHttpClient` builds its own session with a
   **600s `timeoutIntervalForResource`** wall-clock ceiling that the idle per-request timer couldn't
   provide (a byte-dribbling proxy no longer holds a load open forever). See `decisions.md`.
+- **One shared, self-refreshing `/api/config` read (0.3.12).** Closes the standing consolidation
+  follow-up: a `FrigateConfigProvider` actor holds the single config body, so a Cameras grid load
+  costs **one** `/api/config` GET instead of three (the camera list, the group chips and the
+  retention figures each decode their own slice of it). It is **reactive rather than cached** — a
+  2-minute re-read pushes to subscribers, so chips and the summary card follow a server-side change
+  while the grid is open, where they were previously load-time only. Request coalescing alone would
+  have collapsed nothing (the three reads are sequential, never concurrent). The camera list still
+  forces a fresh read so pull-to-refresh stays honest; the config stream carries failures so a first
+  paint can't hang on an unreachable server, resolving to an empty slot on the first failure and
+  leaving on-screen values alone on later ones. See `decisions.md`.
 
-Package logic is covered by Swift Testing (274 tests). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (287 tests). All four main screens — **Timeline**
 (ready busy / gappy / quiet, empty, failed), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
@@ -157,9 +167,6 @@ not snapshot-tested — they center on video players that can't render in a snap
 - A real **app icon** (current is a placeholder; the mac slots are `sips` downscales of the
   1024px source — regenerate them with the new artwork, and keep them filled: empty mac slots
   ship no macOS icon at all, see the App Store packaging decision).
-- **Refactor**: consolidate the per-screen `/api/config` reads behind request coalescing in
-  `FrigateApiClient` (the grid still issues ≤3 config GETs per appearance — the 0.3.1 known cost;
-  the client, extracted in 0.3.10, is now the natural seam for it).
 - A **stream picker** when a camera exposes multiple go2rtc sources. (**PiP keep-alive** across
   navigation was implemented in 0.3.5 via a session retainer — needs the on-device check below.)
 - **Verify the reworked live player on device (0.3.5)** — the bare-`AVPlayerLayer` host can't be

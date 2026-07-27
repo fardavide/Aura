@@ -4,38 +4,57 @@ import CamerasDomain
 import CommonFrigate
 import CommonNetwork
 
-/// Reads recording-disk status from Frigate: `GET /api/stats` for the disk figures and `GET
-/// /api/config` for the retention knobs, combined into one domain value. Two calls because Frigate
-/// splits the data across endpoints; both are load-time (not on the grid's refresh loop).
-///
-/// This re-fetches the heavy `/api/config` that the cameras/groups reads already pull — consolidating
-/// the per-screen config reads behind a shared, request-coalescing client is the standing follow-up.
+/// Reads recording-disk status from Frigate: the retention knobs come from the shared `/api/config`
+/// body, the disk figures from `GET /api/stats`. Two sources because Frigate splits the data; the
+/// stats are re-read on every config emission, since free space is exactly what moves.
 public struct FrigateRecordingStorageRepository: RecordingStorageRepository {
     private let config: ServerConfig
     private let api: FrigateApiClient
+    private let configProvider: FrigateConfigProvider
 
-    public init(config: ServerConfig, httpClient: any HttpClient) {
+    public init(config: ServerConfig, httpClient: any HttpClient, configProvider: FrigateConfigProvider) {
         self.config = config
+        self.configProvider = configProvider
         api = FrigateApiClient(config: config, httpClient: httpClient)
     }
 
-    public func storage() async throws(CamerasError) -> RecordingStorage {
-        let statsData = try await get(.stats)
-        let configData = try await get(.config)
-        do {
-            let stats = try JSONDecoder().decode(StatsDto.self, from: statsData)
-            let record = try JSONDecoder().decode(RecordConfigDto.self, from: configData)
-            return stats.toRecordingStorage(record: record)
-        } catch {
-            throw CamerasError.invalidData
+    public func observeStorage() -> AsyncStream<RecordingStorage?> {
+        AsyncStream { continuation in
+            let task = Task {
+                var hasEmitted = false
+                for await outcome in await configProvider.observeConfig() {
+                    let storage = if case .success(let configData) = outcome {
+                        await read(configData)
+                    } else {
+                        RecordingStorage?.none
+                    }
+                    if let storage {
+                        continuation.yield(storage)
+                        hasEmitted = true
+                    } else if !hasEmitted {
+                        // Resolve the first read even when it failed, so a caller waiting on it
+                        // gets an empty slot rather than hanging.
+                        continuation.yield(nil)
+                        hasEmitted = true
+                    }
+                    // A later failure emits nothing: the figures already on screen stand.
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
         }
     }
 
-    private func get(_ endpoint: FrigateEndpoint) async throws(CamerasError) -> Data {
-        do {
-            return try await api.get(endpoint.url(base: config.baseUrl))
-        } catch {
-            throw CamerasError(error)
+    /// Combines the retention knobs from the config body with a fresh `/api/stats` read. Any trip
+    /// along the way yields nothing rather than a half-filled value.
+    private func read(_ configData: Data) async -> RecordingStorage? {
+        guard
+            let record = try? JSONDecoder().decode(RecordConfigDto.self, from: configData),
+            let statsData = try? await api.get(FrigateEndpoint.stats.url(base: config.baseUrl)),
+            let stats = try? JSONDecoder().decode(StatsDto.self, from: statsData)
+        else {
+            return nil
         }
+        return stats.toRecordingStorage(record: record)
     }
 }

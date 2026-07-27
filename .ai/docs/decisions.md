@@ -702,3 +702,49 @@ pass. Neither is a live bug — both are hardening against pathological deployme
   only the composition root constructs the client, and an injected `.shared` would have silently
   bypassed the bound; `session` is now `internal` so a `CommonNetworkTests` test can pin the
   configured resource timeout.
+
+## One shared, self-refreshing `/api/config` read (0.3.12)
+This closes the standing "consolidate the per-screen `/api/config` reads behind request coalescing"
+follow-up (0.3.1 known cost, re-noted in 0.3.10) — but **not** with request coalescing, which would
+have collapsed nothing: the grid issues its three config reads **sequentially** (the camera list
+gates first paint, then the summary's groups and retention), so they never overlap and there is no
+concurrent duplicate to de-dupe. What they need is a shared *value*.
+
+A `FrigateConfigProvider` actor (in `CamerasData`, since all three readers are Cameras-owned) holds
+the one config body and hands out slices of it. It serves the raw `Data`, not a parsed model, so each
+reader keeps decoding its own DTO (`ConfigDto` / `GroupsConfigDto` / `RecordConfigDto`) and the
+feature-vertical DTO ownership is untouched. A grid load now costs **one** `/api/config` GET instead
+of three — pinned by a test that drives the three readers in load order and counts config requests.
+
+Shape decisions, several of them forced by adversarial reasoning about failure paths:
+- **Reactive, not a short-lived cache.** The provider re-reads every 2 minutes and *pushes* to
+  subscribers, so `camera_groups` and the retention figures follow a server-side change while the
+  grid is open — previously load-time only. The cadence is tied to subscription lifetime (one loop
+  serves every observer; it starts on the first and is cancelled with the last), so a closed screen
+  stops polling. Chosen over the simpler read-through cache because it fits the existing
+  "preferences are observed, not polled" rule and removes staleness rather than merely bounding it.
+- **The camera list deliberately does *not* take the cached copy.** It calls a `reloadConfig()` that
+  always hits the server, because it is the read behind pull-to-refresh and must reflect the server
+  as of now. This costs nothing: the reload broadcasts, so the summary observers refresh off it, and
+  it still coalesces with any fetch in flight — a screen load stays at one request either way.
+- **The config stream carries `Result`, not just successes.** The first draft emitted only successful
+  bodies so subscribers would "keep the last good value" on a trip. That is a deadlock: a view model
+  awaiting its first value on an unreachable server would wait forever. Failures are emitted, and
+  each repository decides what one means — **the first failure resolves to an empty slot** (no chips
+  / no storage figures, exactly the old best-effort behavior, so the screen is never gated on a
+  broken read), while **a later failure emits nothing at all**, leaving what is on screen in place
+  instead of blanking it mid-session. Both halves are pinned by tests, the "later failure" one by
+  asserting the *next* value is a third read's data rather than an empty emission.
+- **Groups and storage became `Observe…` use cases**, with the repository protocols streaming;
+  storage streams an `Optional` because a blank card slot is a real state. `CamerasRepository` /
+  `GetCameras` / `ObserveCameras` are untouched — the camera list stays one-shot, since the list
+  effectively never changes at runtime and leaving that well-tested path alone kept the blast radius
+  small. `GetTodayEventCounts` stays one-shot too (it reads `/api/events`, not the config).
+- The view model still **awaits the first emission** of each observation before `load()` returns, so
+  a settled load still means a settled screen — what the snapshot suite and the pull-to-refresh
+  spinner both depend on. Its two observation tasks are cancelled in the existing `isolated deinit`,
+  and each clears itself when its stream ends so a later `load()` re-subscribes.
+
+Accepted cost, unchanged from before: `RootView` still mints a throwaway view model — and now a
+throwaway provider — per body pass. A provider does no work until something subscribes, so an
+unused one is inert.

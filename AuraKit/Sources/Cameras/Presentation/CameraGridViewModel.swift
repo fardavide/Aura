@@ -31,32 +31,36 @@ public final class CameraGridViewModel {
 
     private let observeCameras: ObserveCameras
     private let getCameraActivity: GetCameraActivity
-    private let getCameraGroups: GetCameraGroups
+    private let observeCameraGroups: ObserveCameraGroups
     private let getTodayEventCounts: GetTodayEventCounts
-    private let getRecordingStorage: GetRecordingStorage
+    private let observeRecordingStorage: ObserveRecordingStorage
     private let imageLoader: any CameraImageLoading
     private var observation: Task<Void, Never>?
+    private var groupsObservation: Task<Void, Never>?
+    private var storageObservation: Task<Void, Never>?
     private var previews: [CameraName: Data] = [:]
     private var offlineCameras: Set<CameraName> = []
 
     public init(
         observeCameras: ObserveCameras,
         getCameraActivity: GetCameraActivity,
-        getCameraGroups: GetCameraGroups,
+        observeCameraGroups: ObserveCameraGroups,
         getTodayEventCounts: GetTodayEventCounts,
-        getRecordingStorage: GetRecordingStorage,
+        observeRecordingStorage: ObserveRecordingStorage,
         imageLoader: any CameraImageLoading
     ) {
         self.observeCameras = observeCameras
         self.getCameraActivity = getCameraActivity
-        self.getCameraGroups = getCameraGroups
+        self.observeCameraGroups = observeCameraGroups
         self.getTodayEventCounts = getTodayEventCounts
-        self.getRecordingStorage = getRecordingStorage
+        self.observeRecordingStorage = observeRecordingStorage
         self.imageLoader = imageLoader
     }
 
     isolated deinit {
         observation?.cancel()
+        groupsObservation?.cancel()
+        storageObservation?.cancel()
     }
 
     /// Live cameras — the loaded ones whose preview still resolved (not seen offline).
@@ -174,12 +178,51 @@ public final class CameraGridViewModel {
     }
 
     /// The grid's chrome — filter chips + the summary card. Every piece is best-effort: a slot that
-    /// fails to load just stays blank, never failing the grid. Fetched on load / pull-to-refresh
-    /// only (the setup rarely changes), not on the still-refresh timer.
+    /// fails to load just stays blank, never failing the grid.
+    ///
+    /// Groups and storage are *observed*: both are read out of the shared server config, which
+    /// re-reads itself periodically, so they keep up on their own instead of only at load time.
+    /// Each observation still awaits its first value here, so a settled `load()` means a settled
+    /// screen — what the snapshot suite and the pull-to-refresh spinner both expect.
     private func loadSummary() async {
-        groups = (try? await getCameraGroups.execute()) ?? []
+        await observeGroups()
         todayEvents = try? await getTodayEventCounts.execute()
-        storage = try? await getRecordingStorage.execute()
+        await observeStorage()
+    }
+
+    private func observeGroups() async {
+        guard groupsObservation == nil else { return }
+        let stream = observeCameraGroups.execute()
+        await withCheckedContinuation { continuation in
+            groupsObservation = Task { [weak self] in
+                var firstEmission: CheckedContinuation<Void, Never>? = continuation
+                for await list in stream {
+                    self?.groups = list
+                    firstEmission?.resume()
+                    firstEmission = nil
+                }
+                firstEmission?.resume()
+                // Cleared so a later load() re-subscribes if the stream ended.
+                self?.groupsObservation = nil
+            }
+        }
+    }
+
+    private func observeStorage() async {
+        guard storageObservation == nil else { return }
+        let stream = observeRecordingStorage.execute()
+        await withCheckedContinuation { continuation in
+            storageObservation = Task { [weak self] in
+                var firstEmission: CheckedContinuation<Void, Never>? = continuation
+                for await value in stream {
+                    self?.storage = value
+                    firstEmission?.resume()
+                    firstEmission = nil
+                }
+                firstEmission?.resume()
+                self?.storageObservation = nil
+            }
+        }
     }
 
     private func loadPreviews(for cameras: [Camera]) async {
