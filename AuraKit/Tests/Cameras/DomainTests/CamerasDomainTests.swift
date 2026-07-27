@@ -168,35 +168,52 @@ struct CamerasDomainTests {
         #expect(result[CameraName("driveway")]?.label == "Person")
     }
 
-    // MARK: GetCameraGroups
+    // MARK: ObserveCameraGroups
 
-    @Test func `given groups when getting them then they are sorted by order then name`() async throws {
+    @Test func `given groups when observing them then they are sorted by order then name`() async throws {
         // given
-        let getGroups = GetCameraGroups(repository: FakeCameraGroupsRepository(.success([
+        let observeGroups = ObserveCameraGroups(repository: FakeCameraGroupsRepository([
             group("Indoor", ["kitchen"], order: 1),
             group("Outdoor", ["driveway"], order: 0),
             group("Attic", ["attic"], order: 0),
-        ])))
+        ]))
 
         // when
-        let result = try await getGroups.execute()
+        var stream = observeGroups.execute().makeAsyncIterator()
 
         // then
-        #expect(result.map(\.name) == ["Attic", "Outdoor", "Indoor"])
+        #expect(await stream.next()?.map(\.name) == ["Attic", "Outdoor", "Indoor"])
     }
 
-    @Test func `given an empty group when getting groups then it is dropped`() async throws {
+    @Test func `given an empty group when observing groups then it is dropped`() async throws {
         // given
-        let getGroups = GetCameraGroups(repository: FakeCameraGroupsRepository(.success([
+        let observeGroups = ObserveCameraGroups(repository: FakeCameraGroupsRepository([
             group("Outdoor", ["driveway"], order: 0),
             group("Birdseye only", [], order: 1),
-        ])))
+        ]))
 
         // when
-        let result = try await getGroups.execute()
+        var stream = observeGroups.execute().makeAsyncIterator()
 
         // then
-        #expect(result.map(\.name) == ["Outdoor"])
+        #expect(await stream.next()?.map(\.name) == ["Outdoor"])
+    }
+
+    @Test func `given a config change when observing groups then the new groups are emitted`() async throws {
+        // given
+        let observeGroups = ObserveCameraGroups(
+            repository: FakeCameraGroupsRepository(
+                [group("Outdoor", ["driveway"], order: 0)],
+                [group("Outdoor", ["driveway"], order: 0), group("Indoor", ["kitchen"], order: 1)]
+            )
+        )
+
+        // when
+        var stream = observeGroups.execute().makeAsyncIterator()
+        _ = await stream.next()
+
+        // then
+        #expect(await stream.next()?.map(\.name) == ["Outdoor", "Indoor"])
     }
 
     // MARK: GetTodayEventCounts
@@ -247,15 +264,18 @@ struct CamerasDomainTests {
         #expect(since <= fixedNow)
     }
 
-    // MARK: GetRecordingStorage
+    // MARK: ObserveRecordingStorage
 
-    @Test func `given storage when getting it then it is returned`() async throws {
+    @Test func `given storage when observing it then it is emitted`() async throws {
         // given
         let storage = RecordingStorage(freeBytes: 1_000, totalBytes: 2_000, retentionDays: 14)
-        let getStorage = GetRecordingStorage(repository: FakeRecordingStorageRepository(.success(storage)))
+        let observeStorage = ObserveRecordingStorage(repository: FakeRecordingStorageRepository(storage))
 
-        // when - then
-        #expect(try await getStorage.execute() == storage)
+        // when
+        var stream = observeStorage.execute().makeAsyncIterator()
+
+        // then
+        #expect(await stream.next() == storage)
     }
 }
 

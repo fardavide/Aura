@@ -199,10 +199,10 @@ struct CameraGridViewModelTests {
         // given
         let sut = makeViewModel(
             repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
-            groups: FakeCameraGroupsRepository(.success([
+            groups: FakeCameraGroupsRepository([
                 group("Indoor", ["kitchen"], order: 1),
                 group("Outdoor", ["driveway"], order: 0),
-            ]))
+            ])
         )
 
         // when
@@ -216,7 +216,7 @@ struct CameraGridViewModelTests {
         // given
         let sut = makeViewModel(
             repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("kitchen")])),
-            groups: FakeCameraGroupsRepository(.success([group("Indoor", ["kitchen"])]))
+            groups: FakeCameraGroupsRepository([group("Indoor", ["kitchen"])])
         )
         await sut.load()
 
@@ -323,7 +323,7 @@ struct CameraGridViewModelTests {
         let storage = RecordingStorage(freeBytes: 1_000, totalBytes: 2_000, retentionDays: 14)
         let sut = makeViewModel(
             repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
-            storage: FakeRecordingStorageRepository(.success(storage))
+            storage: FakeRecordingStorageRepository(storage)
         )
 
         // when
@@ -337,9 +337,9 @@ struct CameraGridViewModelTests {
         // given
         let sut = makeViewModel(
             repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
-            groups: FakeCameraGroupsRepository(.failure(.unreachable)),
+            groups: FakeCameraGroupsRepository([]),
             today: FakeTodayEventsRepository(.failure(.unreachable)),
-            storage: FakeRecordingStorageRepository(.failure(.unreachable))
+            storage: FakeRecordingStorageRepository(nil)
         )
 
         // when
@@ -366,9 +366,9 @@ private func makeViewModel(
     repository: FakeCamerasRepository,
     settings: FakeSettingsRepository = FakeSettingsRepository(),
     activity: FakeCameraActivityRepository = FakeCameraActivityRepository(.success([])),
-    groups: FakeCameraGroupsRepository = FakeCameraGroupsRepository(.success([])),
+    groups: FakeCameraGroupsRepository = FakeCameraGroupsRepository([]),
     today: FakeTodayEventsRepository = FakeTodayEventsRepository(.success([])),
-    storage: FakeRecordingStorageRepository = FakeRecordingStorageRepository(.failure(.unreachable)),
+    storage: FakeRecordingStorageRepository = FakeRecordingStorageRepository(),
     imageLoader: FakeCameraImageLoader = FakeCameraImageLoader()
 ) -> CameraGridViewModel {
     CameraGridViewModel(
@@ -377,9 +377,9 @@ private func makeViewModel(
             observeCameraOrder: ObserveCameraOrder(repository: settings)
         ),
         getCameraActivity: GetCameraActivity(repository: activity),
-        getCameraGroups: GetCameraGroups(repository: groups),
+        observeCameraGroups: ObserveCameraGroups(repository: groups),
         getTodayEventCounts: GetTodayEventCounts(repository: today, now: { fixedNow }),
-        getRecordingStorage: GetRecordingStorage(repository: storage),
+        observeRecordingStorage: ObserveRecordingStorage(repository: storage),
         imageLoader: imageLoader
     )
 }

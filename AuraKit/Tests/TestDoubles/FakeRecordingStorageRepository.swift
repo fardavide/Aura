@@ -1,14 +1,20 @@
 import CamerasDomain
 
-/// Replays a canned result; `result` is mutable so a test can change the outcome between calls.
+/// Replays the canned emissions in order, then finishes. Passing none stands in for a read that
+/// failed — the stream carries no errors, so "nothing arrives" is what a failure looks like.
 public final class FakeRecordingStorageRepository: RecordingStorageRepository, @unchecked Sendable {
-    public var result: Result<RecordingStorage, CamerasError>
+    private let emissions: [RecordingStorage?]
 
-    public init(_ result: Result<RecordingStorage, CamerasError>) {
-        self.result = result
+    public init(_ emissions: RecordingStorage?...) {
+        self.emissions = emissions
     }
 
-    public func storage() async throws(CamerasError) -> RecordingStorage {
-        try result.get()
+    public func observeStorage() -> AsyncStream<RecordingStorage?> {
+        AsyncStream { continuation in
+            for emission in emissions {
+                continuation.yield(emission)
+            }
+            continuation.finish()
+        }
     }
 }

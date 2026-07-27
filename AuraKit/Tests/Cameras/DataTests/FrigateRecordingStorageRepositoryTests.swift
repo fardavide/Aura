@@ -9,7 +9,7 @@ import TestDoubles
 
 struct FrigateRecordingStorageRepositoryTests {
 
-    @Test func `given stats and config when fetching storage then they are combined`() async throws {
+    @Test func `given stats and config when observing storage then they are combined`() async throws {
         // given
         let sut = makeSut(FakeHttpClient(routes: [
             ("api/stats", .response(status: 200, body: Data(statsJson.utf8))),
@@ -17,14 +17,15 @@ struct FrigateRecordingStorageRepositoryTests {
         ]))
 
         // when
-        let storage = try await sut.storage()
+        var stream = sut.observeStorage().makeAsyncIterator()
 
         // then
-        #expect(storage.freeBytes == Int64(1_464_844 * 1_048_576))
-        #expect(storage.retentionDays == 14)
+        let storage = try #require(await stream.next())
+        #expect(storage?.freeBytes == Int64(1_464_844 * 1_048_576))
+        #expect(storage?.retentionDays == 14)
     }
 
-    @Test func `given credentials when fetching storage then a basic auth header is sent`() async throws {
+    @Test func `given credentials when observing storage then a basic auth header is sent`() async throws {
         // given
         let http = FakeHttpClient(routes: [
             ("api/stats", .response(status: 200, body: Data(statsJson.utf8))),
@@ -33,55 +34,75 @@ struct FrigateRecordingStorageRepositoryTests {
         let config = ServerConfig(
             scheme: .http, host: "frigate.test", port: 5000, username: "admin", password: "secret"
         )
-        let sut = FrigateRecordingStorageRepository(config: config, httpClient: http)
+        let sut = makeSut(http, config: config)
 
         // when
-        _ = try await sut.storage()
+        var stream = sut.observeStorage().makeAsyncIterator()
+        _ = await stream.next()
 
         // then
         #expect(http.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Basic YWRtaW46c2VjcmV0")
     }
 
-    @Test func `when fetching storage then the request carries a bounded timeout`() async throws {
+    @Test func `when observing storage then the request carries a bounded timeout`() async throws {
         // given
         let http = FakeHttpClient(routes: [
             ("api/stats", .response(status: 200, body: Data(statsJson.utf8))),
             ("api/config", .response(status: 200, body: Data(recordConfigJson.utf8))),
         ])
-        let sut = FrigateRecordingStorageRepository(config: .test, httpClient: http)
+        let sut = makeSut(http)
 
         // when
-        _ = try await sut.storage()
+        var stream = sut.observeStorage().makeAsyncIterator()
+        _ = await stream.next()
 
         // then
         #expect(http.lastRequest?.timeoutInterval == 15)
     }
 
-    @Test func `given a 401 when fetching storage then it throws not authorized`() async {
+    @Test func `given a 401 when observing storage then the slot is emitted empty`() async throws {
         // given
         let sut = makeSut(FakeHttpClient(.response(status: 401, body: Data())))
 
-        // when - then
-        await #expect(throws: CamerasError.notAuthorized) { try await sut.storage() }
+        // when
+        var stream = sut.observeStorage().makeAsyncIterator()
+
+        // then — resolves rather than hanging, so the grid isn't gated on a failed read
+        #expect(await stream.next() == RecordingStorage?.none)
     }
 
-    @Test func `given malformed json when fetching storage then it throws invalid data`() async {
+    @Test func `given malformed json when observing storage then the slot is emitted empty`() async throws {
         // given
         let sut = makeSut(FakeHttpClient(.response(status: 200, body: Data("not json".utf8))))
 
-        // when - then
-        await #expect(throws: CamerasError.invalidData) { try await sut.storage() }
+        // when
+        var stream = sut.observeStorage().makeAsyncIterator()
+
+        // then
+        #expect(await stream.next() == RecordingStorage?.none)
     }
 
-    @Test func `given a transport failure when fetching storage then it throws unreachable`() async {
+    @Test func `given a transport failure when observing storage then the slot is emitted empty`() async throws {
         // given
         let sut = makeSut(FakeHttpClient(.failure(URLError(.notConnectedToInternet))))
 
-        // when - then
-        await #expect(throws: CamerasError.unreachable) { try await sut.storage() }
+        // when
+        var stream = sut.observeStorage().makeAsyncIterator()
+
+        // then
+        #expect(await stream.next() == RecordingStorage?.none)
     }
 
-    private func makeSut(_ http: FakeHttpClient) -> FrigateRecordingStorageRepository {
-        FrigateRecordingStorageRepository(config: .test, httpClient: http)
+    private func makeSut(
+        _ http: FakeHttpClient,
+        config: ServerConfig = .test
+    ) -> FrigateRecordingStorageRepository {
+        FrigateRecordingStorageRepository(
+            config: config,
+            httpClient: http,
+            configProvider: FrigateConfigProvider(
+                config: config, httpClient: http, refreshInterval: .seconds(120)
+            )
+        )
     }
 }

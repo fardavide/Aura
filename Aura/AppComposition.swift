@@ -55,7 +55,9 @@ final class AppComposition {
     func cameraOrderViewModel(for connection: ConnectionSettings) -> CameraOrderViewModel {
         CameraOrderViewModel(
             getCameras: GetCameras(
-                repository: FrigateCamerasRepository(config: serverConfig(from: connection), httpClient: httpClient)
+                repository: FrigateCamerasRepository(
+                    configProvider: configProvider(config: serverConfig(from: connection))
+                )
             ),
             loadCameraOrder: LoadCameraOrder(repository: settingsRepository),
             saveCameraOrder: SaveCameraOrder(repository: settingsRepository)
@@ -64,20 +66,27 @@ final class AppComposition {
 
     func cameraGridViewModel(for connection: ConnectionSettings) -> CameraGridViewModel {
         let config = serverConfig(from: connection)
+        // One config read shared by the three things on this screen that need a slice of it — the
+        // camera list, the group chips and the retention figures — instead of one heavy
+        // `/api/config` GET each. It re-reads itself while the screen watches, so the chips and the
+        // summary card follow a server-side change without a reload.
+        let configProvider = configProvider(config: config)
         return CameraGridViewModel(
-            observeCameras: observeCameras(config: config),
+            observeCameras: observeCameras(configProvider: configProvider),
             getCameraActivity: GetCameraActivity(
                 repository: FrigateCameraActivityRepository(config: config, httpClient: httpClient, now: { Date() })
             ),
-            getCameraGroups: GetCameraGroups(
-                repository: FrigateCameraGroupsRepository(config: config, httpClient: httpClient)
+            observeCameraGroups: ObserveCameraGroups(
+                repository: FrigateCameraGroupsRepository(configProvider: configProvider)
             ),
             getTodayEventCounts: GetTodayEventCounts(
                 repository: FrigateTodayEventsRepository(config: config, httpClient: httpClient),
                 now: { Date() }
             ),
-            getRecordingStorage: GetRecordingStorage(
-                repository: FrigateRecordingStorageRepository(config: config, httpClient: httpClient)
+            observeRecordingStorage: ObserveRecordingStorage(
+                repository: FrigateRecordingStorageRepository(
+                    config: config, httpClient: httpClient, configProvider: configProvider
+                )
             ),
             imageLoader: FrigateCameraImageLoader(config: config, httpClient: httpClient)
         )
@@ -116,7 +125,7 @@ final class AppComposition {
     func timelineScreenViewModel(for connection: ConnectionSettings) -> TimelineScreenViewModel {
         let config = serverConfig(from: connection)
         return TimelineScreenViewModel(
-            observeCameras: observeCameras(config: config),
+            observeCameras: observeCameras(configProvider: configProvider(config: config)),
             getDayTimeline: GetDayTimeline(
                 repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),
@@ -136,12 +145,22 @@ final class AppComposition {
         )
     }
 
-    private func observeCameras(config: ServerConfig) -> ObserveCameras {
+    private func observeCameras(configProvider: FrigateConfigProvider) -> ObserveCameras {
         ObserveCameras(
             getCameras: GetCameras(
-                repository: FrigateCamerasRepository(config: config, httpClient: httpClient)
+                repository: FrigateCamerasRepository(configProvider: configProvider)
             ),
             observeCameraOrder: ObserveCameraOrder(repository: settingsRepository)
+        )
+    }
+
+    /// A config reader for one screen's lifetime. Screens don't share one: each builds its own, so
+    /// the periodic re-read lives and dies with the screen watching it.
+    private func configProvider(config: ServerConfig) -> FrigateConfigProvider {
+        FrigateConfigProvider(
+            config: config,
+            httpClient: httpClient,
+            refreshInterval: .seconds(120)
         )
     }
 

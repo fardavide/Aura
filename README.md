@@ -40,6 +40,14 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.12 — 2026-07-27
+- The camera grid asks the server for its configuration **once** per load instead of three times —
+  the camera list, the group chips and the recording figures now share a single read, so the screen
+  opens with noticeably less work on the server.
+- The chips and the summary card now **keep themselves current**: they re-read every couple of
+  minutes while the grid is open, so a group or retention change made on the server shows up
+  without reopening the app. A failed re-read quietly leaves what's on screen alone.
+
 ### 0.3.11 — 2026-07-23
 - Timeline first paint no longer downloads an unbounded activity list on busy servers: the review
   markers behind the day timeline are now capped, so a camera setup with heavy history opens fast.
