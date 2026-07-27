@@ -60,13 +60,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
-      # Resolve the target simulator and start it booting NOW, before anything else. A cold iOS 26
-      # boot + app install on a hosted runner measured 2-6 minutes — and a plain `xcodebuild test`
-      # pays that *after* the build, serially, which made it the single largest slice of this job.
-      # `simctl boot` returns as soon as the boot begins, so the device comes up in the background
-      # while we restore caches, resolve packages, and compile; `bootstatus` below joins it. Also
-      # fails early with a readable message if the expected simulator is missing on this image
-      # release (iOS 26 devices have had transient per-release gaps on the hosted runner).
+      # snapshot-testing pulls swift-syntax (a heavy macro dependency); cache the resolved
+      # source clones keyed on the committed pins. The app/unit jobs need no cache — AuraKit
+      # has zero external dependencies; only AuraTests links snapshot-testing.
+      - name: Cache SwiftPM source packages
+        uses: actions/cache@v4
+        with:
+          path: SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+      # NOTE: DerivedData is deliberately NOT cached — measured, it is a net loss. See decisions.md.
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages
+      # Resolve the target simulator and start it booting here — after the cache restore, before the
+      # build. A cold iOS 26 boot + app install measured 2-6 minutes, and a plain `xcodebuild test`
+      # pays that *serially, after the build*, which made it the single largest slice of this job.
+      # `simctl boot` returns as soon as the boot begins, so the device comes up while the app
+      # compiles and `bootstatus` below merely joins it.
+      #
+      # Deliberately NOT first in the job: booting is heavily I/O-bound and starves the concurrent
+      # cache extraction. With the boot ahead of it the SwiftPM restore measured 91-249s against 6s
+      # on an unmodified `main` run — the contention gave back most of what the overlap won. The
+      # ~2min build is enough runway to hide the boot without fighting the cache for disk.
+      #
+      # This also fails early with a readable message if the expected simulator is missing on this
+      # image release (iOS 26 devices have had transient per-release gaps on the hosted runner).
       - name: Resolve the target simulator
         run: |
           python3 - <<'PY'
@@ -103,18 +121,6 @@ jobs:
         # Returns as soon as the boot begins; non-zero only if it is already booted, which is a fine
         # state to proceed from. `bootstatus` further down joins the boot before the tests run.
         run: xcrun simctl boot "$SIMULATOR_UDID" || true
-      # snapshot-testing pulls swift-syntax (a heavy macro dependency); cache the resolved
-      # source clones keyed on the committed pins. The app/unit jobs need no cache — AuraKit
-      # has zero external dependencies; only AuraTests links snapshot-testing.
-      - name: Cache SwiftPM source packages
-        uses: actions/cache@v4
-        with:
-          path: SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
-      # NOTE: DerivedData is deliberately NOT cached — measured, it is a net loss. See decisions.md.
-      - name: Resolve packages
-        run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages
       # Split from the run below so the compile overlaps the simulator boot. Built against the
       # generic simulator destination so this step never touches (or waits on) the booting device.
       - name: Build for testing

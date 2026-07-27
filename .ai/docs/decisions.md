@@ -328,9 +328,13 @@ line and the first log line from the app in the simulator sat a silent gap of **
 `xcodebuild`'s own accounting agreed (`616s elapsed` for a `264s` test run). That gap is simulator
 boot + install + launch, and a plain `xcodebuild test` pays it **serially, after the build**.
 Three changes, in payoff order:
-- **Overlap the boot with the build.** The target simulator is resolved and `simctl boot`ed in the
-  *first* steps of the job (`simctl boot` returns once the boot begins), so it comes up while
-  packages resolve and the app compiles; `simctl bootstatus -b` joins it just before the run. This
+- **Overlap the boot with the build.** The target simulator is resolved and `simctl boot`ed **after
+  the cache restore and package resolve, immediately before the build** (`simctl boot` returns once
+  the boot begins), so it comes up while the app compiles; `simctl bootstatus -b` joins it. Placing
+  it *first* in the job — the obvious spot — measured worse: booting is heavily I/O-bound and starves
+  the concurrent cache extraction, so the SwiftPM restore ran **91-249s against 6s on an unmodified
+  `main` run**, giving back most of what the overlap won. Overlapping only the ~2min build keeps the
+  win without the contention. Two costs that look independent can share one disk. This
   needs the `test` invocation split into `build-for-testing` + `test-without-building` — the build
   targets the **generic** simulator destination so it never touches or waits on the booting device,
   and the run targets the **pinned UDID** (which also stops xcodebuild resolving, or creating, a
