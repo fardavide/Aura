@@ -734,6 +734,7 @@ private func makeTile(provider: FakeCameraPreviewProvider, loader: FakePreviewIm
     PreviewTileViewModel(
         camera: camera,
         previews: GetCameraPreviews(provider: provider),
+        recordings: GetCameraRecordings(repository: FakeCameraRecordingsRepository(.success([]))),
         imageLoader: loader
     )
 }

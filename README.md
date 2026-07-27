@@ -9,7 +9,9 @@ single-user companion app and portfolio piece.
   live playback (go2rtc HLS via AVFoundation) with Picture-in-Picture on iOS and pinch-to-zoom + pan.
 - **Timeline** — a synced multi-camera scrub view: preview tiles over a single continuous
   scrollable timeline with an activity histogram (Liquid Glass), Hour/Day/Week zoom, and a
-  30-second live-edge auto-refresh. iPhone landscape gets a dedicated side-by-side layout.
+  30-second live-edge auto-refresh. Play/pause and 1–8× run every camera's full-resolution
+  recording forward together; tap a tile for that camera alone. iPhone landscape gets a dedicated
+  side-by-side layout.
 - **Events** — detection event list (thumbnail, label, camera, time) with recorded-clip playback.
 - **Settings** — Frigate server connection (password in Keychain), theme, and camera ordering.
 
@@ -39,6 +41,21 @@ portrait/landscape × light/dark) in code, so a single simulator run covers all 
 CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
+
+### 0.4.0 — 2026-07-27
+- **The Timeline plays.** The scrubber card now carries a transport — play/pause, ten seconds
+  either way, and a 1× / 2× / 4× / 8× speed selector — so the whole grid runs forward together
+  instead of only moving when you drag it.
+- **Every camera plays its real recording, not the low-resolution scrub preview.** Press play and
+  each tile switches to the footage itself, carrying on from one hour into the next; pause, and the
+  tiles go back to the previews that make scrubbing instant.
+- Playback steps over stretches with nothing recorded rather than sitting on a frozen frame, and
+  stops when it catches up with the present. Pressing play while parked at the live edge backs up a
+  minute so there is something to watch.
+- Taking hold of the scrubber hands the playhead back to you — playback pauses instead of fighting
+  the drag.
+- A camera whose hour holds no footage (or that the server can't serve) stays on its preview
+  material rather than going blank, and rejoins full resolution at the next hour that has footage.
 
 ### 0.3.13 — 2026-07-27
 - **Tap a camera on the Timeline to watch its recording at full resolution.** Until now the

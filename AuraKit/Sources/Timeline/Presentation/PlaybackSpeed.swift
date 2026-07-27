@@ -13,4 +13,12 @@ public enum PlaybackSpeed: Double, CaseIterable, Sendable {
     public var title: String {
         "\(Int(rawValue))×"
     }
+
+    /// The next rung up, wrapping round at the top — the slim landscape scrubber has room for one
+    /// speed button rather than the whole ladder, so it steps through them.
+    public var next: PlaybackSpeed {
+        let ladder = PlaybackSpeed.allCases
+        guard let index = ladder.firstIndex(of: self) else { return .oneX }
+        return ladder[(index + 1) % ladder.count]
+    }
 }

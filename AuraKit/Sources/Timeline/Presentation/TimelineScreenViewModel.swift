@@ -16,6 +16,9 @@ public final class TimelineScreenViewModel {
 
     public private(set) var state: State = .loading
     public let clock: ScrubClock
+    /// Play/pause and the speed ladder, driving the same clock the scrubber writes. Kept fed with
+    /// the loaded gaps and span so playback steps over missing footage and stops at the live edge.
+    public let transport: TimelineTransport
     /// The continuous window the timeline scrolls over: `[start, now]`. The start is fixed for the
     /// life of the screen; a refresh only extends the end to the present, and each extension has
     /// the tiles refresh their preview material in place so newly recorded footage appears at the
@@ -40,8 +43,11 @@ public final class TimelineScreenViewModel {
         self.getDayTimeline = getDayTimeline
         self.now = now
         let start = now()
-        span = TimeRange(start: start.addingTimeInterval(-Double(days) * 86_400), end: start)
-        clock = ScrubClock(instant: start)
+        let initialSpan = TimeRange(start: start.addingTimeInterval(-Double(days) * 86_400), end: start)
+        let initialClock = ScrubClock(instant: start)
+        span = initialSpan
+        clock = initialClock
+        transport = TimelineTransport(clock: initialClock, now: now, span: initialSpan)
     }
 
     isolated deinit {
@@ -68,6 +74,7 @@ public final class TimelineScreenViewModel {
         do {
             let timeline = try await getDayTimeline.execute(in: span)
             state = .ready(cameras: latestCameras, timeline: timeline)
+            transport.update(gaps: timeline.gaps, span: span)
         } catch {
             state = .failed(error)
         }
@@ -141,6 +148,8 @@ public final class TimelineScreenViewModel {
             // latestCameras, not a pre-fetch snapshot: an order change that landed while
             // the timeline fetch was in flight must survive this write.
             state = .ready(cameras: latestCameras, timeline: timeline)
+            // The live edge just moved: playback that had stopped there now has somewhere to go.
+            transport.update(gaps: timeline.gaps, span: extended)
             // Follow only a playhead parked at the *old* live edge, judged entirely at landing —
             // a drag that began, or even settled elsewhere, while the fetch was in flight is never
             // yanked. This keeps the readout and tiles tracking the present across a long

@@ -79,6 +79,9 @@ public struct TimelineScreenView: View {
         }
         .task { await viewModel.loadIfNeeded() }
         .task { await viewModel.autoRefresh() }
+        // The playhead's own tick. It runs for the screen's life and does nothing while paused, so
+        // play/pause never has to start or stop a task.
+        .task { await viewModel.transport.run() }
         // Returning from the background catches up right away instead of waiting for the next
         // tick — the app may have been suspended for hours, leaving the whole screen at the old
         // live edge. Same gate as the periodic tick: never disturbs a scrub or history browsing.
@@ -120,7 +123,7 @@ public struct TimelineScreenView: View {
         ZStack(alignment: .bottom) {
             grid(cameras: cameras, bottomInset: cardHeight)
             // Float the glass card over the grid so tiles scroll behind it (the glass refracts them).
-            ScrollableTimelineView(axis: .horizontal, span: viewModel.span, timeline: timeline, clock: viewModel.clock) { time in
+            ScrollableTimelineView(axis: .horizontal, span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport) { time in
                 viewModel.scrub(to: time)
             }
             .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { cardHeight = $0 }
@@ -148,7 +151,7 @@ public struct TimelineScreenView: View {
                 .frame(width: columnWidth)
 
                 // The slim scrubber card takes a fixed strip of width and the full height.
-                ScrollableTimelineView(axis: .vertical, span: viewModel.span, timeline: timeline, clock: viewModel.clock) { time in
+                ScrollableTimelineView(axis: .vertical, span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport) { time in
                     viewModel.scrub(to: time)
                 }
                 .frame(width: cardWidth, height: geo.size.height)
@@ -209,9 +212,14 @@ public struct TimelineScreenView: View {
         PreviewTileView(
             viewModel: tiles.tile(for: camera, make: makeTileViewModel),
             clock: viewModel.clock,
+            transport: viewModel.transport,
             range: viewModel.span
         )
         .onTapGesture {
+            // Stop the grid before pushing one camera's player: the tiles stay in the hierarchy
+            // behind it, so leaving playback running would keep every stream open under the screen
+            // that replaced them.
+            viewModel.transport.pause()
             openedRecording = RecordingRoute(camera: camera, instant: viewModel.clock.instant)
         }
     }

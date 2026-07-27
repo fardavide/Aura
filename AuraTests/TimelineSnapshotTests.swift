@@ -33,6 +33,18 @@ struct TimelineScreenSnapshotTests {
         assertScreenSnapshot(view, named: "ready-quiet")
     }
 
+    @Test func `given playback running when ready then it matches the reference`() async {
+        // given — the transport running at 4×, so the card shows pause and the selected rung
+        let view = await timelineScreen(
+            cameras: .success(snapshotCameras()),
+            timeline: .success(richTimelineFixture()),
+            playing: true
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "ready-playing")
+    }
+
     @Test func `given no cameras when empty then it matches the reference`() async {
         // given
         let view = await timelineScreen(cameras: .success([]), timeline: .success(quietTimelineFixture()))

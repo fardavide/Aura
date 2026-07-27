@@ -1,10 +1,11 @@
 ---
 name: swift-style
-description: Aura's Swift 6 / SwiftUI code conventions — strict concurrency, optionality discipline, exhaustive switch, typed wrappers over primitives, no silent init defaults, SwiftUI styling (semantic colors, @Observable), and documentation.
+description: Aura's Swift 6 / SwiftUI code conventions — strict concurrency, optionality discipline, exhaustive switch, typed wrappers over primitives, no silent init defaults, SwiftUI styling (semantic colors, @Observable, theming system controls to a design), and documentation.
 when_to_use: >
   Consult when writing or reviewing Swift production code — adding types, ViewModels, or SwiftUI
-  views, choosing optionality or error handling, or naming things. Also when the user asks to
-  "write the model", "add a view", or flags Swift style.
+  views, choosing optionality or error handling, or naming things. Also when building a screen or
+  control to a design mock, or when the user asks to "write the model", "add a view", "follow the
+  design", or flags Swift style.
 ---
 
 ## Concurrency — Swift 6, strict
@@ -146,6 +147,28 @@ clear meaning, or its name makes intent substantially clearer.
 - Keep views small and composable; push logic into the ViewModel. The camera grid is
   the centerpiece — keep it clean and minimal.
 - Embrace iOS 26 / Liquid Glass styling where it comes for free; don't fight the system.
+
+### Building to a design: theme the system control, don't hand-roll one
+
+When a design mock shows a control, find the **system control with that behavior** and theme it
+(font, weight, `monospacedDigit`, sizing, `buttonStyle`, background/tint) until it reads like the
+mock. A four-rung speed ladder is a segmented `Picker`; a translucent chip with a border and a soft
+shadow is `.buttonStyle(.glass)` — the mock is *describing* the system look, so reproducing its
+hex values by hand is both more code and worse (no dark mode, no Dynamic Type, no platform drift).
+Build a custom component only when **no** system control has the behavior, and say why.
+
+Two failure modes this rule sits between, both real:
+
+- **Don't substitute a different control** and call it done — a menu button instead of the mock's
+  visible ladder loses what the design was communicating. Match the *affordance*, then theme it.
+- **Don't ship a default that reads badly in context.** A stock segmented picker over the glass
+  scrubber card washes out; `.font(.footnote.weight(.bold))` + `.fixedSize()` made the same control
+  legible and closer to the mock than the default was.
+
+**Verify styling against rendered pixels, not intuition.** Re-record the affected snapshot and look
+at the PNG. If a styling modifier makes no difference, delete it: `.tint()` on a segmented `Picker`
+is a **no-op** (the selection indicator is not tinted by it) — proven by an A/B of the recorded
+image, byte-identical with and without. A modifier that does nothing is a false claim about the UI.
 
 ## Documentation
 
