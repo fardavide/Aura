@@ -171,8 +171,9 @@ extension View {
     }
 }
 
-// A small perceptual tolerance for Liquid Glass / blur, which isn't pixel-identical run-to-run; the
-// view is also warmed up once before each capture (see `warmUpRender`) to avoid cold-render variance.
+// A small perceptual tolerance for Liquid Glass / blur, which isn't pixel-identical run-to-run; each
+// size + appearance pair is also warmed up once per process (see `warmUpRenderIfNeeded`) to avoid
+// cold-render variance.
 private let snapshotPrecision: Float = 0.98
 private let snapshotPerceptualPrecision: Float = 0.95
 
@@ -182,6 +183,27 @@ import UIKit
 private struct SnapshotConfig {
     let name: String
     let device: ViewImageConfig
+}
+
+/// A size + appearance pair that has already been warmed up in this process.
+private struct WarmUpKey: Hashable {
+    let size: CGSize
+    let style: UIUserInterfaceStyle
+}
+
+@MainActor private var warmedUpRenders: Set<WarmUpKey> = []
+
+/// Warms up the render pipeline for this size + style the first time the process sees the pair, and
+/// does nothing afterwards. The caches `warmUpRender` primes — the Liquid Glass shader pipelines and
+/// the glyph atlas — are **process-global**, not per-view, so one warm-up per pair is as effective as
+/// one per capture while costing a fraction of the time: the suite captures ~200 images across only
+/// eight (size, style) pairs, so this drops ~200 throwaway renders and their settle delays to eight.
+/// If cold-render drift ever reappears on a *later* screen rather than the first, this is the
+/// scoping to widen first.
+@MainActor
+private func warmUpRenderIfNeeded(_ view: some View, size: CGSize, style: UIUserInterfaceStyle) {
+    guard warmedUpRenders.insert(WarmUpKey(size: size, style: style)).inserted else { return }
+    warmUpRender(view, size: size, style: style)
 }
 
 /// Renders `view` once in a real key window (at the snapshot's size + style) to warm up the Liquid
@@ -256,7 +278,12 @@ func assertScreenSnapshot(
         let traits = UITraitCollection(userInterfaceStyle: scheme.style)
         for config in configs {
             // Warm up the render (glass shader / glyph caches) at this size so the capture is stable.
-            warmUpRender(scene, size: config.device.size ?? CGSize(width: 400, height: 800), style: scheme.style)
+            // Once per size + style for the whole process — those caches are global, not per-view.
+            warmUpRenderIfNeeded(
+                scene,
+                size: config.device.size ?? CGSize(width: 400, height: 800),
+                style: scheme.style
+            )
             assertSnapshot(
                 of: scene,
                 as: .image(

@@ -60,6 +60,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
+      # Resolve the target simulator and start it booting NOW, before anything else. A cold iOS 26
+      # boot + app install on a hosted runner measured 2-6 minutes — and a plain `xcodebuild test`
+      # pays that *after* the build, serially, which made it the single largest slice of this job.
+      # `simctl boot` returns as soon as the boot begins, so the device comes up in the background
+      # while we restore caches, resolve packages, and compile; `bootstatus` below joins it. Also
+      # fails early with a readable message if the expected simulator is missing on this image
+      # release (iOS 26 devices have had transient per-release gaps on the hosted runner).
+      - name: Resolve the target simulator
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+
+          raw = subprocess.run(
+              ["xcrun", "simctl", "list", "devices", "available", "--json"],
+              check=True, capture_output=True, text=True,
+          ).stdout
+          devices = json.loads(raw)["devices"]
+
+          def version(runtime):
+              return [int(part) for part in runtime.rsplit("iOS-", 1)[1].split("-")]
+
+          def fail(message):
+              # Workflow commands are read from stdout, so annotate there rather than via stderr.
+              print(f"::error::{message}")
+              sys.exit(1)
+
+          runtimes = sorted((r for r in devices if "SimRuntime.iOS-26" in r), key=version)
+          if not runtimes:
+              fail("No iOS 26 simulator runtime available on this runner image")
+          # Newest iOS 26.x first, matching the `OS=latest` this replaces.
+          for runtime in reversed(runtimes):
+              for device in devices[runtime]:
+                  if device["name"] == "iPhone 17":
+                      print(f"Using iPhone 17 ({device['udid']}) on {runtime}")
+                      with open(os.environ["GITHUB_ENV"], "a") as env:
+                          env.write(f"SIMULATOR_UDID={device['udid']}\n")
+                      sys.exit(0)
+          fail("iPhone 17 simulator not available on this runner image")
+          PY
+      - name: Start booting the simulator
+        # Returns as soon as the boot begins; non-zero only if it is already booted, which is a fine
+        # state to proceed from. `bootstatus` further down joins the boot before the tests run.
+        run: xcrun simctl boot "$SIMULATOR_UDID" || true
       # snapshot-testing pulls swift-syntax (a heavy macro dependency); cache the resolved
       # source clones keyed on the committed pins. The app/unit jobs need no cache — AuraKit
       # has zero external dependencies; only AuraTests links snapshot-testing.
@@ -69,29 +112,43 @@ jobs:
           path: SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
+      # Compiled output, so the swift-syntax macro build (the expensive part of a cold compile) is
+      # not repeated per run. Keyed on the sources so a hit is exact; the restore-keys fall back to
+      # a warm-but-stale tree that Xcode rebuilds incrementally. `Index.noindex` is excluded — it is
+      # the largest directory by far and CI never queries the index (COMPILER_INDEX_STORE_ENABLE=NO
+      # below stops populating it at all).
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: |
+            DerivedData
+            !DerivedData/Index.noindex
+          key: dd-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ hashFiles('Aura.xcodeproj/project.pbxproj', 'AuraKit/Package.swift', 'Aura/**/*.swift', 'AuraTests/**/*.swift', 'AuraKit/**/*.swift') }}
+          restore-keys: |
+            dd-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-
+            dd-${{ runner.os }}-
       - name: Resolve packages
         run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages
-      # Fail early with a readable message if the expected simulator is missing on this image
-      # release (iOS 26 devices have had transient per-release gaps on the hosted runner).
-      - name: Verify an iOS 26 iPhone 17 simulator is available
+      # Split from the run below so the compile overlaps the simulator boot. Built against the
+      # generic simulator destination so this step never touches (or waits on) the booting device.
+      - name: Build for testing
         run: |
-          runtimes="$(xcrun simctl list runtimes available)"
-          devices="$(xcrun simctl list devices available)"
-          grep -E 'iPhone|iPad' <<< "$devices" || true
-          if ! grep -q 'iOS 26' <<< "$runtimes"; then
-            echo "::error::No iOS 26 simulator runtime available on this runner image"
-            exit 1
-          fi
-          if ! grep -q 'iPhone 17' <<< "$devices"; then
-            echo "::error::iPhone 17 simulator not available on this runner image"
-            exit 1
-          fi
+          xcodebuild build-for-testing \
+            -scheme Aura \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath DerivedData \
+            -clonedSourcePackagesDirPath SourcePackages \
+            COMPILER_INDEX_STORE_ENABLE=NO
+      # Join the boot started at the top of the job. Usually already finished by now.
+      - name: Wait for the simulator to finish booting
+        run: xcrun simctl bootstatus "$SIMULATOR_UDID" -b
       - name: Run snapshot tests
         run: |
-          xcodebuild test \
+          xcodebuild test-without-building \
             -scheme Aura \
             -only-testing:AuraTests \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -destination "id=$SIMULATOR_UDID" \
+            -derivedDataPath DerivedData \
             -clonedSourcePackagesDirPath SourcePackages
       # On a mismatch the suite writes each freshly-rendered screen to AuraTests/__SnapshotFailures__/
       # (SnapshotSupport.swift pins SNAPSHOT_ARTIFACTS there). Pair each with its committed baseline and

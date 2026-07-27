@@ -321,6 +321,36 @@ solid one and the failing signal is precise:
 This required **sharing the `Aura` scheme** (`xcshareddata/xcschemes/Aura.xcscheme`, committed): it
 previously lived only in gitignored `xcuserdata/`, so a fresh CI checkout couldn't resolve `-scheme Aura`.
 
+## Snapshot CI: the simulator boot was the bottleneck, not the tests
+The snapshot job gated CI at ~12 minutes while every other job finished in ~2, and profiling two
+`main` runs from the job logs showed **the tests weren't the main cost**. Between the last compile
+line and the first log line from the app in the simulator sat a silent gap of **117-346s** —
+`xcodebuild`'s own accounting agreed (`616s elapsed` for a `264s` test run). That gap is simulator
+boot + install + launch, and a plain `xcodebuild test` pays it **serially, after the build**.
+Three changes, in payoff order:
+- **Overlap the boot with the build.** The target simulator is resolved and `simctl boot`ed in the
+  *first* steps of the job (`simctl boot` returns once the boot begins), so it comes up while
+  packages resolve and the app compiles; `simctl bootstatus -b` joins it just before the run. This
+  needs the `test` invocation split into `build-for-testing` + `test-without-building` — the build
+  targets the **generic** simulator destination so it never touches or waits on the booting device,
+  and the run targets the **pinned UDID** (which also stops xcodebuild resolving, or creating, a
+  device from `name=…,OS=latest`). Device selection moved from `grep` over `simctl list` to a small
+  Python pass over its JSON, which sorts runtimes numerically (so `26.10` beats `26.2`) and matches
+  the device name exactly (so `iPhone 17 Pro` can't stand in for `iPhone 17`); it emits the same
+  two `::error::` annotations when the image lacks the runtime or the device.
+- **Cache DerivedData**, keyed on the sources with looser restore-keys, so the swift-syntax macro
+  build — the expensive part of a cold compile — is not repeated. `Index.noindex` is excluded and
+  `COMPILER_INDEX_STORE_ENABLE=NO` stops populating it: CI never queries the index, and it was the
+  bulk of the cache payload (a cache that costs more to transfer than the build it saves is a loss).
+- **Warm up once per size + appearance, not once per capture** (`warmUpRenderIfNeeded`). The caches
+  the warm-up primes — Liquid Glass shader pipelines, the glyph atlas — are process-global, so the
+  ~200 warm-up renders (each with a fixed 0.2s settle) collapse to the eight distinct (size, style)
+  pairs the matrix actually uses. Baselines are unchanged. If cold-render drift ever reappears on a
+  *later* screen rather than the first one, widening this scoping is the first thing to try.
+
+Sharding the suite across runners was **rejected** for now: while boot costs minutes, every shard
+re-pays it, so it loses to fixing the boot. Reconsider only once the gap above is gone.
+
 ## Timeline: vertical scrubber on iPhone landscape (compact height)
 On iPhone landscape the bottom-floating glass scrubber ate the scarce vertical height and squeezed
 the camera grid. There, and only there, the screen splits side-by-side and **hides the nav bar** to
