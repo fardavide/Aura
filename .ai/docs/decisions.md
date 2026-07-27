@@ -345,17 +345,26 @@ Three changes, in payoff order:
   and the build that followed took **191s against 134s from cold** — a restored tree makes Xcode
   re-validate and rebuild much of it anyway, so you pay the download *and* a slower compile. The
   cold `build-for-testing` is only ~2min; there is not enough there to buy back a cache transfer.
-**Rejected — do not retry as-is: warming up once per size + appearance instead of once per capture.**
+**Known flaky on CI: `ready-playing.iPhone-portrait.light`.** The transport-playing snapshot
+intermittently fails on the hosted runner at `0.9764099` pixel match / `0.6478125` perceptual, against
+its `0.98` / `0.95` floors. Those figures are **identical to seven decimals on every failure**, so this
+is not drift and not tolerance noise — the capture lands on one of *two* deterministic frames and which
+one is timing-dependent. That it is environmental rather than a code regression is settled by the
+**same commit producing a red run and a green run six minutes apart** (runs `30303158486` vs
+`30303599117`, both on `7c394e4`). It is the matrix's *first* capture — light and iPhone-portrait are
+each first in their loop — which is where a not-yet-settled first frame would show up. The playback
+clock is correctly pinned (the injected fixed `now` makes `advance(byRealSeconds:)` a no-op), so
+whatever is still settling is something else and is **not yet identified**. Re-running is the current
+workaround; diagnosing it needs a local repro, and a fix belongs in the test, never in a CI re-record.
+
+**Untested, not rejected — warming up once per size + appearance instead of once per capture.**
 `warmUpRender` runs for every one of the ~200 captures, each building a throwaway hosting controller
-and spinning the runloop 0.2s, and its doc comment describes priming *process-global* caches (glass
-shader pipelines, the glyph atlas) — which suggested collapsing it to the eight distinct (size, style)
-pairs the matrix uses. **Measured, it breaks the suite**: the transport-over-full-res-tile screen
-dropped to `0.648` perceptual precision against its `0.95` floor (`ready-playing.iPhone-portrait.light`),
-on a runner where `main` had passed with the same baselines minutes earlier. A gap that large is a
-structurally different frame, not tolerance noise, so the per-capture warm-up is **not** purely
-cache-priming: the 0.2s spin also lets *that view's* own async work settle, which the newest and most
-async-heavy screen depends on. Any future attempt has to keep a per-capture settle and can at best
-drop the duplicate render — and must be measured, not reasoned about.
+and spinning the runloop 0.2s, while its doc comment describes priming *process-global* caches (glass
+shader pipelines, the glyph atlas) — which suggests collapsing it to the eight distinct (size, style)
+pairs the matrix uses. It was tried; the run failed on the flaky snapshot above and it was reverted on
+that evidence — **which the same-commit pass/fail then invalidated**. It is therefore neither proven
+harmful nor proven safe. Evaluate it only against a green-stable suite over repeated local runs: while
+that snapshot flakes, a single CI run cannot be read as a verdict on any rendering change.
 
 Sharding the suite across runners was also **rejected** for now: while boot costs minutes, every shard
 re-pays it, so it loses to fixing the boot. Reconsider only once the gap above is gone.
