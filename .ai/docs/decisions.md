@@ -796,4 +796,7 @@ behind a Basic-auth proxy), and the server snaps a head-trimmed clip back to the
 and adds the gained milliseconds to its duration — a blind spot the client cannot see and Frigate's
 own client shares, bounded by one GOP and reset at each window.
 
-Not snapshot-tested, per the standing convention for screens built around a video player.
+Snapshot-tested the way the live player already is: recorded video can't render offscreen, so the
+transport is split into a `RecordingControlState` value + a bar that is a pure function of it, and
+the layout is captured over a black placeholder with no `AVPlayer` built. Three states (playing,
+paused at 8×, an hour with no footage) across the device + light/dark matrix.
