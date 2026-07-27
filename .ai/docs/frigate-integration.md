@@ -29,6 +29,18 @@ retention — see below), `/api/events` (list, and `?after=` for the grid's "tod
 (`latest.jpg`, `thumbnail.jpg`, `clip.mp4`). Event/review times are Unix epoch seconds; map at the
 DTO boundary. Details: `/frigate-rest`.
 
+### Recordings playback findings (verified against Frigate v0.17.2 source)
+- **Recordings are single-resolution.** Frigate records only the stream carrying the `record` role;
+  there is no second rendition to pick. The multi-stream map in `/api/config` is go2rtc **live**
+  only. The one lower-res view of history is `preview.mp4` — what the scrub grid already uses.
+- **The VOD playlist is gapless.** `/vod/{camera}/start/{s}/end/{e}/master.m3u8` welds the window's
+  recordings into one sequence with `discontinuity` off, so **player time ≠ wall-clock time** and a
+  seek must be converted by summing the footage before the target. The manifest builds each clip
+  from the recording's reported `duration` (not `end − start`), trims it by the window overhang, and
+  drops what falls under 100 ms or reaches `MAX_SEGMENT_DURATION` (600 s).
+- **`MAX_PLAYLIST_SECONDS` is 7200**, so one clock hour per playlist is the safe unit.
+- Exact rules, including the invisible keyframe-snap on a head-trimmed clip: `/frigate-rest`.
+
 ### Cameras grid v2 findings (verified against Frigate v0.17.2 source)
 - **`camera_groups`** is a top-level object in `/api/config`, keyed by group name →
   `{ cameras, icon, order }`. ⚠️ `cameras` is `Union[str, list[str]]`: the web UI writes a

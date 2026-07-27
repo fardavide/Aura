@@ -60,16 +60,3 @@ public struct FrigatePreviewSourceProvider: CameraPreviewProviding {
         }
     }
 }
-
-private extension TimelineError {
-    /// Translates the shared Frigate transport error into the feature's domain error at the Data
-    /// boundary, so the Domain never sees Frigate vocabulary.
-    init(_ error: FrigateApiError) {
-        switch error {
-        case .unreachable: self = .unreachable
-        case .notAuthorized: self = .notAuthorized
-        case .serverUnavailable: self = .serverUnavailable
-        case .unknown: self = .unknown
-        }
-    }
-}

@@ -16,10 +16,11 @@ public struct TimelineScreenView: View {
     // RootView's `.id`.
     @State private var viewModel: TimelineScreenViewModel
     private let makeTileViewModel: (Camera) -> PreviewTileViewModel
-    private let onOpenRecording: (Camera, Date) -> Void
+    private let makeRecordingPlayerViewModel: (Camera, Date) -> RecordingPlayerViewModel
 
     @State private var tiles = TileStore()
     @State private var cardHeight: CGFloat = 180
+    @State private var openedRecording: RecordingRoute?
     @Environment(\.scenePhase) private var scenePhase
 
     // Read the real size class so the layout re-evaluates on rotation. iOS-only: macOS has no
@@ -53,11 +54,11 @@ public struct TimelineScreenView: View {
     public init(
         viewModel: TimelineScreenViewModel,
         makeTileViewModel: @escaping (Camera) -> PreviewTileViewModel,
-        onOpenRecording: @escaping (Camera, Date) -> Void
+        makeRecordingPlayerViewModel: @escaping (Camera, Date) -> RecordingPlayerViewModel
     ) {
         _viewModel = State(initialValue: viewModel)
         self.makeTileViewModel = makeTileViewModel
-        self.onOpenRecording = onOpenRecording
+        self.makeRecordingPlayerViewModel = makeRecordingPlayerViewModel
     }
 
     public var body: some View {
@@ -70,6 +71,11 @@ public struct TimelineScreenView: View {
                 // the tall scrubber (the tab bar already shows you're on Timeline).
                 .toolbar(isCompactHeight ? .hidden : .visible, for: .navigationBar)
                 #endif
+                .navigationDestination(item: $openedRecording) { recording in
+                    RecordingPlayerView(
+                        viewModel: makeRecordingPlayerViewModel(recording.camera, recording.instant)
+                    )
+                }
         }
         .task { await viewModel.loadIfNeeded() }
         .task { await viewModel.autoRefresh() }
@@ -205,8 +211,17 @@ public struct TimelineScreenView: View {
             clock: viewModel.clock,
             range: viewModel.span
         )
-        .onTapGesture { onOpenRecording(camera, viewModel.clock.instant) }
+        .onTapGesture {
+            openedRecording = RecordingRoute(camera: camera, instant: viewModel.clock.instant)
+        }
     }
+}
+
+/// The pushed recordings player: which camera, and the instant the tile was tapped at — the
+/// playhead the full-resolution stream opens on.
+private struct RecordingRoute: Hashable {
+    let camera: Camera
+    let instant: Date
 }
 
 /// Keeps one tile view model per camera alive across re-renders (so players aren't rebuilt).

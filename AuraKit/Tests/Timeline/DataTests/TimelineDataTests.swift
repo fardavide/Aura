@@ -33,6 +33,88 @@ struct TimelineDecodingTests {
         #expect(frames.first?.time == at(1700))
         #expect(frames.first?.fileName == "preview_driveway-1700.webp")
     }
+
+    @Test func `given recordings json when mapping then bounds and encoded duration are read`() throws {
+        let segments = try JSONDecoder().decode([RecordingSegmentDto].self, from: Data(recordingsJson.utf8)).toSegments()
+        #expect(segments.first?.range == TimeRange(start: at(100), end: at(110)))
+        #expect(segments.first?.duration == 10)
+    }
+
+    // The encoded file can be shorter than the span it covers; playback follows the file, so the
+    // reported duration must survive mapping rather than being recomputed from the bounds.
+    @Test func `given a duration that disagrees with the span when mapping then the reported duration is kept`() throws {
+        let segments = try JSONDecoder().decode([RecordingSegmentDto].self, from: Data(recordingsJson.utf8)).toSegments()
+        #expect(segments.last?.range == TimeRange(start: at(110), end: at(120)))
+        #expect(segments.last?.duration == 9.5)
+    }
+}
+
+struct FrigateCameraRecordingsRepositoryTests {
+
+    @Test func `given segments json when fetching then they map to domain segments`() async throws {
+        // given
+        let sut = FrigateCameraRecordingsRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 200, body: Data(recordingsJson.utf8)))
+        )
+
+        // when
+        let segments = try await sut.segments(for: CameraName("driveway"), in: window)
+
+        // then
+        #expect(segments.count == 2)
+        #expect(segments.first?.duration == 10)
+    }
+
+    @Test func `when fetching segments then the camera recordings endpoint is queried for the window`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(recordingsJson.utf8)))
+        let sut = FrigateCameraRecordingsRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.segments(for: CameraName("driveway"), in: TimeRange(start: at(3600), end: at(7200)))
+
+        // then
+        #expect(
+            http.lastRequest?.url
+                == URL(string: "http://frigate.test:5000/api/driveway/recordings?after=3600&before=7200")!
+        )
+    }
+
+    @Test func `given malformed json when fetching segments then it throws invalid data`() async {
+        let sut = FrigateCameraRecordingsRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 200, body: Data("nonsense".utf8)))
+        )
+        await #expect(throws: TimelineError.invalidData) { try await sut.segments(for: CameraName("driveway"), in: window) }
+    }
+
+    @Test func `given an unauthorized server when fetching segments then it throws not authorized`() async {
+        let sut = FrigateCameraRecordingsRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 401, body: Data()))
+        )
+        await #expect(throws: TimelineError.notAuthorized) { try await sut.segments(for: CameraName("driveway"), in: window) }
+    }
+
+    // The playlist has to cover exactly the window the segments described, or every mapped
+    // instant lands somewhere else in the stream.
+    @Test func `when resolving the playback source then it points at the same window's playlist`() {
+        // given
+        let sut = FrigateCameraRecordingsRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 200, body: Data()))
+        )
+
+        // when
+        let source = sut.playbackSource(for: CameraName("driveway"), in: TimeRange(start: at(3600), end: at(7200)))
+
+        // then
+        #expect(source.url == URL(string: "http://frigate.test:5000/vod/driveway/start/3600/end/7200/master.m3u8")!)
+    }
+
+    @Test func `given credentials when resolving the playback source then it carries the auth header`() {
+        let sut = FrigateCameraRecordingsRepository(
+            config: .authed, httpClient: FakeHttpClient(.response(status: 200, body: Data()))
+        )
+        #expect(sut.playbackSource(for: CameraName("driveway"), in: window).headers["Authorization"] != nil)
+    }
 }
 
 struct FrigateCameraDayTimelineRepositoryTests {
@@ -162,6 +244,13 @@ private let clipsJson = """
 """
 
 private let framesJson = #"[ "preview_driveway-1700.webp", "preview_driveway-1710.webp" ]"#
+
+private let recordingsJson = """
+[
+  { "id": "s1", "start_time": 100.0, "end_time": 110.0, "duration": 10.0, "motion": 4, "objects": 0, "segment_size": 1.2 },
+  { "id": "s2", "start_time": 110.0, "end_time": 120.0, "duration": 9.5, "motion": 0, "objects": 0, "segment_size": 1.1 }
+]
+"""
 
 extension ServerConfig {
     static let test = ServerConfig(scheme: .http, host: "frigate.test", port: 5000, username: nil, password: nil)

@@ -40,6 +40,16 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.3.13 — 2026-07-27
+- **Tap a camera on the Timeline to watch its recording at full resolution.** Until now the
+  timeline could only be scrubbed through low-resolution previews; the new player streams the
+  recorded footage itself, opening at whatever moment the scrubber was parked on.
+- The player has the transport you'd expect from the Frigate web client: **play/pause, skip back
+  and forward ten seconds, and a 1× / 2× / 4× / 8× speed selector.** Playback rolls straight on
+  from one hour into the next, and stops when it catches up with the present.
+- Stretches with nothing recorded are called out rather than silently skipped past — the clock
+  keeps showing the real time of the frame on screen even where footage is missing.
+
 ### 0.3.12 — 2026-07-27
 - The camera grid asks the server for its configuration **once** per load instead of three times —
   the camera list, the group chips and the recording figures now share a single read, so the screen

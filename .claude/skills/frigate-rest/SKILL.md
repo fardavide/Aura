@@ -238,6 +238,17 @@ How Frigate's Review "Motion" grid scrubs cheaply (each tile, two modes by time)
 - **Bound the window to ~1 hour.** nginx-vod fails past a per-playlist segment cap (~1200+ segments). The web UI chunks the day into ≤1h windows, plays one, swaps playlists when scrubbing crosses the edge — mirror this; don't request a multi-hour playlist.
 - **Player time ≠ wall-clock.** The HLS playlist concatenates segments with gaps removed; map a timeline timestamp ↔ player time by summing segment durations from `/api/{camera}/recordings`. For gapped windows use `/vod/clip/…`.
 - **AVPlayer scrubbing Frigate's VOD is unproven** — the web UI uses hls.js on every platform, never the native player. **Verify on the real server before building on it.**
+
+**How the VOD manifest is built (verified v0.17.2, `frigate/api/media.py` + `frigate/const.py`) — required to map wall clock ↔ player time:**
+- Recordings are selected with `start_time BETWEEN (s,e) OR end_time BETWEEN (s,e) OR (s > start_time AND e < end_time)`, ordered by `start_time` asc.
+- Per recording: `duration_ms = recording.duration * 1000`; if the window starts after it, `clipFrom = (s − start)*1000` and `duration_ms -= clipFrom`; if it ends after the window, `duration_ms -= (end − e)*1000`.
+- **A clip is skipped when the adjusted `duration_ms < 100` or `>= MAX_SEGMENT_DURATION*1000`.** `MAX_SEGMENT_DURATION = 600` (s). Replicate both or every later instant maps off by the omitted clip.
+- ⚠️ Drive the mapping off the recording's reported **`duration`**, not `end_time − start_time` — the manifest does, and the two differ in practice.
+- `discontinuity` is the `force_discontinuity` param, **default false** — so `/vod/{camera}/…` is ONE gapless sequence: player time = running sum of adjusted durations, gaps have zero length. (`/vod/clip/…` forces it true.)
+- ⚠️ **Keyframe snapping is invisible to the client**: when `clipFrom` is applied the server snaps back to the preceding keyframe via `get_keyframe_before(...)` and *adds the gained ms to the duration*. A head-trimmed first clip can therefore run up to one GOP longer than computed. Frigate's own client has the same blind spot; flooring windows onto the hour keeps it rare.
+- **`MAX_PLAYLIST_SECONDS = 7200`** — the real playlist ceiling. A **1-hour window is the safe unit** (what the web UI chunks to); never request a whole day.
+- **Recordings are single-resolution.** Frigate records only the stream assigned the `record` role — there is no 720p/high rendition to choose between, and `live.streams` in `/api/config` is go2rtc **live** only. The only lower-res history is `preview.mp4`.
+- Segment JSON: `{ id, start_time, end_time, duration, motion, objects, segment_size }`.
 - **Auth on media:** port 5000 = unauthenticated. On 8971, HLS auth uses an nginx query-string `secure_token` (`?token=`) — custom `AVURLAssetHTTPHeaderFieldsKey` headers do **not** reliably reach HLS *segment* sub-requests, so prefer the token there.
 
 ---

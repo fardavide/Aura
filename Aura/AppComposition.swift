@@ -145,6 +145,24 @@ final class AppComposition {
         )
     }
 
+    func recordingPlayerViewModel(
+        for camera: Camera,
+        at instant: Date,
+        connection: ConnectionSettings
+    ) -> RecordingPlayerViewModel {
+        RecordingPlayerViewModel(
+            camera: camera,
+            recordings: GetCameraRecordings(
+                repository: FrigateCameraRecordingsRepository(
+                    config: serverConfig(from: connection),
+                    httpClient: httpClient
+                )
+            ),
+            now: { Date() },
+            startingAt: instant
+        )
+    }
+
     private func observeCameras(configProvider: FrigateConfigProvider) -> ObserveCameras {
         ObserveCameras(
             getCameras: GetCameras(

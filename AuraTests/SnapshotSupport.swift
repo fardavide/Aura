@@ -125,7 +125,15 @@ func timelineScreen(
     return TimelineScreenView(
         viewModel: viewModel,
         makeTileViewModel: { tiles[$0.name] ?? PreviewTileViewModel(camera: $0, previews: previews, imageLoader: imageLoader) },
-        onOpenRecording: { _, _ in }
+        // Never invoked in a snapshot — the destination is only built once a tile is tapped.
+        makeRecordingPlayerViewModel: { camera, instant in
+            RecordingPlayerViewModel(
+                camera: camera,
+                recordings: GetCameraRecordings(repository: FakeCameraRecordingsRepository(.success([]))),
+                now: { snapshotNow },
+                startingAt: instant
+            )
+        }
     )
 }
 

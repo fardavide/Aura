@@ -40,7 +40,9 @@ struct RootView: View {
                         TimelineScreenView(
                             viewModel: composition.timelineScreenViewModel(for: connection),
                             makeTileViewModel: { composition.previewTileViewModel(for: $0, connection: connection) },
-                            onOpenRecording: { _, _ in }
+                            makeRecordingPlayerViewModel: {
+                                composition.recordingPlayerViewModel(for: $0, at: $1, connection: connection)
+                            }
                         )
                     } label: {
                         Label("Timeline", systemImage: "calendar.day.timeline.left")

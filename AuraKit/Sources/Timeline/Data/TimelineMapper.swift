@@ -1,7 +1,21 @@
 import Foundation
 
 import CamerasEntities
+import CommonFrigate
 import TimelineDomain
+
+extension TimelineError {
+    /// Translates the shared Frigate transport error into the feature's domain error at the Data
+    /// boundary, so the Domain never sees Frigate vocabulary.
+    init(_ error: FrigateApiError) {
+        switch error {
+        case .unreachable: self = .unreachable
+        case .notAuthorized: self = .notAuthorized
+        case .serverUnavailable: self = .serverUnavailable
+        case .unknown: self = .unknown
+        }
+    }
+}
 
 extension [ReviewMarkerDto] {
     /// Maps review segments to markers, dropping severities the timeline doesn't render.
@@ -51,6 +65,20 @@ extension [PreviewClipDto] {
                     end: Date(timeIntervalSince1970: dto.end)
                 ),
                 path: dto.src
+            )
+        }
+    }
+}
+
+extension [RecordingSegmentDto] {
+    func toSegments() -> [RecordingSegment] {
+        map { dto in
+            RecordingSegment(
+                range: TimeRange(
+                    start: Date(timeIntervalSince1970: dto.startTime),
+                    end: Date(timeIntervalSince1970: dto.endTime)
+                ),
+                duration: dto.duration
             )
         }
     }

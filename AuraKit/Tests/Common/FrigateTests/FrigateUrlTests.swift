@@ -133,4 +133,26 @@ struct FrigateUrlTests {
                 == URL(string: "http://frigate.local:5000/clips/previews/driveway-1.mp4")!
         )
     }
+
+    @Test func `when building the recording segment list then it queries the camera window`() {
+        #expect(
+            FrigateRecordingsUrl.segments(base: base, camera: "driveway", after: 100, before: 200)
+                == URL(string: "http://frigate.local:5000/api/driveway/recordings?after=100&before=200")!
+        )
+    }
+
+    // The playlist is served by the media module at the root — an `api/` prefix here 404s.
+    @Test func `when building the playback playlist then it is served at the root without the api prefix`() {
+        #expect(
+            FrigateRecordingsUrl.playlist(base: base, camera: "driveway", after: 100, before: 3700)
+                == URL(string: "http://frigate.local:5000/vod/driveway/start/100/end/3700/master.m3u8")!
+        )
+    }
+
+    @Test func `given fractional bounds when building the playback playlist then they render as whole seconds`() {
+        #expect(
+            FrigateRecordingsUrl.playlist(base: base, camera: "driveway", after: 100.6, before: 200.4)
+                == URL(string: "http://frigate.local:5000/vod/driveway/start/100/end/200/master.m3u8")!
+        )
+    }
 }
