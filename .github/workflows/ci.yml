@@ -50,7 +50,7 @@ jobs:
 
   # Liquid-Glass screenshot tests (app-hosted AuraTests target, iOS-only). Isolated on purpose:
   # the reference PNGs are recorded locally and their rendering is environment-sensitive
-  # (precision 0.98 / perceptualPrecision 0.95) — keeping them in their own job means a snapshot
+  # (precision 0.98 area budget / perceptualPrecision 0.87 = ΔE 13 — see decisions.md) — keeping them in their own job means a snapshot
   # diff never masks a real unit/build failure. If the runner's rendering drifts past tolerance,
   # re-record baselines locally (see /build-test) and commit. This job GATES the PR.
   snapshot-tests:

@@ -901,3 +901,32 @@ gesture already covers that capability).
 `RecordingTransportBar` / `RecordingDetailState` + `RecordingDetailActions` / `RecordingDetailLayout`.
 The screenshot suite grew from 3 states to 5 and covers all three arrangements through the existing
 device matrix; baselines were re-recorded locally and inspected.
+
+## Screenshot tolerance: widen the per-pixel threshold, keep the area budget (0.5.0)
+The recording-player suite went red on CI while passing locally. Chasing it produced two wrong
+answers before the right one, both worth recording so the next person doesn't repeat them.
+
+**Wrong answer 1 — "the renders differ".** They don't, much. The CI captures match the committed
+baselines to 9 pixels out of 2.96M (iPhone portrait) and 11 of 8.96M (iPad landscape), worst channel
+delta 1/255. Note the baselines are **16-bit Display P3**: `sips`, BMP conversion and every other
+8-bit tool silently truncate them and will report a pair as identical when it isn't. Decode at 16
+bits or don't bother.
+
+**Wrong answer 2 — "so drop the perceptual comparator".** `perceptualPrecision < 1` does route
+`compare` through Core Image with colour management disabled, and the library's own source warns that
+virtualized hardware without a GPU "falls back to a CPU-based OpenGL ES renderer that silently fails
+when a Metal command is issued" — every GitHub-hosted runner. But switching to the byte branch
+(`perceptualPrecision = 1`) fails **locally**: re-rendering an iPad frame redraws ~26% of it — the
+whole Liquid-Glass panel — by 1–15/255, while the text and shapes drawn *on* the glass stay stable.
+Glass is genuinely not deterministic, which is exactly why the perceptual tolerance was there.
+
+**The fix** is to spend the tolerance on the right axis. `perceptualPrecision` sets the per-pixel ΔE
+threshold ((1 - value) × 100); `precision` is the fraction of pixels allowed to exceed it. The glass
+drift is a per-pixel problem, so the threshold moves — 0.95 → **0.87**, i.e. ΔE 5 → 13, clearing both
+the local drift and the ~10.1 worst pixel the GPU-less runner scored. The area budget `precision`
+stays at **0.98**: that is the real gate, and a moved control, a wrong colour or dropped text exceeds
+ΔE 13 across far more than 2% of a frame. No baselines were re-recorded.
+
+The cost, stated plainly: a regression that shifts colour by less than ΔE 13 without moving anything
+is now invisible. Glass forces that trade — the alternative is a gate whose verdict depends on
+whether the machine running it has a GPU.

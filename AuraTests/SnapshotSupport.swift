@@ -175,10 +175,21 @@ extension View {
     }
 }
 
-// A small perceptual tolerance for Liquid Glass / blur, which isn't pixel-identical run-to-run; the
-// view is also warmed up once before each capture (see `warmUpRender`) to avoid cold-render variance.
+// Liquid Glass is not deterministic. Re-rendering the same screen re-draws the whole glass panel a
+// shade differently — measured at ~26% of an iPad frame drifting by 1–15/255, while the text and
+// shapes *on* the glass stay pixel-stable. `warmUpRender` reduces it but cannot remove it.
+//
+// So the two knobs do different jobs, and only one of them may be spent on that drift:
+//   - `perceptualPrecision` sets the **per-pixel** ΔE threshold below which a difference is free
+//     ((1 - value) × 100). It has to clear the glass drift, and it has to clear it on a GPU-less CI
+//     runner, whose ΔE scoring reads higher than a local one's — CI measured a worst pixel at ~10.1
+//     where 0.95 allowed only 5, which is what turned PR #30 red.
+//   - `precision` is the **area** budget: the fraction of pixels allowed to exceed that threshold.
+//     This is the real gate, and it stays tight — a moved control, a wrong colour or dropped text
+//     blows past ΔE 13 over far more than 2% of the frame.
+// See `decisions.md`.
 private let snapshotPrecision: Float = 0.98
-private let snapshotPerceptualPrecision: Float = 0.95
+private let snapshotPerceptualPrecision: Float = 0.87
 
 #if os(iOS)
 import UIKit
