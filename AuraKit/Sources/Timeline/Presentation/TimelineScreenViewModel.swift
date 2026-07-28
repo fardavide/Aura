@@ -28,10 +28,17 @@ public final class TimelineScreenViewModel {
     private let observeCameras: ObserveCameras
     private let getDayTimeline: GetDayTimeline
     private let now: @MainActor () -> Date
+    /// The motion-strip resolution, pinned from the span at birth so every overlay window — and
+    /// every refresh — comes back at the same bucket width.
+    private let bucket: TimeInterval
     private var observation: Task<Void, Never>?
     /// The freshest stream emission — read at ready-time so an order change landing while
     /// the timeline fetch is in flight is not lost.
     private var latestCameras: [Camera] = []
+    /// The oldest instant overlays have been loaded back to. The window walk runs newest-first,
+    /// so coverage is always the suffix `[overlaysLoadedBack, span.end]`; a walk an unreachable
+    /// server cut short leaves this shy of the span start, and the next refresh resumes there.
+    private var overlaysLoadedBack: Date
 
     /// How close to the present the playhead must be for an auto-refresh to fire. Generous so minor
     /// scroll drift never stops live updates, while genuine history browsing (hours/days back in a
@@ -48,6 +55,8 @@ public final class TimelineScreenViewModel {
         span = initialSpan
         clock = initialClock
         transport = TimelineTransport(clock: initialClock, now: now, span: initialSpan)
+        bucket = OverlayWindow.bucketDuration(for: initialSpan)
+        overlaysLoadedBack = initialSpan.end
     }
 
     isolated deinit {
@@ -57,6 +66,7 @@ public final class TimelineScreenViewModel {
     public func load() async {
         state = .loading
         span = TimeRange(start: span.start, end: now())
+        overlaysLoadedBack = span.end
 
         let cameras: [Camera]
         do {
@@ -71,13 +81,11 @@ public final class TimelineScreenViewModel {
             return
         }
 
-        do {
-            let timeline = try await getDayTimeline.execute(for: .allCameras, in:span)
-            state = .ready(cameras: latestCameras, timeline: timeline)
-            transport.update(gaps: timeline.gaps, span: span)
-        } catch {
-            state = .failed(error)
-        }
+        // Paint the grid at once over empty overlays — the timeline windows stream in behind it,
+        // and a server with only its activity endpoints down still shows its cameras.
+        state = .ready(cameras: latestCameras, timeline: DayTimeline(markers: [], motion: [], gaps: []))
+        transport.update(gaps: [], span: span)
+        await loadOverlays(in: span)
     }
 
     /// Loads on first appearance only. A re-appearance (e.g. returning to the tab) keeps the
@@ -122,8 +130,10 @@ public final class TimelineScreenViewModel {
     /// far tighter than the auto-refresh gate's `liveEdgeWindow`.
     private static let playheadFollowTolerance: TimeInterval = 1
 
-    /// Reuses the already-loaded cameras when present; otherwise (initial or recovered-from-
-    /// failure) it loads them too. A transient failure keeps the last good content.
+    /// Reuses the already-loaded content when present — re-reading **only the stretch since the
+    /// last read**, because history is settled and re-reading seven days of it every tick is what
+    /// buried the server. From a failure it reloads cameras and the whole span. A transient
+    /// failure keeps the last good content.
     private func performRefresh() async {
         let extended = TimeRange(start: span.start, end: now())
         // The old live edge, before the span jumps — the reference for the playhead follow below.
@@ -131,35 +141,56 @@ public final class TimelineScreenViewModel {
 
         switch state {
         case .ready:
-            break
+            let delta = OverlayWindow.refresh(previousEnd: previousEnd, now: extended.end, bucket: bucket)
+            guard await loadOverlays(in: delta) > 0 else {
+                return  // still unreachable — keep the current span, retry next tick
+            }
         case .loading, .empty, .failed:
-            let cameras: [Camera]
             do {
-                cameras = try await startObservingCameras()
+                let cameras = try await startObservingCameras()
+                guard !cameras.isEmpty else { return }
             } catch {
                 return  // still unreachable — keep the current state, retry next tick
             }
-            guard !cameras.isEmpty else { return }
+            state = .ready(cameras: latestCameras, timeline: DayTimeline(markers: [], motion: [], gaps: []))
+            overlaysLoadedBack = extended.end
+            guard await loadOverlays(in: extended) > 0 else { return }
         }
 
-        do {
-            let timeline = try await getDayTimeline.execute(for: .allCameras, in:extended)
-            span = extended
-            // latestCameras, not a pre-fetch snapshot: an order change that landed while
-            // the timeline fetch was in flight must survive this write.
-            state = .ready(cameras: latestCameras, timeline: timeline)
+        // A walk the server cut short earlier resumes here, one day-sized window at a time.
+        if overlaysLoadedBack > span.start {
+            await loadOverlays(in: TimeRange(start: span.start, end: overlaysLoadedBack))
+        }
+
+        span = extended
+        if case let .ready(_, timeline) = state {
             // The live edge just moved: playback that had stopped there now has somewhere to go.
             transport.update(gaps: timeline.gaps, span: extended)
-            // Follow only a playhead parked at the *old* live edge, judged entirely at landing —
-            // a drag that began, or even settled elsewhere, while the fetch was in flight is never
-            // yanked. This keeps the readout and tiles tracking the present across a long
-            // suspension (where the gap far exceeds the refresh gate's window).
-            if !clock.isScrubbing, previousEnd.timeIntervalSince(clock.instant) <= Self.playheadFollowTolerance {
-                clock.scrub(to: extended.end)
-            }
-        } catch {
-            return  // transient blip — keep the last good timeline rather than show an error
         }
+        // Follow only a playhead parked at the *old* live edge, judged entirely at landing —
+        // a drag that began, or even settled elsewhere, while the fetch was in flight is never
+        // yanked. This keeps the readout and tiles tracking the present across a long
+        // suspension (where the gap far exceeds the refresh gate's window).
+        if !clock.isScrubbing, previousEnd.timeIntervalSince(clock.instant) <= Self.playheadFollowTolerance {
+            clock.scrub(to: extended.end)
+        }
+    }
+
+    /// Streams overlay windows into the ready state, newest first, and answers how many landed —
+    /// zero means the server failed the very first window. An order change landing mid-walk is
+    /// safe: each slice merges into the state current at that moment, cameras included.
+    @discardableResult
+    private func loadOverlays(in range: TimeRange) async -> Int {
+        var applied = 0
+        for await slice in getDayTimeline.execute(for: .allCameras, in: range, bucket: bucket) {
+            guard case let .ready(cameras, timeline) = state else { break }
+            let merged = timeline.replacing(slice)
+            state = .ready(cameras: cameras, timeline: merged)
+            transport.update(gaps: merged.gaps, span: span)
+            overlaysLoadedBack = min(overlaysLoadedBack, slice.window.start)
+            applied += 1
+        }
+        return applied
     }
 
     /// Whether an auto-refresh tick should fire now. Never interrupts an active scrub; over loaded

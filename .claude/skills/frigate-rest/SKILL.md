@@ -188,8 +188,18 @@ timeline's colored markers — distinct from `/api/events`.
 | Motion-intensity strip | `GET /api/review/activity/motion?cameras=&before=&after=&scale=<sec>` |
 
 - Review item: `{ id, camera, start_time, end_time (null while in-progress), severity, thumb_path, data{ objects, zones, audio, detections, … }, has_been_reviewed }`. `/api/review` defaults to the last 24h; ordered severity asc then start_time desc.
+- `/api/review`'s window clause is **overlap with NULL-end handling**: `start_time < before AND (end_time IS NULL OR end_time > after)` — so items straddling the window are returned, and **every in-progress item is in every window that touches now**. A single indexed query; cheap. Always pass `limit`.
 - `review/summary` → `{ last24Hours:{reviewed_alert,reviewed_detection,total_alert,total_detection}, "YYYY-MM-DD":{…same four…} }`.
-- `review/activity/motion` → `[{ start_time(int s), motion(0–100), camera }]`; `scale` = bucket seconds (default 30).
+- `review/activity/motion` → `[{ start_time(int s), motion(0–100), camera }]`; `scale` = bucket seconds (default 30). Rows selected by `start_time > after AND end_time < before` — a segment straddling a window edge belongs to **neither** side.
+- ⚠️ **Server cost (verified v0.17.2) — never query motion or gaps over more than ~a day.**
+  `review/activity/motion` (sync handler, threadpool) loads *every* `motion > 0` recording row in
+  the window into pandas — a 7-day window is ~60k rows/camera, seconds of CPU per call.
+  `recordings/unavailable` is far worse: an **`async def` on the API event loop** whose gap scan
+  re-walks the window's rows once per `scale` bucket — O(buckets × rows), i.e. tens of seconds on a
+  modest host for 7d × 2000 buckets, **with the entire Frigate API frozen** (HA marks the server
+  unavailable; client timeouts don't stop it server-side). Split multi-day spans into **sequential
+  day-sized windows, newest first**, keep `scale` derived from the *full* span, and refresh only
+  the live-edge delta — this is what Aura ships (see `OverlayWindow` + `decisions.md` 0.5.1).
 
 ### Recordings — what footage exists
 

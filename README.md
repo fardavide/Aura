@@ -43,6 +43,18 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.5.1 — 2026-07-28
+- **The Timeline no longer overwhelms the server.** Opening the Timeline (or a camera's own
+  timeline) used to ask Frigate for a whole week of activity in one query, and re-ask every half
+  minute — on a modest machine that could freeze Frigate's API for tens of seconds, long enough to
+  show it offline and drop it from Home Assistant. Activity now loads one day at a time, newest
+  first, and each periodic refresh re-reads only the seconds since the last one.
+- While browsing history on a camera's timeline, the periodic refresh now pauses entirely — same
+  as the Timeline tab — and resumes at the live edge.
+- The camera grid on the Timeline tab now appears as soon as the cameras are known, with the
+  activity strip filling in behind it, so an unreachable activity endpoint no longer blanks the
+  screen.
+
 ### 0.5.0 — 2026-07-28
 - **One camera, one time axis.** Tapping a camera in the Timeline now opens a proper timeline of its
   own: the footage with a Liquid-Glass panel against it carrying a 24-hour overview of the day, a

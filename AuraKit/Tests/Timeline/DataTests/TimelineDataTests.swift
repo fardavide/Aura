@@ -126,11 +126,24 @@ struct FrigateCameraDayTimelineRepositoryTests {
             ("api/review", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
-        let timeline = try await sut.dayTimeline(for: .allCameras, in: window)
+        let timeline = try await sut.dayTimeline(for: .allCameras, in: window, bucket: 300)
 
         #expect(timeline.markers.count == 2)
         #expect(timeline.motion.count == 3)
         #expect(timeline.gaps.count == 1)
+    }
+
+    @Test func `when fetching the day then the bucket is sent as the scale on motion and gaps`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data("[]".utf8)))
+        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.dayTimeline(for: .allCameras, in: window, bucket: 302)
+
+        // then — whole seconds on the wire, on both scaled queries
+        #expect(http.requestedUrls.contains { $0.contains("activity/motion") && $0.hasSuffix("scale=302") })
+        #expect(http.requestedUrls.contains { $0.contains("recordings/unavailable") && $0.hasSuffix("scale=302") })
     }
 
     // The review body is served only to a capped query; an uncapped one falls through to the
@@ -143,7 +156,7 @@ struct FrigateCameraDayTimelineRepositoryTests {
             ("limit=1000", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
-        let timeline = try await sut.dayTimeline(for: .allCameras, in: window)
+        let timeline = try await sut.dayTimeline(for: .allCameras, in: window, bucket: 300)
 
         #expect(timeline.markers.count == 2)
     }
@@ -158,7 +171,7 @@ struct FrigateCameraDayTimelineRepositoryTests {
             ("api/review?cameras=driveway", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
-        let timeline = try await sut.dayTimeline(for: .camera(CameraName("driveway")), in: window)
+        let timeline = try await sut.dayTimeline(for: .camera(CameraName("driveway")), in: window, bucket: 300)
 
         #expect(timeline.markers.count == 2)
         #expect(timeline.motion.count == 3)
@@ -172,11 +185,22 @@ struct FrigateCameraDayTimelineRepositoryTests {
             ("api/review", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
-        let timeline = try await sut.dayTimeline(for: .allCameras, in: window)
+        let timeline = try await sut.dayTimeline(for: .allCameras, in: window, bucket: 300)
 
         #expect(timeline.markers.count == 2)
         #expect(timeline.motion.count == 3)
         #expect(timeline.gaps.isEmpty)
+    }
+
+    // One endpoint down degrades; all three down is a server that isn't answering, and the
+    // window-by-window walk must stop asking it for more days.
+    @Test func `given every overlay endpoint failing when fetching the day then it throws unreachable`() async {
+        let sut = FrigateCameraDayTimelineRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 500, body: Data()))
+        )
+        await #expect(throws: TimelineError.unreachable) {
+            _ = try await sut.dayTimeline(for: .allCameras, in: window, bucket: 300)
+        }
     }
 }
 

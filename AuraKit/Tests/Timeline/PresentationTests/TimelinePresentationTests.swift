@@ -87,10 +87,31 @@ struct TimelineScreenViewModelTests {
         #expect(sut.state == .failed(.notAuthorized))
     }
 
-    @Test func `given a timeline failure when loading then it fails`() async {
+    @Test func `given failing overlay endpoints when loading then the grid still paints`() async {
         let sut = makeViewModel(cameras: .success([camera]), timeline: .failure(.serverUnavailable))
         await sut.load()
-        #expect(sut.state == .failed(.serverUnavailable))
+        #expect(sut.state == .ready(cameras: [camera], timeline: emptyTimeline))
+    }
+
+    @Test func `when loading then the span is read newest-first one day at a time`() async {
+        // given
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { at(1_000_000) },
+            days: 2
+        )
+
+        // when
+        await sut.load()
+
+        // then — two day-sized windows, live edge first, at the span's bucket resolution
+        #expect(timelineRepo.queriedRanges == [
+            TimeRange(start: at(913_600), end: at(1_000_000)),
+            TimeRange(start: at(827_200), end: at(913_600)),
+        ])
+        #expect(timelineRepo.queriedBuckets.allSatisfy { $0 == 86 })
     }
 
     @Test func `given a scrub before the span starts then it is clamped into the span`() {
@@ -115,10 +136,40 @@ struct TimelineScreenViewModelTests {
         // when
         await sut.refresh()
 
-        // then
+        // then — only the stretch since the last read is re-queried, one bucket back for the seam
         #expect(sut.span.end == at(1_000_030))
-        #expect(timelineRepo.queriedRanges.last == TimeRange(start: sut.span.start, end: at(1_000_030)))
+        #expect(timelineRepo.queriedRanges.last == TimeRange(start: at(999_884), end: at(1_000_030)))
         #expect(sut.span.start == at(1_000_000 - 2 * 86_400))
+    }
+
+    @Test func `given overlays cut short by an unreachable server when refreshing then the walk resumes`() async {
+        // given — the server answers the newest day's window, then goes down mid-walk
+        let clock = TestClock(at(1_000_000))
+        let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
+        timelineRepo.onQuery = { [weak timelineRepo] in
+            guard let timelineRepo, timelineRepo.queriedRanges.count == 2 else { return }
+            timelineRepo.result = .failure(.unreachable)
+        }
+        let sut = TimelineScreenViewModel(
+            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            now: { clock.value },
+            days: 2
+        )
+        await sut.load()
+        #expect(timelineRepo.queriedRanges.count == 2)
+        timelineRepo.onQuery = nil
+        timelineRepo.result = .success(emptyTimeline)
+        clock.value = at(1_000_030)
+
+        // when
+        await sut.refresh()
+
+        // then — the live-edge delta lands first, then the missing day is fetched
+        #expect(Array(timelineRepo.queriedRanges.dropFirst(2)) == [
+            TimeRange(start: at(999_884), end: at(1_000_030)),
+            TimeRange(start: at(827_200), end: at(913_600)),
+        ])
     }
 
     @Test func `given a refresh failure when refreshing then the last good timeline is kept`() async {
@@ -141,22 +192,22 @@ struct TimelineScreenViewModelTests {
     }
 
     @Test func `given a failed load when refreshing recovers then it becomes ready`() async {
-        // given
-        let timelineRepo = FakeCameraDayTimelineRepository(.failure(.unreachable))
+        // given — the camera read failed, so the whole screen failed
+        let cameras = FakeCamerasRepository(.failure(.unreachable))
         let sut = TimelineScreenViewModel(
-            observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
-            getDayTimeline: GetDayTimeline(repository: timelineRepo),
+            observeCameras: makeObserveCameras(repository: cameras),
+            getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(busyTimeline))),
             now: { at(1_000_000) },
             days: 2
         )
         await sut.load()
         #expect(sut.state == .failed(.unreachable))
-        timelineRepo.result = .success(busyTimeline)
+        cameras.result = .success([camera])
 
         // when
         await sut.refresh()
 
-        // then
+        // then — cameras and the whole overlay span are re-read
         #expect(sut.state == .ready(cameras: [camera], timeline: busyTimeline))
     }
 
@@ -267,8 +318,8 @@ struct TimelineScreenViewModelTests {
         async let second: Void = sut.refresh()
         _ = await (first, second)
 
-        // then — one fetch for the load, one shared fetch for both refresh calls
-        #expect(timelineRepo.queriedRanges.count == 2)
+        // then — two windows for the load, one shared delta for both refresh calls
+        #expect(timelineRepo.queriedRanges.count == 3)
     }
 
     @Test func `given the playhead scrubbed into history when a refresh extends the span then the playhead stays put`() async {
@@ -772,7 +823,9 @@ private func settle(_ condition: () -> Bool) async {
     }
 }
 private let emptyTimeline = DayTimeline(markers: [], motion: [], gaps: [])
-private let busyTimeline = DayTimeline(markers: [], motion: [MotionBucket(time: at(1_000), intensity: 80)], gaps: [])
+/// Motion inside the tests' two-day span (`now` 1,000,000 − 2 days) — content outside the span
+/// would be clipped away by the window merge and the fixture would silently read as empty.
+private let busyTimeline = DayTimeline(markers: [], motion: [MotionBucket(time: at(999_000), intensity: 80)], gaps: [])
 
 @MainActor
 private func makeViewModel(

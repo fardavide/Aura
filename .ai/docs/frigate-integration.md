@@ -41,6 +41,24 @@ DTO boundary. Details: `/frigate-rest`.
 - **`MAX_PLAYLIST_SECONDS` is 7200**, so one clock hour per playlist is the safe unit.
 - Exact rules, including the invisible keyframe-snap on a head-trimmed clip: `/frigate-rest`.
 
+### Server cost of the overlay endpoints (verified against Frigate v0.17.2 source)
+- **`/api/recordings/unavailable` can freeze the whole API.** `no_recordings`
+  (`frigate/api/media.py`) is an **`async def`** — it runs on the API's event loop, not a worker
+  thread — and computes gaps with a pure-Python scan that re-walks the window's recording rows for
+  every `scale` bucket: O(buckets × rows). A 7-day window at ~300s scale is ~2000 buckets over
+  ~60k rows per camera (one row per ~10s segment) — tens of seconds of CPU during which **every**
+  API request (HA polls, the web UI, our VOD reads) hangs. Client timeouts don't help: the loop
+  never awaits, so uvicorn finishes the scan even after the client hangs up.
+- **`/api/review/activity/motion` is heavy but threaded.** A sync `def`: it loads every
+  `motion > 0` recording row in the window into a pandas frame and resamples — seconds of CPU on a
+  wide window, but it doesn't block the loop.
+- **`/api/review` is a single indexed query** (overlap clause `start_time < before AND
+  (end_time IS NULL OR end_time > after)` — in-progress items are in every window touching now)
+  with a `limit`; cheap.
+- **Contract for the client (0.5.1):** never query motion/gaps over more than ~a day; issue
+  multi-day spans as sequential day windows (newest first) so the loop breathes in between;
+  refresh only the live-edge delta. This is what the app ships; also worth filing upstream.
+
 ### Scoping the timeline overlays to one camera
 `/api/review`, `/api/review/activity/motion` and `/api/recordings/unavailable` all take a
 comma-separated `cameras=`. The client sends it only when narrowing to a camera and **omits it
