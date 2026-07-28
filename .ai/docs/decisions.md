@@ -851,3 +851,82 @@ may degrade to stepping). The transport clock is correct regardless of what the 
 Snapshot coverage adds a **playing** state (transport showing pause at 4×) to the timeline suite.
 It is deterministic because `now` is injected and frozen: `run()` measures real elapsed time, which
 is zero against a frozen clock, so the tick loop can't advance the playhead mid-capture.
+
+## Timeline detail: one camera on its own time axis (0.5.0)
+`Timeline Detail.dc.html` (Claude Design) applies to the screen a tile push opens — one camera, one
+time axis, playhead fixed at the centre. The user scoped this to the **core screen**: the mock's
+activity list, its Hour-zoom preview filmstrip and its Save-frame / Clip-export actions are
+deliberately out, and so is the `IR` badge (Frigate exposes no day/night flag; the mock fakes it with
+a CSS filter) and the discrete `1× / 2× / 4×` digital-zoom chip (the live view's `ZoomableContainer`
+gesture already covers that capability).
+
+- **Timeline reads are scoped by a `TimelineScope` enum, not an optional camera.** `allCameras` (the
+  tab) and `camera(name)` (the detail) are both named states, so no caller has to interpret a `nil`.
+  The Data layer maps the scope to a `cameras=` query on all three review endpoints and **omits the
+  param entirely** for all-cameras — `cameras=all` is only documented for `/api/events`, and omission
+  is the shape already proven in production.
+- **The detail track is centre-anchored (`TimelineViewport`), not scroll-offset (`TimelineScale`).**
+  The tab's track lives in a `ScrollView`, so its geometry is a function of a scroll offset. This one
+  has to drive an `AVPlayer` seek from a drag, which a scroll offset models badly — so the viewport is
+  a pure function of the playhead instant, the density and the measured length, and the drag is
+  *anchored* (instant at gesture start + total translation) rather than summing deltas. Both types
+  stay; they answer different questions.
+- **Scrubbing seeks within the loaded hour and defers the window swap to the release.** A drag that
+  leaves the hour would otherwise fetch a playlist per drag frame. In-hour seeks are tolerant (±0.5s,
+  cheap); the settle on release is exact. The readout follows the finger throughout.
+- **The readout keeps the instant asked for, even inside a gap.** The stream welds gaps away, so
+  reading the position back off the player would collapse a gap-side instant onto the footage that
+  actually resumes there and quietly report the wrong time. The periodic time observer therefore
+  updates the readout **only while playing** — paused, the playhead belongs to whoever positioned it.
+- **The day-overview bar is derived, not fetched.** `DayOverview` rolls the already-loaded motion
+  buckets into 24 hourly means (mean, not peak — a peak saturates on one burst). Frigate's own
+  `/api/{camera}/recordings/summary` would be a second round trip per day step for the same picture.
+  The bar's mean and the track's bars share one measured axis length so the outlined window is honest.
+- **Motion bars are drawn at the resolution of the data.** Bucket width comes from the buckets
+  themselves (the server picks the scale from the span — ~5 min over a 7-day span), not from a
+  constant. The mock's fine-grained bars are generated data; pretending to that resolution would be a
+  false claim about the footage.
+- **Three arrangements, chosen by size class exactly as `TimelineScreenView` already does.** Compact
+  height → the mock's full-bleed footage plus a 168pt vertical rail; compact width → the panel floats
+  over the bottom on glass; regular width (iPad, macOS) → the mock's hero with the panel spread wide
+  beneath it. The phone-upright case departs from the mock, which puts the panel *below* a fixed-height
+  hero with the activity list under it: without that list the layout would leave a third of the screen
+  empty, so the panel floats instead — the app's established language (the Timeline tab, the live view).
+- **The hero chrome renders against a forced dark color scheme.** The hero is a dark surface whatever
+  the app's appearance — the footage is, and so is the black it falls back to — so resolving
+  `primary`/`secondary`/`thinMaterial` against dark is what keeps the badges and the no-footage state
+  legible in a light-mode app.
+
+`RecordingControlBar` / `RecordingControlState` / `RecordingPlayerLayout` are superseded by
+`RecordingTransportBar` / `RecordingDetailState` + `RecordingDetailActions` / `RecordingDetailLayout`.
+The screenshot suite grew from 3 states to 5 and covers all three arrangements through the existing
+device matrix; baselines were re-recorded locally and inspected.
+
+## Screenshot tolerance: widen the per-pixel threshold, keep the area budget (0.5.0)
+The recording-player suite went red on CI while passing locally. Chasing it produced two wrong
+answers before the right one, both worth recording so the next person doesn't repeat them.
+
+**Wrong answer 1 — "the renders differ".** They don't, much. The CI captures match the committed
+baselines to 9 pixels out of 2.96M (iPhone portrait) and 11 of 8.96M (iPad landscape), worst channel
+delta 1/255. Note the baselines are **16-bit Display P3**: `sips`, BMP conversion and every other
+8-bit tool silently truncate them and will report a pair as identical when it isn't. Decode at 16
+bits or don't bother.
+
+**Wrong answer 2 — "so drop the perceptual comparator".** `perceptualPrecision < 1` does route
+`compare` through Core Image with colour management disabled, and the library's own source warns that
+virtualized hardware without a GPU "falls back to a CPU-based OpenGL ES renderer that silently fails
+when a Metal command is issued" — every GitHub-hosted runner. But switching to the byte branch
+(`perceptualPrecision = 1`) fails **locally**: re-rendering an iPad frame redraws ~26% of it — the
+whole Liquid-Glass panel — by 1–15/255, while the text and shapes drawn *on* the glass stay stable.
+Glass is genuinely not deterministic, which is exactly why the perceptual tolerance was there.
+
+**The fix** is to spend the tolerance on the right axis. `perceptualPrecision` sets the per-pixel ΔE
+threshold ((1 - value) × 100); `precision` is the fraction of pixels allowed to exceed it. The glass
+drift is a per-pixel problem, so the threshold moves — 0.95 → **0.87**, i.e. ΔE 5 → 13, clearing both
+the local drift and the ~10.1 worst pixel the GPU-less runner scored. The area budget `precision`
+stays at **0.98**: that is the real gate, and a moved control, a wrong colour or dropped text exceeds
+ΔE 13 across far more than 2% of a frame. No baselines were re-recorded.
+
+The cost, stated plainly: a regression that shifts colour by less than ΔE 13 without moving anything
+is now invisible. Glass forces that trade — the alternative is a gate whose verdict depends on
+whether the machine running it has a GPU.

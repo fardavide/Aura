@@ -170,6 +170,17 @@ at the PNG. If a styling modifier makes no difference, delete it: `.tint()` on a
 is a **no-op** (the selection indicator is not tinted by it) — proven by an A/B of the recorded
 image, byte-identical with and without. A modifier that does nothing is a false claim about the UI.
 
+**Finishing UI work means showing the screens, not describing them.** Whenever a change touches the
+UI, end the turn by showing the user **three** rendered screens: **iPhone portrait, iPhone landscape,
+iPad**. They are the three compositions every screen has to survive, and the snapshot baselines
+already contain them — never ask the user to run anything to see their own work.
+
+**Publish them as an Artifact page, not as raw image files.** The user reads on mobile, where loose
+PNGs often can't be opened. Downscale the baselines (`sips -Z <width> -s format jpeg`), inline them
+as data URIs, and publish one page. Two things that page must do: swap between the light and dark
+baselines with the viewer's theme (the app ships both, so show both), and say which parts are
+placeholder — a black rect where video would be — so nothing reads as broken.
+
 ## Documentation
 
 Don't add comments that restate the code — a well-named declaration needs none. A

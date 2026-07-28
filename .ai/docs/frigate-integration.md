@@ -41,6 +41,15 @@ DTO boundary. Details: `/frigate-rest`.
 - **`MAX_PLAYLIST_SECONDS` is 7200**, so one clock hour per playlist is the safe unit.
 - Exact rules, including the invisible keyframe-snap on a head-trimmed clip: `/frigate-rest`.
 
+### Scoping the timeline overlays to one camera
+`/api/review`, `/api/review/activity/motion` and `/api/recordings/unavailable` all take a
+comma-separated `cameras=`. The client sends it only when narrowing to a camera and **omits it
+entirely** for all cameras — the `cameras=all` sentinel is documented for `/api/events` but not for
+these three, and omission is the shape already running in production. The motion `scale` (bucket
+seconds) is still derived from the span, so a 7-day window comes back at roughly five-minute
+resolution whatever the scope; the detail track draws its bars at that width rather than
+interpolating a finer one.
+
 ### Cameras grid v2 findings (verified against Frigate v0.17.2 source)
 - **`camera_groups`** is a top-level object in `/api/config`, keyed by group name →
   `{ cameras, icon, order }`. ⚠️ `cameras` is `Union[str, list[str]]`: the web UI writes a

@@ -336,6 +336,298 @@ struct RecordingPlayerViewModelTests {
         #expect(sut.isPlaying)
     }
 
+    // MARK: - The day timeline
+
+    @Test func `given a camera when loading then its own overlays are fetched over the span`() async {
+        // given
+        let overlays = FakeCameraDayTimelineRepository(.success(activity))
+        let sut = makeViewModel(segments: fullHour(from: 3600), overlays: overlays)
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then — scoped to this camera, not the whole deployment
+        #expect(overlays.queriedScopes == [.camera(CameraName("driveway"))])
+        #expect(overlays.queriedRanges == [TimeRange(start: at(7300 - 2 * 86_400), end: now)])
+        #expect(sut.dayTimeline == activity)
+    }
+
+    @Test func `given the overlays fail when loading then the recording still plays`() async {
+        // given
+        let sut = makeViewModel(
+            segments: fullHour(from: 3600),
+            overlays: FakeCameraDayTimelineRepository(.failure(.serverUnavailable))
+        )
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then — the timeline panel degrades to empty rather than failing the screen
+        #expect(isReady(sut.display))
+        #expect(sut.dayTimeline == DayTimeline(markers: [], motion: [], gaps: []))
+    }
+
+    @Test func `when refreshing then the span is extended to the present and the overlays re-read`() async {
+        // given
+        let clock = Clock(now)
+        let overlays = FakeCameraDayTimelineRepository(.success(activity))
+        let sut = makeViewModel(segments: fullHour(from: 3600), overlays: overlays, clock: clock)
+        await sut.loadIfNeeded()
+
+        // when
+        clock.instant = at(10_000)
+        await sut.refreshOverlays()
+
+        // then — the start is fixed for the screen's life; only the live edge grows
+        #expect(sut.span == TimeRange(start: at(7300 - 2 * 86_400), end: at(10_000)))
+        #expect(overlays.queriedRanges.count == 2)
+    }
+
+    @Test func `given a failing refresh then the last good overlays are kept`() async {
+        // given
+        let overlays = FakeCameraDayTimelineRepository(.success(activity))
+        let sut = makeViewModel(segments: fullHour(from: 3600), overlays: overlays)
+        await sut.loadIfNeeded()
+
+        // when
+        overlays.result = .failure(.unreachable)
+        await sut.refreshOverlays()
+
+        // then
+        #expect(sut.dayTimeline == activity)
+    }
+
+    // MARK: - Zoom
+
+    @Test func `given the default zoom when selecting another then it is applied`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+
+        // when
+        sut.select(TimelineZoom.week)
+
+        // then
+        #expect(sut.zoom == .week)
+    }
+
+    // MARK: - Seeking
+
+    @Test func `given an instant inside the loaded window when seeking then it moves without refetching`() async {
+        // given
+        let repository = FakeCameraRecordingsRepository(.success(fullHour(from: 3600)))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.seek(to: at(6000))
+
+        // then
+        #expect(sut.instant == at(6000))
+        #expect(repository.fetchCount == 1)
+    }
+
+    @Test func `given an instant in another hour when seeking then that window is loaded`() async {
+        // given
+        let repository = FakeCameraRecordingsRepository(.success(twoHours))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.seek(to: at(7250))
+
+        // then
+        #expect(repository.lastWindow == TimeRange(start: at(7200), end: at(10_800)))
+        #expect(sut.instant == at(7250))
+    }
+
+    @Test func `given an instant outside the span when seeking then it is clamped to it`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.seek(to: at(999_999))
+
+        // then
+        #expect(sut.instant == now)
+    }
+
+    // The readout must say where the playhead actually is, so the hero can report the gap — the
+    // stream collapses gaps away, so reading the instant back off the player would hide it.
+    @Test func `given a gap when seeking into it then the readout holds the instant and reports no footage`() async {
+        // given — footage only in the first five minutes of the hour
+        let sut = makeViewModel(segments: [segment(from: 3600, to: 3900)], startingAt: at(3700))
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.seek(to: at(5000))
+
+        // then
+        #expect(sut.instant == at(5000))
+        #expect(!sut.hasFootage)
+    }
+
+    // MARK: - Scrubbing the track
+
+    @Test func `given a drag when scrubbing then the readout follows without loading a window`() async {
+        // given
+        let repository = FakeCameraRecordingsRepository(.success(twoHours))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+
+        // when — a drag that runs into the next hour
+        sut.scrub(to: at(6000))
+        sut.scrub(to: at(7250))
+
+        // then — the fetch waits for the finger to lift
+        #expect(sut.instant == at(7250))
+        #expect(repository.fetchCount == 1)
+    }
+
+    @Test func `given a drag past the live edge when scrubbing then it is clamped to the span`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+        await sut.loadIfNeeded()
+
+        // when
+        sut.scrub(to: at(999_999))
+
+        // then
+        #expect(sut.instant == now)
+    }
+
+    @Test func `when the drag ends then the window under the playhead is loaded`() async {
+        // given
+        let repository = FakeCameraRecordingsRepository(.success(twoHours))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+        sut.scrub(to: at(7250))
+
+        // when
+        await sut.endScrub()
+
+        // then
+        #expect(repository.lastWindow == TimeRange(start: at(7200), end: at(10_800)))
+        #expect(sut.instant == at(7250))
+    }
+
+    @Test func `given a playing recording when a drag starts then it pauses`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+        await sut.loadIfNeeded()
+
+        // when
+        sut.beginScrub()
+
+        // then — the drag and the transport would otherwise both drive the playhead
+        #expect(!sut.isPlaying)
+    }
+
+    // MARK: - Jumping
+
+    @Test func `given markers when jumping forward then the playhead lands on the next marker's start`() async {
+        // given
+        let sut = makeViewModel(
+            segments: fullHour(from: 3600),
+            overlays: FakeCameraDayTimelineRepository(.success(activity)),
+            startingAt: at(4000)
+        )
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.jumpToNextMarker()
+
+        // then
+        #expect(sut.instant == at(5000))
+    }
+
+    @Test func `given markers when jumping back then the playhead lands on the previous marker's start`() async {
+        // given
+        let sut = makeViewModel(
+            segments: fullHour(from: 3600),
+            overlays: FakeCameraDayTimelineRepository(.success(activity)),
+            startingAt: at(5500)
+        )
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.jumpToPreviousMarker()
+
+        // then
+        #expect(sut.instant == at(5000))
+    }
+
+    @Test func `given no marker in that direction when jumping then the playhead stays put`() async {
+        // given
+        let sut = makeViewModel(
+            segments: fullHour(from: 3600),
+            overlays: FakeCameraDayTimelineRepository(.success(activity)),
+            startingAt: at(3700)
+        )
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.jumpToPreviousMarker()
+
+        // then
+        #expect(sut.instant == at(3700))
+    }
+
+    @Test func `given an instant inside a marker then it is the active one`() async {
+        // given
+        let sut = makeViewModel(
+            segments: fullHour(from: 3600),
+            overlays: FakeCameraDayTimelineRepository(.success(activity)),
+            startingAt: at(5010)
+        )
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.activeMarker?.severity == .alert)
+    }
+
+    // MARK: - Day stepping and the live edge
+
+    @Test func `when stepping back a day then the playhead moves a day earlier`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600), startingAt: at(90_000))
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.stepDay(by: -1)
+
+        // then
+        #expect(sut.instant == at(90_000 - 86_400))
+    }
+
+    @Test func `given the live edge when stepping forward a day then the playhead clamps to it`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600), startingAt: at(5000))
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.stepDay(by: 1)
+
+        // then
+        #expect(sut.instant == now)
+    }
+
+    @Test func `given a playhead in the past when going live then it jumps to the newest footage`() async {
+        // given
+        let sut = makeViewModel(segments: twoHours, startingAt: at(5000))
+        await sut.loadIfNeeded()
+        #expect(!sut.state.isLive)
+
+        // when
+        await sut.goLive()
+
+        // then
+        #expect(sut.instant == now)
+        #expect(sut.state.isLive)
+    }
+
     // Driven by a *moving* clock: the in-progress hour grows while it plays, and the live-edge
     // check has to read "no later hour exists yet" rather than "the window looks different now" —
     // otherwise the end of the stream reloads the same hour and rewinds to the top of it.
@@ -395,26 +687,51 @@ private func fullHour(from start: TimeInterval) -> [RecordingSegment] {
 /// something to play on the other side.
 private let twoHours = fullHour(from: 3600) + fullHour(from: 7200)
 
+/// Two markers on the loaded hour — one alert, one detection — plus a little motion, so the jump
+/// buttons and the active-marker badge have something to find.
+private let activity = DayTimeline(
+    markers: [
+        ReviewMarker(start: at(3800), end: at(3860), severity: .detection),
+        ReviewMarker(start: at(5000), end: at(5060), severity: .alert),
+    ],
+    motion: [MotionBucket(time: at(3800), intensity: 40)],
+    gaps: []
+)
+
 @MainActor
 private func makeViewModel(
     repository: FakeCameraRecordingsRepository,
+    overlays: FakeCameraDayTimelineRepository = FakeCameraDayTimelineRepository(
+        .success(DayTimeline(markers: [], motion: [], gaps: []))
+    ),
     startingAt instant: Date = at(5000),
     clock: Clock? = nil
 ) -> RecordingPlayerViewModel {
     RecordingPlayerViewModel(
         camera: camera,
         recordings: GetCameraRecordings(repository: repository),
+        getDayTimeline: GetDayTimeline(repository: overlays),
         now: { clock?.instant ?? now },
-        startingAt: instant
+        startingAt: instant,
+        days: 2
     )
 }
 
 @MainActor
 private func makeViewModel(
     segments: [RecordingSegment],
-    startingAt instant: Date = at(5000)
+    overlays: FakeCameraDayTimelineRepository = FakeCameraDayTimelineRepository(
+        .success(DayTimeline(markers: [], motion: [], gaps: []))
+    ),
+    startingAt instant: Date = at(5000),
+    clock: Clock? = nil
 ) -> RecordingPlayerViewModel {
-    makeViewModel(repository: FakeCameraRecordingsRepository(.success(segments)), startingAt: instant)
+    makeViewModel(
+        repository: FakeCameraRecordingsRepository(.success(segments)),
+        overlays: overlays,
+        startingAt: instant,
+        clock: clock
+    )
 }
 
 private func isReady(_ display: RecordingPlayerViewModel.Display) -> Bool {

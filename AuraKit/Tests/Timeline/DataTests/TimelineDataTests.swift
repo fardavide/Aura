@@ -126,7 +126,7 @@ struct FrigateCameraDayTimelineRepositoryTests {
             ("api/review", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
-        let timeline = try await sut.dayTimeline(in: window)
+        let timeline = try await sut.dayTimeline(for: .allCameras, in: window)
 
         #expect(timeline.markers.count == 2)
         #expect(timeline.motion.count == 3)
@@ -143,9 +143,26 @@ struct FrigateCameraDayTimelineRepositoryTests {
             ("limit=1000", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
-        let timeline = try await sut.dayTimeline(in: window)
+        let timeline = try await sut.dayTimeline(for: .allCameras, in: window)
 
         #expect(timeline.markers.count == 2)
+    }
+
+    // The review body is served only to a camera-scoped query; an unscoped one falls through to the
+    // motion body, which decodes no markers — so the assertion pins the scope without racing the
+    // three concurrent fetches for a single lastRequest.
+    @Test func `given one camera when fetching the day then every overlay query is scoped to it`() async throws {
+        let sut = FrigateCameraDayTimelineRepository(config: .test, httpClient: FakeHttpClient(routes: [
+            ("activity/motion?cameras=driveway", .response(status: 200, body: Data(motionJson.utf8))),
+            ("unavailable?cameras=driveway", .response(status: 200, body: Data(gapsJson.utf8))),
+            ("api/review?cameras=driveway", .response(status: 200, body: Data(reviewJson.utf8))),
+        ]))
+
+        let timeline = try await sut.dayTimeline(for: .camera(CameraName("driveway")), in: window)
+
+        #expect(timeline.markers.count == 2)
+        #expect(timeline.motion.count == 3)
+        #expect(timeline.gaps.count == 1)
     }
 
     @Test func `given a failing overlay endpoint when fetching the day then that overlay degrades to empty`() async throws {
@@ -155,7 +172,7 @@ struct FrigateCameraDayTimelineRepositoryTests {
             ("api/review", .response(status: 200, body: Data(reviewJson.utf8))),
         ]))
 
-        let timeline = try await sut.dayTimeline(in: window)
+        let timeline = try await sut.dayTimeline(for: .allCameras, in: window)
 
         #expect(timeline.markers.count == 2)
         #expect(timeline.motion.count == 3)

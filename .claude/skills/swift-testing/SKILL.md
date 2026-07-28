@@ -161,7 +161,10 @@ never `Package.swift`, so the app stays dependency-free).
   the load idempotent so the view's `.task` doesn't reset it. Force data-dependent tiles/players into a
   stable placeholder — live video never renders in a snapshot.
 - **Capture across the device matrix** (iPhone + iPad, both orientations) × light + dark on the
-  simulator; use a perceptual-precision tolerance (glass isn't pixel-identical across OS versions). **macOS is excluded** —
+  simulator. Spend the tolerance on the right axis: **`perceptualPrecision` is the per-pixel ΔE threshold**
+  and must clear Liquid Glass's run-to-run drift (it re-draws a whole panel by 1–15/255) *and* the higher
+  ΔE a GPU-less CI runner scores; **`precision` is the area budget** and is the real gate — keep it tight.
+  Never set `perceptualPrecision` to 1: byte comparison cannot survive glass. **macOS is excluded** —
   AppKit's offscreen `cacheDisplay` can't capture glass/materials/`ContentUnavailableView` (renders
   light/blank), so faithful macOS snapshots aren't achievable; don't retry without a different renderer.
 - **Recording baselines:** delete the stale reference and run the suite — the first run writes the

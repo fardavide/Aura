@@ -145,8 +145,23 @@
   hour with footage. **Reverses** the 0.3.13 "the grid keeps its previews" decision — see
   `decisions.md` and `.ai/plan/no-ticket_timeline-transport-fullres/`.
 
-Package logic is covered by Swift Testing (382 tests). All four main screens — **Timeline**
-(ready busy / gappy / quiet / **playing**, empty, failed), the **Cameras grid**, the **Events list**, and
+- **Slice 8 — Timeline detail, one camera on its own axis (0.5.0).** The screen a tile push opens
+  was rebuilt to `Timeline Detail.dc.html`: the footage with a Liquid-Glass panel carrying a
+  **24-hour day-overview bar** (hourly motion rollup, alert ticks, hatched gaps + future, the
+  outlined slice the track is showing — drag it to jump), a **centre-anchored scrub track** (motion
+  from the baseline, an alert/detection marker lane, hatched gaps, day dividers, a dashed live edge,
+  a fixed playhead — drag it to scrub), a **ruler**, an Hour/Day/Week zoom, a day stepper, and a
+  transport extended with **jump to previous / next activity** and a **Live** chip. The timeline
+  reads are now **scoped to the camera** (`TimelineScope`; `cameras=` on review / motion / gaps).
+  Three arrangements by size class: panel floating over the footage (phone upright), a **168pt
+  vertical rail** (phone on its side, the mock's full-bleed layout), and the mock's hero-plus-wide-
+  panel (iPad, macOS). The mock's **activity list, preview filmstrip and Save-frame / Clip-export
+  are deliberately out of scope**, as are the `IR` badge and the discrete digital-zoom chip — see
+  `decisions.md`.
+
+Package logic is covered by Swift Testing (434 tests). All four main screens — **Timeline**
+(ready busy / gappy / quiet / **playing**, empty, failed), the **Timeline detail** (playing, paused
+at 8×, week zoom, no footage, live), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
 iPhone + iPad (portrait + landscape) × light + dark on the simulator.

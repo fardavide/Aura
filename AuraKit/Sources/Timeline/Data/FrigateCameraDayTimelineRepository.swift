@@ -17,19 +17,26 @@ public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
         api = FrigateApiClient(config: config, httpClient: httpClient)
     }
 
-    public func dayTimeline(in range: TimeRange) async throws(TimelineError) -> DayTimeline {
+    public func dayTimeline(for scope: TimelineScope, in range: TimeRange) async throws(TimelineError) -> DayTimeline {
         let base = config.baseUrl
+        let cameras = scope.cameraNames.map(\.value)
         let after = range.start.timeIntervalSince1970
         let before = Swift.min(range.end.timeIntervalSince1970, Date().timeIntervalSince1970)
         // Coarser buckets for wider spans so the motion strip stays light (~2000 points max).
         let scale = Swift.max(60, Int((before - after) / 2000))
 
         async let markers = fetch(
-            FrigateReviewUrl.review(base: base, after: after, before: before, limit: reviewMarkerLimit),
+            FrigateReviewUrl.review(base: base, cameras: cameras, after: after, before: before, limit: reviewMarkerLimit),
             as: ReviewMarkerDto.self
         )
-        async let motion = fetch(FrigateReviewUrl.motionActivity(base: base, after: after, before: before, scale: scale), as: MotionActivityDto.self)
-        async let gaps = fetch(FrigateReviewUrl.recordingsUnavailable(base: base, after: after, before: before, scale: scale), as: RecordingGapDto.self)
+        async let motion = fetch(
+            FrigateReviewUrl.motionActivity(base: base, cameras: cameras, after: after, before: before, scale: scale),
+            as: MotionActivityDto.self
+        )
+        async let gaps = fetch(
+            FrigateReviewUrl.recordingsUnavailable(base: base, cameras: cameras, after: after, before: before, scale: scale),
+            as: RecordingGapDto.self
+        )
 
         return DayTimeline(
             markers: await markers.toMarkers(),

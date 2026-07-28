@@ -91,18 +91,33 @@ struct FrigateUrlTests {
         )
     }
 
-    @Test func `when building review timeline urls then they target review and recordings`() {
+    @Test func `given no cameras when building review timeline urls then they are unscoped`() {
         #expect(
-            FrigateReviewUrl.review(base: base, after: 100, before: 200, limit: 300)
+            FrigateReviewUrl.review(base: base, cameras: [], after: 100, before: 200, limit: 300)
                 == URL(string: "http://frigate.local:5000/api/review?after=100&before=200&limit=300")!
         )
         #expect(
-            FrigateReviewUrl.motionActivity(base: base, after: 100, before: 200, scale: 30)
+            FrigateReviewUrl.motionActivity(base: base, cameras: [], after: 100, before: 200, scale: 30)
                 == URL(string: "http://frigate.local:5000/api/review/activity/motion?after=100&before=200&scale=30")!
         )
         #expect(
-            FrigateReviewUrl.recordingsUnavailable(base: base, after: 100, before: 200, scale: 30)
+            FrigateReviewUrl.recordingsUnavailable(base: base, cameras: [], after: 100, before: 200, scale: 30)
                 == URL(string: "http://frigate.local:5000/api/recordings/unavailable?after=100&before=200&scale=30")!
+        )
+    }
+
+    @Test func `given cameras when building review timeline urls then each is scoped to them`() {
+        #expect(
+            FrigateReviewUrl.review(base: base, cameras: ["driveway", "yard"], after: 100, before: 200, limit: 300)
+                == URL(string: "http://frigate.local:5000/api/review?cameras=driveway,yard&after=100&before=200&limit=300")!
+        )
+        #expect(
+            FrigateReviewUrl.motionActivity(base: base, cameras: ["driveway"], after: 100, before: 200, scale: 30)
+                == URL(string: "http://frigate.local:5000/api/review/activity/motion?cameras=driveway&after=100&before=200&scale=30")!
+        )
+        #expect(
+            FrigateReviewUrl.recordingsUnavailable(base: base, cameras: ["driveway"], after: 100, before: 200, scale: 30)
+                == URL(string: "http://frigate.local:5000/api/recordings/unavailable?cameras=driveway&after=100&before=200&scale=30")!
         )
     }
 

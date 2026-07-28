@@ -23,6 +23,7 @@ public struct FrigateCameraActivityRepository: CameraActivityRepository {
         let after = before.addingTimeInterval(-activityWindow)
         let data = try await get(FrigateReviewUrl.review(
             base: config.baseUrl,
+            cameras: [],
             after: after.timeIntervalSince1970,
             before: before.timeIntervalSince1970,
             limit: activityLimit
