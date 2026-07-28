@@ -72,7 +72,7 @@ public final class TimelineScreenViewModel {
         }
 
         do {
-            let timeline = try await getDayTimeline.execute(in: span)
+            let timeline = try await getDayTimeline.execute(for: .allCameras, in:span)
             state = .ready(cameras: latestCameras, timeline: timeline)
             transport.update(gaps: timeline.gaps, span: span)
         } catch {
@@ -143,7 +143,7 @@ public final class TimelineScreenViewModel {
         }
 
         do {
-            let timeline = try await getDayTimeline.execute(in: extended)
+            let timeline = try await getDayTimeline.execute(for: .allCameras, in:extended)
             span = extended
             // latestCameras, not a pre-fetch snapshot: an order change that landed while
             // the timeline fetch was in flight must survive this write.

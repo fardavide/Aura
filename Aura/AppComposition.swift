@@ -22,6 +22,9 @@ import TimelinePresentation
 final class AppComposition {
     private let settingsRepository: any SettingsRepository
     private let httpClient: any HttpClient
+    /// How much history the Timeline scrolls over — the same on the tab and on one camera's
+    /// detail, so a tile tapped at some instant opens onto the axis it was scrubbed on.
+    private let timelineSpanDays = 7
 
     init() {
         settingsRepository = DefaultSettingsRepository(
@@ -130,7 +133,7 @@ final class AppComposition {
                 repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),
             now: { Date() },
-            days: 7
+            days: timelineSpanDays
         )
     }
 
@@ -153,16 +156,20 @@ final class AppComposition {
         at instant: Date,
         connection: ConnectionSettings
     ) -> RecordingPlayerViewModel {
-        RecordingPlayerViewModel(
+        let config = serverConfig(from: connection)
+        return RecordingPlayerViewModel(
             camera: camera,
             recordings: GetCameraRecordings(
-                repository: FrigateCameraRecordingsRepository(
-                    config: serverConfig(from: connection),
-                    httpClient: httpClient
-                )
+                repository: FrigateCameraRecordingsRepository(config: config, httpClient: httpClient)
+            ),
+            // Scoped to this camera, unlike the tab's all-camera read — the detail timeline shows
+            // one camera's activity, not the deployment's.
+            getDayTimeline: GetDayTimeline(
+                repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),
             now: { Date() },
-            startingAt: instant
+            startingAt: instant,
+            days: timelineSpanDays
         )
     }
 

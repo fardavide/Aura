@@ -10,8 +10,9 @@ single-user companion app and portfolio piece.
 - **Timeline** — a synced multi-camera scrub view: preview tiles over a single continuous
   scrollable timeline with an activity histogram (Liquid Glass), Hour/Day/Week zoom, and a
   30-second live-edge auto-refresh. Play/pause and 1–8× run every camera's full-resolution
-  recording forward together; tap a tile for that camera alone. iPhone landscape gets a dedicated
-  side-by-side layout.
+  recording forward together. Tap a tile for **that camera on its own time axis**: a day-overview
+  bar, a scrubbable activity track with a fixed centre playhead, Hour/Day/Week zoom, and a transport
+  that jumps between activity. iPhone landscape gets a dedicated side-by-side layout throughout.
 - **Events** — detection event list (thumbnail, label, camera, time) with recorded-clip playback.
 - **Settings** — Frigate server connection (password in Keychain), theme, and camera ordering.
 
@@ -41,6 +42,22 @@ portrait/landscape × light/dark) in code, so a single simulator run covers all 
 CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
+
+### 0.5.0 — 2026-07-28
+- **One camera, one time axis.** Tapping a camera in the Timeline now opens a proper timeline of its
+  own: the footage with a Liquid-Glass panel against it carrying a 24-hour overview of the day, a
+  scrubbable activity track with the playhead fixed at the centre, and a ruler under it.
+- The track shows **that camera's** activity rather than the whole system's — motion rising from the
+  baseline, alerts and detections in a lane above it, stretches with nothing recorded hatched, a
+  divider at each midnight and a dashed line at the live edge.
+- **Drag the track to scrub**, or drag the day bar to jump to any time of day. Step a whole day
+  either way with the arrows beside the date, and switch the track between Hour, Day and Week.
+- The transport gained **jump to the previous / next activity** and a **Live** chip that goes red
+  once you are parked at the newest footage.
+- Scrubbing into a stretch with no recording says so on the picture instead of leaving the last
+  frame up, and the readout keeps the time you actually asked for.
+- Adapts per device: the panel floats over the footage on a phone held upright, becomes a rail down
+  the side when you turn it, and spreads out beside the picture on iPad and Mac.
 
 ### 0.4.0 — 2026-07-27
 - **The Timeline plays.** The scrubber card now carries a transport — play/pause, ten seconds

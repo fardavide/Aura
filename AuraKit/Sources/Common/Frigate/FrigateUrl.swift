@@ -63,37 +63,47 @@ public enum FrigateLiveUrl {
 }
 
 /// Builders for the day-timeline overlays. `after`/`before` are Unix epoch seconds — the Data
-/// layer converts its `Date`s at the boundary. `cameras` defaults to all cameras server-side.
+/// layer converts its `Date`s at the boundary.
+///
+/// An **empty** `cameras` omits the param entirely, which is how the server means "all cameras".
+/// The `cameras=all` sentinel is only documented for `/api/events`, so it is never sent here.
 public enum FrigateReviewUrl {
 
     /// Activity markers (alerts + detections) in the window. `limit` is required because the
     /// server answers an unbounded query with every review item in the window — on an
     /// event-dense deployment that payload gates first paint. Frigate orders severity asc then
     /// start_time desc, so truncation keeps all alerts before the oldest detections drop.
-    public static func review(base: URL, after: Double, before: Double, limit: Int) -> URL {
+    public static func review(base: URL, cameras: [String], after: Double, before: Double, limit: Int) -> URL {
         makeUrl(
             base: base,
             path: "api/review",
-            queryItems: window(after: after, before: before) + [URLQueryItem(name: "limit", value: String(limit))]
+            queryItems: scope(cameras) + window(after: after, before: before)
+                + [URLQueryItem(name: "limit", value: String(limit))]
         )
     }
 
     /// Normalized motion-intensity buckets for the activity strip.
-    public static func motionActivity(base: URL, after: Double, before: Double, scale: Int) -> URL {
+    public static func motionActivity(base: URL, cameras: [String], after: Double, before: Double, scale: Int) -> URL {
         makeUrl(
             base: base,
             path: "api/review/activity/motion",
-            queryItems: window(after: after, before: before) + [URLQueryItem(name: "scale", value: String(scale))]
+            queryItems: scope(cameras) + window(after: after, before: before)
+                + [URLQueryItem(name: "scale", value: String(scale))]
         )
     }
 
     /// The spans that have no recording (drawn as gaps).
-    public static func recordingsUnavailable(base: URL, after: Double, before: Double, scale: Int) -> URL {
+    public static func recordingsUnavailable(base: URL, cameras: [String], after: Double, before: Double, scale: Int) -> URL {
         makeUrl(
             base: base,
             path: "api/recordings/unavailable",
-            queryItems: window(after: after, before: before) + [URLQueryItem(name: "scale", value: String(scale))]
+            queryItems: scope(cameras) + window(after: after, before: before)
+                + [URLQueryItem(name: "scale", value: String(scale))]
         )
+    }
+
+    private static func scope(_ cameras: [String]) -> [URLQueryItem] {
+        cameras.isEmpty ? [] : [URLQueryItem(name: "cameras", value: cameras.joined(separator: ","))]
     }
 
     private static func window(after: Double, before: Double) -> [URLQueryItem] {

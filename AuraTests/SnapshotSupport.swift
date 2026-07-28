@@ -46,7 +46,7 @@ func snapshotActivity() -> [CameraActivity] {
     ]
 }
 
-private let snapshotSpanStart = Date(timeIntervalSince1970: 1_000_000 - Double(2 * 86_400))
+let snapshotSpanStart = Date(timeIntervalSince1970: 1_000_000 - Double(2 * 86_400))
 
 /// A busy day: a swelling motion profile with night lulls, alert/detection markers (one still
 /// in progress), and a footage gap.
@@ -149,8 +149,12 @@ func timelineScreen(
             RecordingPlayerViewModel(
                 camera: camera,
                 recordings: GetCameraRecordings(repository: FakeCameraRecordingsRepository(.success([]))),
+                getDayTimeline: GetDayTimeline(
+                    repository: FakeCameraDayTimelineRepository(.success(quietTimelineFixture()))
+                ),
                 now: { snapshotNow },
-                startingAt: instant
+                startingAt: instant,
+                days: snapshotDays
             )
         }
     )

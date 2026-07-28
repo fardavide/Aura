@@ -3,7 +3,7 @@ import Foundation
 /// The named densities the timeline is drawn at — the zoom pill cycles through these, and the
 /// pinch zooms continuously between the extremes. The same scale drives both axes so the bar
 /// spacing reads identically whether the card is horizontal or vertical.
-enum TimelineZoom: CaseIterable {
+public enum TimelineZoom: CaseIterable, Sendable {
     case hour, day, week
 
     var pointsPerHour: CGFloat {
@@ -14,7 +14,7 @@ enum TimelineZoom: CaseIterable {
         }
     }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .hour: "Hour"
         case .day: "Day"
@@ -22,7 +22,7 @@ enum TimelineZoom: CaseIterable {
         }
     }
 
-    var icon: String {
+    public var icon: String {
         switch self {
         case .hour: "clock"
         case .day: "sun.max"

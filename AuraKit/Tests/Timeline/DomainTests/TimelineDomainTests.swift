@@ -67,12 +67,34 @@ struct GetDayTimelineTests {
     @Test func `given a repository when executing then it returns the day timeline`() async throws {
         let timeline = DayTimeline(markers: [], motion: [], gaps: [])
         let sut = GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(timeline)))
-        #expect(try await sut.execute(in: window) == timeline)
+        #expect(try await sut.execute(for: .allCameras, in: window) == timeline)
     }
 
     @Test func `given a failing repository when executing then it propagates the error`() async {
         let sut = GetDayTimeline(repository: FakeCameraDayTimelineRepository(.failure(.serverUnavailable)))
-        await #expect(throws: TimelineError.serverUnavailable) { try await sut.execute(in: window) }
+        await #expect(throws: TimelineError.serverUnavailable) {
+            try await sut.execute(for: .allCameras, in: window)
+        }
+    }
+
+    @Test func `given one camera when executing then the repository is asked for that scope`() async throws {
+        let repository = FakeCameraDayTimelineRepository(.success(DayTimeline(markers: [], motion: [], gaps: [])))
+        let sut = GetDayTimeline(repository: repository)
+
+        _ = try await sut.execute(for: .camera(CameraName("driveway")), in: window)
+
+        #expect(repository.queriedScopes == [.camera(CameraName("driveway"))])
+    }
+}
+
+struct TimelineScopeTests {
+
+    @Test func `given all cameras then it names none`() {
+        #expect(TimelineScope.allCameras.cameraNames.isEmpty)
+    }
+
+    @Test func `given one camera then it names that camera`() {
+        #expect(TimelineScope.camera(CameraName("driveway")).cameraNames == [CameraName("driveway")])
     }
 }
 
