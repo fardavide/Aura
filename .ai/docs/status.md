@@ -170,8 +170,7 @@
   live edge** like the tab's; the tab paints its grid before the overlays; and a walk cut short by
   an unreachable server resumes on a later refresh. See `decisions.md` and `frigate-integration.md`.
 
-Package logic is covered by Swift Testing (453 tests as of 0.5.1 — count unverified in the 0.5.1
-container, confirm on the next local/CI run). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (455 tests as of 0.5.1, per CI). All four main screens — **Timeline**
 (ready busy / gappy / quiet / **playing**, empty, failed), the **Timeline detail** (playing, paused
 at 8×, week zoom, no footage, live), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered

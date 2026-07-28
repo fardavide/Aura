@@ -136,9 +136,11 @@ struct TimelineScreenViewModelTests {
         // when
         await sut.refresh()
 
-        // then — only the stretch since the last read is re-queried, one bucket back for the seam
+        // then — only the stretch since the last read is re-queried: one bucket (86s) plus a
+        // segment (60s) back from the *previous* live edge, so a long gap between ticks can
+        // never leave a hole
         #expect(sut.span.end == at(1_000_030))
-        #expect(timelineRepo.queriedRanges.last == TimeRange(start: at(999_884), end: at(1_000_030)))
+        #expect(timelineRepo.queriedRanges.last == TimeRange(start: at(999_854), end: at(1_000_030)))
         #expect(sut.span.start == at(1_000_000 - 2 * 86_400))
     }
 
@@ -165,9 +167,10 @@ struct TimelineScreenViewModelTests {
         // when
         await sut.refresh()
 
-        // then — the live-edge delta lands first, then the missing day is fetched
+        // then — the live-edge delta (anchored one bucket + a segment behind the previous edge)
+        // lands first, then the missing day is fetched
         #expect(Array(timelineRepo.queriedRanges.dropFirst(2)) == [
-            TimeRange(start: at(999_884), end: at(1_000_030)),
+            TimeRange(start: at(999_854), end: at(1_000_030)),
             TimeRange(start: at(827_200), end: at(913_600)),
         ])
     }
