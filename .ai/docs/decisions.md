@@ -930,3 +930,52 @@ stays at **0.98**: that is the real gate, and a moved control, a wrong colour or
 The cost, stated plainly: a regression that shifts colour by less than ΔE 13 without moving anything
 is now invisible. Glass forces that trade — the alternative is a gate whose verdict depends on
 whether the machine running it has a GPU.
+
+## Timeline overlays: day-sized sequential windows + live-edge delta refresh (0.5.1)
+Field report: opening the Timeline took the user's Frigate server down for a while — the web UI
+"offline", the Home Assistant entity Unavailable — and playback on the new detail screen never got
+a chance to start. The cause is server-side but the client was pulling the trigger: Frigate 0.17's
+`/api/recordings/unavailable` handler is an `async def` that scans the window's recording rows once
+per bucket **on the API's event loop** (`no_recordings`, `frigate/api/media.py`, verified v0.17.2 —
+details in `frigate-integration.md`). Our 7-day × ~2000-bucket query froze the entire API for tens
+of seconds per call on a modest machine; the tab re-issued it every 30s at the live edge, and 0.5.0
+added the detail screen doing the same **ungated**, every 30s, even while browsing history. The
+client's own 15s timeout makes it worse, not better: uvicorn grinds each abandoned request to
+completion while the next tick queues another.
+
+The fix keeps the feature and re-shapes the traffic:
+
+- **Overlay reads are windowed to at most a day and issued sequentially, newest first**
+  (`OverlayWindow.windows`; the `GetDayTimeline` use case now returns an `AsyncStream` of
+  `DayTimelineSlice`s). Cost of the quadratic endpoint drops roughly linearly with the window
+  count, each event-loop hold shrinks from tens of seconds to sub-second, and the server breathes
+  between windows — HA polls keep answering. The walk **stops at the first failed window** (the
+  repository throws only when *all three* endpoints fail — one failing endpoint still degrades to
+  empty, per the 0.1.4 best-effort rule) so an unreachable server isn't asked for six more days.
+  Coverage is tracked as a suffix (`overlaysLoadedBack`) and the next refresh resumes the walk.
+- **The strip's resolution is pinned from the full span** (`OverlayWindow.bucketDuration`, floored
+  to whole seconds) and passed through the repository per window — per-window derivation would
+  have made a day-window read come back at 60s buckets, 5× the rows *and* mixed bar widths.
+- **A periodic refresh re-reads only `[previous end − one bucket − 60s, now]`** and merges it in
+  place (`DayTimeline.replacing`): slices replace exactly their window — markers by overlap (an
+  in-progress marker reaches the present, so any live-edge window supersedes it; `/api/review`'s
+  overlap-with-NULL-end clause guarantees the fresh copy is in the response), motion buckets by
+  half-open containment, gaps clipped at the seam and re-welded when two windows each hold half.
+  Slice content is clipped to its window first — overlap queries answer generously, and the canned
+  fakes answer every window identically; without the clip both would duplicate.
+- **The detail screen's refresh is now gated at the live edge** exactly like the tab's (browsing
+  history re-reads nothing), and **the tab paints its grid before the overlays** — `.ready` with
+  empty overlays right after the cameras land, slices streaming in behind — so a server with only
+  its activity endpoints down no longer blanks the screen (the repository had always promised
+  that; the view model finally honors it). A timeline-fetch failure can no longer fail the screen,
+  only a camera failure can — the `.failed`-on-timeline-throw path was unreachable in production
+  and is gone.
+
+Deliberately unchanged: the 30s cadence (each tick is now ~200s of data instead of 7 days), the
+7-day span, and the `/api/review` per-window `limit` (1000). Known, accepted exposures: motion rows
+straddling a window seam belong to neither window's query (`start_time > after AND end_time <
+before`), so a seam bucket can read one segment low — invisible at 5-minute buckets; and overlay
+history loaded at open is not re-read while the screen stays up, so a server-side review deletion
+only disappears on the next screen entry. Fixing the endpoint upstream (bisect + threadpool) is
+worth filing with Frigate; until then this access pattern is the contract — recorded in
+`/frigate-rest`.

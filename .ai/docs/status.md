@@ -159,7 +159,18 @@
   are deliberately out of scope**, as are the `IR` badge and the discrete digital-zoom chip — see
   `decisions.md`.
 
-Package logic is covered by Swift Testing (434 tests). All four main screens — **Timeline**
+- **Timeline overlay reads made server-safe (0.5.1).** Field-reported outage: opening the Timeline
+  froze a modest Frigate server (API unresponsive → web UI "offline", HA entity Unavailable, VOD
+  playback starved). Root cause: Frigate 0.17's `/api/recordings/unavailable` runs an
+  O(buckets × rows) scan **on the API event loop**, and we queried 7 days at ~2000 buckets — on
+  open and every 30s (0.5.0's detail screen: ungated). Overlay reads now go out **one day-sized
+  window at a time, sequentially, newest first** (`OverlayWindow` + `GetDayTimeline` as an
+  `AsyncStream` of `DayTimelineSlice`s, merged by `DayTimeline.replacing`); a periodic refresh
+  re-reads **only the stretch since the last one**; the detail screen's refresh is **gated at the
+  live edge** like the tab's; the tab paints its grid before the overlays; and a walk cut short by
+  an unreachable server resumes on a later refresh. See `decisions.md` and `frigate-integration.md`.
+
+Package logic is covered by Swift Testing (455 tests as of 0.5.1, per CI). All four main screens — **Timeline**
 (ready busy / gappy / quiet / **playing**, empty, failed), the **Timeline detail** (playing, paused
 at 8×, week zoom, no footage, live), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered

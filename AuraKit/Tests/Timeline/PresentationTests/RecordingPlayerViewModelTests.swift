@@ -346,9 +346,12 @@ struct RecordingPlayerViewModelTests {
         // when
         await sut.loadIfNeeded()
 
-        // then — scoped to this camera, not the whole deployment
-        #expect(overlays.queriedScopes == [.camera(CameraName("driveway"))])
-        #expect(overlays.queriedRanges == [TimeRange(start: at(7300 - 2 * 86_400), end: now)])
+        // then — scoped to this camera, one day-sized window at a time, live edge first
+        #expect(overlays.queriedScopes.allSatisfy { $0 == .camera(CameraName("driveway")) })
+        #expect(overlays.queriedRanges == [
+            TimeRange(start: at(-79_100), end: now),
+            TimeRange(start: at(7300 - 2 * 86_400), end: at(-79_100)),
+        ])
         #expect(sut.dayTimeline == activity)
     }
 
@@ -378,9 +381,11 @@ struct RecordingPlayerViewModelTests {
         clock.instant = at(10_000)
         await sut.refreshOverlays()
 
-        // then — the start is fixed for the screen's life; only the live edge grows
+        // then — the start is fixed for the screen's life; only the stretch since the last read
+        // is re-queried, one bucket back for the seam
         #expect(sut.span == TimeRange(start: at(7300 - 2 * 86_400), end: at(10_000)))
-        #expect(overlays.queriedRanges.count == 2)
+        #expect(overlays.queriedRanges.last == TimeRange(start: at(7154), end: at(10_000)))
+        #expect(overlays.queriedRanges.count == 3)
     }
 
     @Test func `given a failing refresh then the last good overlays are kept`() async {
@@ -395,6 +400,44 @@ struct RecordingPlayerViewModelTests {
 
         // then
         #expect(sut.dayTimeline == activity)
+    }
+
+    @Test func `given overlays cut short when refreshing at the live edge then the walk resumes`() async {
+        // given — every overlay window failed on load, so the track is bare
+        let clock = Clock(now)
+        let overlays = FakeCameraDayTimelineRepository(.failure(.unreachable))
+        let sut = makeViewModel(segments: fullHour(from: 3600), overlays: overlays, startingAt: at(7000), clock: clock)
+        await sut.loadIfNeeded()
+        #expect(sut.dayTimeline == DayTimeline(markers: [], motion: [], gaps: []))
+        #expect(overlays.queriedRanges.count == 1)
+        overlays.result = .success(activity)
+        clock.instant = at(7350)
+
+        // when
+        await sut.refreshOverlays()
+
+        // then — the live-edge delta lands, then the whole span is back-filled day by day
+        #expect(sut.dayTimeline == activity)
+        #expect(sut.span.end == at(7350))
+        #expect(Array(overlays.queriedRanges.dropFirst()) == [
+            TimeRange(start: at(7154), end: at(7350)),
+            TimeRange(start: at(-79_246), end: at(7154)),
+            TimeRange(start: at(-165_500), end: at(-79_246)),
+        ])
+    }
+
+    // MARK: - The refresh gate
+
+    @Test func `given the playhead near the live edge then a periodic refresh is due`() async {
+        let sut = makeViewModel(segments: fullHour(from: 3600), startingAt: at(7000))
+        await sut.loadIfNeeded()
+        #expect(sut.shouldRefreshNow)
+    }
+
+    @Test func `given the playhead browsing history then a periodic refresh is suppressed`() async {
+        let sut = makeViewModel(segments: fullHour(from: 3600), startingAt: at(5000))
+        await sut.loadIfNeeded()
+        #expect(!sut.shouldRefreshNow)
     }
 
     // MARK: - Zoom

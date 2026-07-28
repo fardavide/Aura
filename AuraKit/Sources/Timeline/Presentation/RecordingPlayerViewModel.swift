@@ -76,8 +76,18 @@ public final class RecordingPlayerViewModel {
     private let recordings: GetCameraRecordings
     private let getDayTimeline: GetDayTimeline
     private let now: @MainActor () -> Date
+    /// The motion-strip resolution, pinned from the span at birth so every overlay window — and
+    /// every refresh — comes back at the same bucket width.
+    private let bucket: TimeInterval
     private var window: TimeRange
     private var timeline: RecordingTimeline
+    /// The oldest instant overlays have been loaded back to. The window walk runs newest-first,
+    /// so coverage is always the suffix `[overlaysLoadedBack, span.end]`; a walk an unreachable
+    /// server cut short leaves this shy of the span start, and the next refresh resumes there.
+    private var overlaysLoadedBack: Date
+    /// How close to the live edge the playhead must be for a periodic refresh to fire — the same
+    /// window the tab uses, so neither screen re-reads anything while history is browsed.
+    private static let liveEdgeWindow: TimeInterval = 600
     /// Stamps each window load so one that lands after a newer request — a second skip, or a seek
     /// the user made while it was in flight — is dropped instead of yanking the playhead back.
     private var loadGeneration = 0
@@ -99,7 +109,10 @@ public final class RecordingPlayerViewModel {
         self.now = now
         self.instant = instant
         let present = now()
-        span = TimeRange(start: present.addingTimeInterval(-Double(days) * 86_400), end: present)
+        let initialSpan = TimeRange(start: present.addingTimeInterval(-Double(days) * 86_400), end: present)
+        span = initialSpan
+        bucket = OverlayWindow.bucketDuration(for: initialSpan)
+        overlaysLoadedBack = initialSpan.end
         let initial = RecordingWindow.containing(instant)
         window = initial
         timeline = RecordingTimeline(window: initial, segments: [])
@@ -113,26 +126,41 @@ public final class RecordingPlayerViewModel {
     public func loadIfNeeded() async {
         guard case .loading = display else { return }
         isPlaying = true
-        async let overlays: Void = loadOverlays(in: span)
+        async let overlays = loadOverlays(in: span)
         await load(window: window, seeking: .instant(instant))
-        await overlays
+        _ = await overlays
     }
 
-    /// Extends the span to the present and re-reads this camera's activity, without disturbing the
-    /// playhead — history doesn't change, and the newly recorded stretch is what the track gains.
+    /// Extends the span to the present and re-reads **only the stretch since the last read**,
+    /// merged in place without disturbing the playhead — history doesn't change, and re-reading
+    /// seven days of it every tick is what buried the server. A walk an unreachable server cut
+    /// short earlier is resumed too; a refresh the server fails outright changes nothing and is
+    /// retried on the next tick.
     public func refreshOverlays() async {
-        let extended = TimeRange(start: span.start, end: now())
-        await loadOverlays(in: extended)
-        span = extended
+        let present = now()
+        let delta = OverlayWindow.refresh(previousEnd: span.end, now: present, bucket: bucket)
+        guard await loadOverlays(in: delta) > 0 else { return }
+        if overlaysLoadedBack > span.start {
+            await loadOverlays(in: TimeRange(start: span.start, end: overlaysLoadedBack))
+        }
+        span = TimeRange(start: span.start, end: present)
     }
 
-    /// Keeps the track current while the screen is visible. The owning `.task` cancels this loop
-    /// when the view disappears.
+    /// Keeps the track current while the screen is visible — but only while the playhead sits
+    /// near the live edge: browsing history re-reads nothing, because history doesn't change.
+    /// The owning `.task` cancels this loop when the view disappears.
     public func autoRefresh(every interval: Duration = .seconds(30)) async {
         while !Task.isCancelled {
             try? await Task.sleep(for: interval)
+            guard shouldRefreshNow else { continue }
             await refreshOverlays()
         }
+    }
+
+    /// Whether a periodic tick should fire: only when the playhead is at (or within ten minutes
+    /// of) the live edge — the tab's gate, mirrored.
+    var shouldRefreshNow: Bool {
+        instant >= span.end.addingTimeInterval(-Self.liveEdgeWindow)
     }
 
     public func togglePlayPause() {
@@ -291,12 +319,19 @@ public final class RecordingPlayerViewModel {
         }
     }
 
-    /// Best-effort: a failing activity endpoint leaves the track without overlays rather than
-    /// failing the screen — the recording itself is what this screen is for, and it loads
-    /// independently.
-    private func loadOverlays(in range: TimeRange) async {
-        guard let loaded = try? await getDayTimeline.execute(for: .camera(camera.name), in: range) else { return }
-        dayTimeline = loaded
+    /// Streams this camera's overlay windows into the track, newest first, and answers how many
+    /// landed — zero means the server failed the very first window. Best-effort throughout: a
+    /// short walk leaves the track short rather than failing the screen — the recording itself is
+    /// what this screen is for, and it loads independently.
+    @discardableResult
+    private func loadOverlays(in range: TimeRange) async -> Int {
+        var applied = 0
+        for await slice in getDayTimeline.execute(for: .camera(camera.name), in: range, bucket: bucket) {
+            dayTimeline = dayTimeline.replacing(slice)
+            overlaysLoadedBack = min(overlaysLoadedBack, slice.window.start)
+            applied += 1
+        }
+        return applied
     }
 
     private func seek(toPlayerTime playerTime: TimeInterval) {

@@ -4,10 +4,11 @@ import CommonFrigate
 import CommonNetwork
 import TimelineDomain
 
-/// Assembles the day timeline from review markers, motion activity, and recording gaps, fetched
-/// concurrently. Each overlay is **best-effort**: a missing or failing endpoint degrades to empty
-/// rather than failing the whole screen — connectivity and auth are already proven by the grid, so
-/// the camera scrub-grid must still load even if an activity endpoint is unavailable.
+/// Assembles one window's day timeline from review markers, motion activity, and recording gaps,
+/// fetched concurrently. Each overlay is **best-effort**: a single missing or failing endpoint
+/// degrades to empty rather than failing the read — the camera grid must still load even if an
+/// activity endpoint is unavailable. All three failing together, though, is a server that isn't
+/// answering, and is thrown so a window-by-window walk stops instead of piling more queries on it.
 public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
     private let config: ServerConfig
     private let api: FrigateApiClient
@@ -17,13 +18,16 @@ public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
         api = FrigateApiClient(config: config, httpClient: httpClient)
     }
 
-    public func dayTimeline(for scope: TimelineScope, in range: TimeRange) async throws(TimelineError) -> DayTimeline {
+    public func dayTimeline(
+        for scope: TimelineScope,
+        in range: TimeRange,
+        bucket: TimeInterval
+    ) async throws(TimelineError) -> DayTimeline {
         let base = config.baseUrl
         let cameras = scope.cameraNames.map(\.value)
         let after = range.start.timeIntervalSince1970
         let before = Swift.min(range.end.timeIntervalSince1970, Date().timeIntervalSince1970)
-        // Coarser buckets for wider spans so the motion strip stays light (~2000 points max).
-        let scale = Swift.max(60, Int((before - after) / 2000))
+        let scale = Int(bucket)
 
         async let markers = fetch(
             FrigateReviewUrl.review(base: base, cameras: cameras, after: after, before: before, limit: reviewMarkerLimit),
@@ -38,27 +42,32 @@ public struct FrigateCameraDayTimelineRepository: CameraDayTimelineRepository {
             as: RecordingGapDto.self
         )
 
+        let (markerDtos, motionDtos, gapDtos) = await (markers, motion, gaps)
+        if markerDtos == nil, motionDtos == nil, gapDtos == nil {
+            throw TimelineError.unreachable
+        }
         return DayTimeline(
-            markers: await markers.toMarkers(),
-            motion: await motion.toBuckets(),
-            gaps: await gaps.toGaps()
+            markers: (markerDtos ?? []).toMarkers(),
+            motion: (motionDtos ?? []).toBuckets(),
+            gaps: (gapDtos ?? []).toGaps()
         )
     }
 
-    /// Best-effort GET + decode of a JSON array; any failure yields an empty array.
-    private func fetch<Element: Decodable>(_ url: URL, as element: Element.Type) async -> [Element] {
+    /// Best-effort GET + decode of a JSON array. Failure is `nil` — distinct from a served empty
+    /// array, so the caller can tell "no data" from "no answer".
+    private func fetch<Element: Decodable>(_ url: URL, as element: Element.Type) async -> [Element]? {
         guard
             let data = try? await api.get(url),
             let decoded = try? JSONDecoder().decode([Element].self, from: data)
         else {
-            return []
+            return nil
         }
         return decoded
     }
 }
 
-/// Caps the review payload gating first paint — the full multi-day span can otherwise run to
-/// megabytes on an event-dense deployment. Server-side ordering (alerts before detections,
-/// newest first within each) means truncation drops the oldest detections; overall density
-/// still shows through the motion strip.
+/// Caps each window's review payload — a day of an event-dense deployment can still run to
+/// hundreds of items, and the markers only gate the strip, not the screen. Server-side ordering
+/// (alerts before detections, newest first within each) means truncation drops the oldest
+/// detections; overall density still shows through the motion strip.
 private let reviewMarkerLimit = 1000
