@@ -18,6 +18,10 @@ public struct RecordingDetailState: Equatable, Sendable {
     public let speed: PlaybackSpeed
     /// Whether the playhead sits over recorded footage; false inside a gap, where the hero says so.
     public let hasFootage: Bool
+    /// Whether the playhead is parked at — or following — the newest recorded footage. Owned by
+    /// the view model, not derived from the instant: the player parks a couple of seconds behind
+    /// the wall clock (segments land late), and that drift must not read as history.
+    public let isLive: Bool
     /// False for an hour holding no footage at all: there is nothing to start or speed up, though
     /// the skips and the track stay live so the hour can be left.
     public let isPlayable: Bool
@@ -31,6 +35,7 @@ public struct RecordingDetailState: Equatable, Sendable {
         isPlaying: Bool,
         speed: PlaybackSpeed,
         hasFootage: Bool,
+        isLive: Bool,
         isPlayable: Bool
     ) {
         self.cameraName = cameraName
@@ -41,19 +46,13 @@ public struct RecordingDetailState: Equatable, Sendable {
         self.isPlaying = isPlaying
         self.speed = speed
         self.hasFootage = hasFootage
+        self.isLive = isLive
         self.isPlayable = isPlayable
     }
 
     /// The review marker under the playhead, if any — what the hero badge names.
     public var activeMarker: ReviewMarker? {
         MarkerNavigator.marker(at: instant, in: dayTimeline.markers)
-    }
-
-    /// Whether the playhead is parked at the newest footage. Sub-second drift only: anything the
-    /// user deliberately positioned — even seconds back — is history, and the Live chip is how they
-    /// come back from it.
-    public var isLive: Bool {
-        span.end.timeIntervalSince(instant) <= 1
     }
 
     /// The calendar day the playhead is in — what the stepper walks and the overview bar draws.

@@ -14,8 +14,8 @@ struct DayOverview: Equatable {
     /// Mean motion intensity (0–100) per hour of the day, always `hoursInDay` long. Mean, not peak:
     /// the bar answers "how busy was this hour", which a peak would saturate on a single burst.
     let hourlyMotion: [Int]
-    /// Where the day's alerts start — the red ticks along the top of the bar.
-    let alerts: [Date]
+    /// The day's review markers — the severity-colored ticks along the top of the bar.
+    let markers: [ReviewMarker]
     /// No-footage stretches, clipped to the day so a gap crossing midnight draws on both days.
     let gaps: [TimeRange]
 
@@ -34,9 +34,7 @@ struct DayOverview: Equatable {
             hourlyMotion: zip(totals, counts).map { total, count in
                 count == 0 ? 0 : Int((Double(total) / Double(count)).rounded())
             },
-            alerts: timeline.markers
-                .filter { $0.severity == .alert && day.contains($0.start) }
-                .map(\.start),
+            markers: timeline.markers.filter { day.contains($0.start) },
             gaps: timeline.gaps.compactMap { gap in
                 let start = Swift.max(gap.range.start, day.start)
                 let end = Swift.min(gap.range.end, day.end)

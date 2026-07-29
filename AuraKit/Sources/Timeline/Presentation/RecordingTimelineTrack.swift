@@ -20,12 +20,6 @@ struct RecordingTimelineTrack: View {
 
     @Environment(\.calendar) private var calendar
 
-    /// Cross-axis room reserved for the marker lane, above/left of the motion.
-    private static let laneInset: CGFloat = 3
-    private static let laneThickness: CGFloat = 8
-    /// Clear space between the lane and the tallest a motion bar may grow.
-    private static let laneClearance: CGFloat = 6
-
     var body: some View {
         // Captured here: the draw closure runs after `body` returns.
         let calendar = calendar
@@ -84,7 +78,8 @@ struct RecordingTimelineTrack: View {
     private func drawMotion(in context: GraphicsContext, geometry: TrackGeometry) {
         let visible = viewport.visible
         let bucketDuration = timeline.motionBucketDuration
-        let maxLength = geometry.crossExtent - Self.laneInset - Self.laneThickness - Self.laneClearance
+        let maxLength = geometry.crossExtent
+            - TimelineTrackStyle.laneInset - TimelineTrackStyle.laneThickness - TimelineTrackStyle.laneClearance
         guard maxLength > 0 else { return }
 
         for bucket in timeline.motion where bucket.intensity > 0 {
@@ -97,9 +92,10 @@ struct RecordingTimelineTrack: View {
                 crossFrom: geometry.crossExtent - length,
                 crossTo: geometry.crossExtent
             )
-            // A hairline between neighbours: without it, contiguous buckets weld into one block and
-            // the strip stops reading as a series of measurements.
-            context.fill(Path(geometry.narrowed(bar, by: 1)), with: .color(.green))
+            context.fill(
+                Path(geometry.narrowed(bar, by: TimelineTrackStyle.motionBarSeparator)),
+                with: .color(TimelineTrackStyle.motionColor)
+            )
         }
     }
 
@@ -116,15 +112,11 @@ struct RecordingTimelineTrack: View {
             var pill = geometry.rect(
                 from: marker.start,
                 to: end,
-                crossFrom: Self.laneInset,
-                crossTo: Self.laneInset + Self.laneThickness
+                crossFrom: TimelineTrackStyle.laneInset,
+                crossTo: TimelineTrackStyle.laneInset + TimelineTrackStyle.laneThickness
             )
-            // A marker lasting a second or two would otherwise be invisible at week density.
-            pill = geometry.lengthened(pill, toAtLeast: Self.laneThickness / 2)
-            context.fill(
-                Path(roundedRect: pill, cornerRadius: Self.laneThickness / 2),
-                with: .color(marker.severity == .alert ? .red : .orange)
-            )
+            pill = geometry.lengthened(pill, toAtLeast: TimelineTrackStyle.minimumMarkerLength)
+            TimelineTrackStyle.fillMarkerPill(pill, severity: marker.severity, in: context)
         }
     }
 }

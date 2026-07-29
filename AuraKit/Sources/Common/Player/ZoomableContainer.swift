@@ -10,6 +10,10 @@ public struct ZoomableContainer<Content: View>: View {
     /// toggle its overlay chrome. Kept here (not on the host) so it shares the gesture arena with
     /// the double-tap and is disambiguated against it.
     private let onSingleTap: () -> Void
+    /// Whether zoomed content is cut at the container's bounds. The full-screen live view clips;
+    /// the recording detail's video slot doesn't, so zoomed footage spills under the glass panel
+    /// beside it instead of stopping dead at an invisible line.
+    private let clipsContent: Bool
 
     @State private var transform = ZoomTransform.standard()
     /// Committed transform captured when a gesture starts; the gestures' cumulative
@@ -22,12 +26,25 @@ public struct ZoomableContainer<Content: View>: View {
     @State private var isMagnifying = false
     @State private var isPanning = false
 
-    public init(onSingleTap: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+    public init(
+        onSingleTap: @escaping () -> Void,
+        clipsContent: Bool,
+        @ViewBuilder content: () -> Content
+    ) {
         self.onSingleTap = onSingleTap
+        self.clipsContent = clipsContent
         self.content = content()
     }
 
-    public var body: some View {
+    @ViewBuilder public var body: some View {
+        if clipsContent {
+            zoomArea.clipped()
+        } else {
+            zoomArea
+        }
+    }
+
+    private var zoomArea: some View {
         GeometryReader { proxy in
             ZStack {
                 content
@@ -50,7 +67,6 @@ public struct ZoomableContainer<Content: View>: View {
                 transform = transform.panned(by: .zero, viewport: newSize)
             }
         }
-        .clipped()
     }
 
     private func magnify(in viewport: CGSize) -> some Gesture {

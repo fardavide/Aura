@@ -159,6 +159,21 @@
   are deliberately out of scope**, as are the `IR` badge and the discrete digital-zoom chip — see
   `decisions.md`.
 
+- **Timeline detail polish batch (0.5.2).** The detail's footage now lives in a laid-out **top
+  slot** the panel can never cover (portrait: video above the floating panel; landscape: beside the
+  rail), is **pinch-zoomable** like the live view, and zoomed footage deliberately overflows the
+  slot **under the glass**. Scrubbing any timeline (track, day bar, tab scrubber) **resumes the
+  playback it paused**; the detail track got a **fling** (UIScrollView's deceleration curve, pure
+  `ScrubFling`); the **Live chip stays red** while parked at/following the newest footage
+  (`followsLiveEdge` intent, goLive settles onto the newest clip), and playing out the live hour
+  **refetches the growing hour once** so playback follows fresh footage (revises 0.3.13's
+  no-second-fetch rule — no rewind, no loop). All three timeline strips draw in one shared
+  language (`TimelineTrackStyle`: data-resolution green bars, red/orange marker-lane pills, shared
+  hatch); the panel clock gained trailing seconds and the portrait transport is the mock's single
+  row. A `cameraAreaHighlights` env flag + `detail-areas` baseline outline the surface and the
+  camera slot so panel-over-video regressions show up in snapshots. **Deferred**: the preview
+  thumbnail filmstrip (spawned as its own follow-up task). See `decisions.md`.
+
 - **Timeline overlay reads made server-safe (0.5.1).** Field-reported outage: opening the Timeline
   froze a modest Frigate server (API unresponsive → web UI "offline", HA entity Unavailable, VOD
   playback starved). Root cause: Frigate 0.17's `/api/recordings/unavailable` runs an

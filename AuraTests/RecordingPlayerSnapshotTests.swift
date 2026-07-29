@@ -55,10 +55,20 @@ struct RecordingPlayerSnapshotTests {
 
     @Test func `given the playhead parked at the live edge then the Live chip is prominent`() {
         // given
-        let view = recordingDetail(state: detailState(instant: snapshotNow))
+        let view = recordingDetail(state: detailState(instant: snapshotNow, isLive: true))
 
         // then
         assertScreenSnapshot(view, named: "detail-live")
+    }
+
+    @Test func `given area highlights then the surface and the initial camera slot are outlined`() {
+        // given — diagnostics on: the outlined slot must never sit under the glass panel, and the
+        // outlined surface shows how far zoomed footage may legitimately spill
+        let view = recordingDetail(state: detailState())
+            .environment(\.cameraAreaHighlights, true)
+
+        // then
+        assertScreenSnapshot(view, named: "detail-areas")
     }
 }
 
@@ -80,6 +90,7 @@ private func detailState(
     isPlaying: Bool = true,
     speed: PlaybackSpeed = .oneX,
     hasFootage: Bool = true,
+    isLive: Bool = false,
     isPlayable: Bool = true
 ) -> RecordingDetailState {
     RecordingDetailState(
@@ -91,6 +102,7 @@ private func detailState(
         isPlaying: isPlaying,
         speed: speed,
         hasFootage: hasFootage,
+        isLive: isLive,
         isPlayable: isPlayable
     )
 }

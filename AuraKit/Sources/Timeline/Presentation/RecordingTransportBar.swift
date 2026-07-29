@@ -11,7 +11,8 @@ struct RecordingTransportBar: View {
     enum Density {
         /// The wide panel's control column: the whole cluster on one row, speed as a ladder.
         case wide
-        /// A phone held upright: the whole cluster on one row, speed as a chip.
+        /// A phone held upright: the mock's single row — cluster leading, speed chip and Live
+        /// trailing — with a two-row fallback where even that can't fit.
         case compact
         /// The landscape rail: two short rows, because five circles do not fit across 144 points.
         case narrow
@@ -38,17 +39,39 @@ struct RecordingTransportBar: View {
                 }
             }
         case .compact:
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
+            // Small controls on purpose — at regular size even a plain phone width can't hold
+            // the row, and an overrun silently pushes the whole layout past the screen edges
+            // (caught by the `detail-areas` highlight baseline). Where the row still can't fit
+            // (a narrow split-view window, large Dynamic Type), it falls back to two rows
+            // rather than letting controls run off-screen.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
                     previousMarkerButton
                     skipButton(by: -10, systemImage: "gobackward.10")
                     playPauseButton
                     skipButton(by: 10, systemImage: "goforward.10")
                     nextMarkerButton
+                    // A trailing flexible frame, not a Spacer: a Spacer's ideal width is
+                    // unbounded, which reads as "never fits" to the enclosing ViewThatFits.
+                    HStack(spacing: 6) {
+                        speedChip.fixedSize()
+                        liveChip.fixedSize()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                HStack(spacing: 8) {
-                    speedChip
-                    liveChip
+                .controlSize(.small)
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        previousMarkerButton
+                        skipButton(by: -10, systemImage: "gobackward.10")
+                        playPauseButton
+                        skipButton(by: 10, systemImage: "goforward.10")
+                        nextMarkerButton
+                    }
+                    HStack(spacing: 8) {
+                        speedChip
+                        liveChip
+                    }
                 }
             }
         case .narrow:

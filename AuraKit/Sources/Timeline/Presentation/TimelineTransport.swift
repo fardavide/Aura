@@ -19,6 +19,10 @@ public final class TimelineTransport {
     private let now: @MainActor () -> Date
     private var gaps: [FootageGap] = []
     private var span: TimeRange
+    /// Whether the user currently owns the playhead, and whether playback was running when they
+    /// took it — releasing resumes that; an explicit play/pause taken meanwhile wins instead.
+    private var isInteracting = false
+    private var resumeOnRelease = false
 
     /// How close to the live edge counts as parked on it — the playhead the auto-refresh follow
     /// leaves behind sits within sub-second drift of it.
@@ -34,6 +38,7 @@ public final class TimelineTransport {
     }
 
     public func togglePlayPause() {
+        resumeOnRelease = false
         guard !isPlaying else {
             isPlaying = false
             return
@@ -56,9 +61,30 @@ public final class TimelineTransport {
         clock.scrub(to: span.clamp(clock.instant.addingTimeInterval(seconds)))
     }
 
-    /// Hands the playhead back to the user — the scrubber and the transport would otherwise both
-    /// drive the clock, and the drag would fight the tick.
+    /// Hands the playhead to the user — the scrubber and the transport would otherwise both drive
+    /// the clock, and the drag would fight the tick. Scroll phases report this repeatedly
+    /// (tracking, interacting, decelerating), so the play state is captured only on the first.
+    public func beginInteraction() {
+        if !isInteracting {
+            isInteracting = true
+            resumeOnRelease = isPlaying
+        }
+        isPlaying = false
+    }
+
+    /// The user let go: playback they were watching resumes; a pause they chose stays. Resumes by
+    /// setting the state directly, not by toggling — toggling from the live edge would rewind.
+    public func endInteraction() {
+        isInteracting = false
+        guard resumeOnRelease else { return }
+        resumeOnRelease = false
+        isPlaying = true
+    }
+
+    /// A deliberate stop (leaving the screen, pushing a player over it) — unlike the interaction
+    /// pair, nothing resumes afterwards.
     public func pause() {
+        resumeOnRelease = false
         isPlaying = false
     }
 

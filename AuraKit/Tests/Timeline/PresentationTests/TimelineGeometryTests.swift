@@ -102,7 +102,7 @@ struct DayOverviewTests {
         #expect(overview.hourlyMotion.allSatisfy { $0 == 0 })
     }
 
-    @Test func `given markers when rolling up then only the day's alerts are kept`() {
+    @Test func `given markers when rolling up then the day's are kept at every severity`() {
         // given
         let timeline = DayTimeline(
             markers: [
@@ -117,8 +117,11 @@ struct DayOverviewTests {
         // when
         let overview = DayOverview.rolledUp(from: timeline, day: day, calendar: utc)
 
-        // then
-        #expect(overview.alerts == [at(3_600)])
+        // then — detections included, so the bar speaks the same severity vocabulary as the tracks
+        #expect(overview.markers == [
+            ReviewMarker(start: at(3_600), end: at(3_660), severity: .alert),
+            ReviewMarker(start: at(7_200), end: at(7_260), severity: .detection),
+        ])
     }
 
     @Test func `given a gap crossing midnight when rolling up then it is clipped to the day`() {
