@@ -1,6 +1,8 @@
 import SwiftUI
 import Testing
 
+import CamerasEntities
+import TestDoubles
 import TimelineDomain
 import TimelinePresentation
 
@@ -8,7 +10,9 @@ import TimelinePresentation
 /// `RecordingDetailLayout` is captured over a black placeholder: what's verified is the chrome —
 /// the hero badges, the glass timeline panel with its day-overview bar, scrub track, ruler and
 /// transport — in each of the three arrangements the device matrix produces (phone upright, phone
-/// on its side, iPad), and that it all sits inside the safe area.
+/// on its side, iPad), and that it all sits inside the safe area. The Hour-zoom filmstrip is
+/// captured the same way network images can't render, so its store is given no material and the
+/// strip degrades to its stable placeholder cells.
 ///
 /// Driven by literal `RecordingDetailState`, so no `AVPlayer` and no server are involved.
 @MainActor
@@ -36,6 +40,14 @@ struct RecordingPlayerSnapshotTests {
 
         // then
         assertScreenSnapshot(view, named: "detail-week")
+    }
+
+    @Test func `given the hour zoom then the filmstrip's placeholder slots line the track`() {
+        // given
+        let view = recordingDetail(state: detailState(zoom: .hour))
+
+        // then
+        assertScreenSnapshot(view, named: "detail-hour")
     }
 
     @Test func `given a playhead with nothing recorded then the hero says so`() {
@@ -76,9 +88,19 @@ struct RecordingPlayerSnapshotTests {
 
 @MainActor
 private func recordingDetail(state: RecordingDetailState) -> some View {
-    RecordingDetailLayout(state: state, actions: .inert) {
+    RecordingDetailLayout(state: state, actions: .inert, filmstrip: emptyFilmstrip()) {
         Color.black
     }
+}
+
+/// A store with nothing to load from — every filmstrip slot stays on its placeholder cell.
+@MainActor
+private func emptyFilmstrip() -> RecordingFilmstripStore {
+    RecordingFilmstripStore(
+        camera: CameraName("driveway"),
+        previews: GetCameraPreviews(provider: FakeCameraPreviewProvider()),
+        imageLoader: FakePreviewImageLoader()
+    )
 }
 
 /// A playhead 33.4 hours into the two-day span — inside the rich fixture's busy stretch, with
