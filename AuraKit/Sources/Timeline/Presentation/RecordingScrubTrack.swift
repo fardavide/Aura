@@ -20,6 +20,8 @@ struct RecordingScrubTrack: View {
 
     @Environment(\.calendar) private var calendar
     @State private var dragAnchor: Date?
+    /// The glide running after a thrown release; a fresh grab or leaving the screen cancels it.
+    @State private var flingTask: Task<Void, Never>?
 
     /// Keeps a label from being half-cut at either end of the ruler.
     private static let rulerEdgeInset: CGFloat = 18
@@ -49,6 +51,13 @@ struct RecordingScrubTrack: View {
         }
     }
 
+    /// A glide left running when the track leaves the screen would keep scrubbing a view model
+    /// nobody is looking at.
+    private func cancelFling() {
+        flingTask?.cancel()
+        flingTask = nil
+    }
+
     private func viewport(length: CGFloat) -> TimelineViewport {
         TimelineViewport(center: state.instant, pointsPerHour: state.zoom.pointsPerHour, length: length)
     }
@@ -65,6 +74,7 @@ struct RecordingScrubTrack: View {
         .overlay { playhead }
         .contentShape(Rectangle())
         .gesture(drag(length: length))
+        .onDisappear { cancelFling() }
         .accessibilityLabel("Timeline")
         .accessibilityValue(Text(state.instant, format: .dateTime.hour().minute().second()))
         .accessibilityAdjustableAction { direction in
@@ -102,6 +112,9 @@ struct RecordingScrubTrack: View {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
                 let anchor = dragAnchor ?? {
+                    // Grabbing the track catches any glide still running; the scrub the glide
+                    // began stays open, so the resume-on-settle intent survives the new grab.
+                    cancelFling()
                     actions.beginScrub()
                     dragAnchor = state.instant
                     return state.instant
@@ -116,10 +129,40 @@ struct RecordingScrubTrack: View {
                 )
                 actions.scrub(anchored.center(shiftedByPoints: shift))
             }
-            .onEnded { _ in
+            .onEnded { value in
                 dragAnchor = nil
-                actions.endScrub()
+                let axisVelocity = axis == .horizontal ? -value.velocity.width : value.velocity.height
+                guard let fling = ScrubFling(velocity: axisVelocity) else {
+                    actions.endScrub()
+                    return
+                }
+                glide(fling, length: length)
             }
+    }
+
+    /// Runs a released throw to its natural stop: the track keeps sliding along the deceleration
+    /// curve, then the scrub settles exactly where the glide ended. The span's edges stop a glide
+    /// dead — there is nothing past them to slide onto.
+    private func glide(_ fling: ScrubFling, length: CGFloat) {
+        let viewport = TimelineViewport(
+            center: state.instant,
+            pointsPerHour: state.zoom.pointsPerHour,
+            length: length
+        )
+        flingTask = Task { @MainActor in
+            var elapsed: TimeInterval = 0
+            while !Task.isCancelled, elapsed < fling.duration {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled else { return }
+                elapsed += 0.016
+                let target = viewport.center(shiftedByPoints: fling.offset(at: min(elapsed, fling.duration)))
+                actions.scrub(target)
+                if target <= state.span.start || target >= state.span.end { break }
+            }
+            guard !Task.isCancelled else { return }
+            flingTask = nil
+            actions.endScrub()
+        }
     }
 
     private func ruler(length: CGFloat) -> some View {

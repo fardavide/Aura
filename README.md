@@ -43,6 +43,28 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.5.2 — 2026-07-29
+- **A camera's timeline puts the picture first.** On iPhone the footage now sits at the top of the
+  screen, fully visible above the controls, instead of centred and half-hidden behind them — and
+  the same in landscape, beside the side rail.
+- **The recording is zoomable.** Pinch, drag and double-tap on a camera's timeline work just like
+  the live view — and zoomed footage slides *under* the glass controls instead of stopping at an
+  invisible edge.
+- **Scrubbing hands playback back.** If the recording was playing when you grabbed a timeline —
+  the track, the day bar, or the Timeline tab's scrubber — it resumes when you let go.
+- **Throw the timeline.** Releasing the camera timeline with speed keeps it gliding and eases it
+  to a stop, like a scroll view.
+- **Live stays red.** The Live chip no longer flicks back to grey seconds after tapping it — the
+  recording parks on the newest footage and reads as live until you deliberately move away. And
+  when playback catches up with the newest footage, it now picks up whatever was recorded in the
+  meantime and keeps going.
+- **Every timeline speaks one design.** The Timeline tab's scrubber, the camera timeline's track
+  and its 24-hour day bar now share the same look: green activity bars at the data's resolution,
+  red/orange event markers in their own lane, hatched no-footage stretches. The day bar also marks
+  detections now, not just alerts.
+- The timeline panel's clock shows seconds, and the portrait controls sit on a single row, as
+  designed.
+
 ### 0.5.1 — 2026-07-28
 - **The Timeline no longer overwhelms the server.** Opening the Timeline (or a camera's own
   timeline) used to ask Frigate for a whole week of activity in one query, and re-ask every half

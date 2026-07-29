@@ -60,6 +60,7 @@ public final class RecordingPlayerViewModel {
             isPlaying: isPlaying,
             speed: speed,
             hasFootage: hasFootage,
+            isLive: followsLiveEdge,
             isPlayable: isPlayable
         )
     }
@@ -88,6 +89,19 @@ public final class RecordingPlayerViewModel {
     /// How close to the live edge the playhead must be for a periodic refresh to fire — the same
     /// window the tab uses, so neither screen re-reads anything while history is browsed.
     private static let liveEdgeWindow: TimeInterval = 600
+    /// How close to the span's end a deliberate move must land to count as "at the live edge".
+    private static let liveEdgeTolerance: TimeInterval = 1
+    /// How far inside the newest clip Live parks. Right on the boundary the half-open footage
+    /// check would read "no footage" for the very frame being shown.
+    private static let liveSettleBackoff: TimeInterval = 0.5
+    /// Whether the playhead is parked at (or following) the newest recorded footage — what the
+    /// Live chip and the hero badge read. Only a deliberate move away from the edge clears it;
+    /// the player drifting a couple of seconds behind the wall clock must not read as history.
+    private var followsLiveEdge: Bool
+    /// Whether a track drag owns the playhead, and whether playback was running when it took it —
+    /// the settle hands playback back, unless an explicit play/pause taken meanwhile wins.
+    private var isScrubbing = false
+    private var resumePlaybackOnSettle = false
     /// Stamps each window load so one that lands after a newer request — a second skip, or a seek
     /// the user made while it was in flight — is dropped instead of yanking the playhead back.
     private var loadGeneration = 0
@@ -113,6 +127,7 @@ public final class RecordingPlayerViewModel {
         span = initialSpan
         bucket = OverlayWindow.bucketDuration(for: initialSpan)
         overlaysLoadedBack = initialSpan.end
+        followsLiveEdge = present.timeIntervalSince(instant) <= Self.liveEdgeTolerance
         let initial = RecordingWindow.containing(instant)
         window = initial
         timeline = RecordingTimeline(window: initial, segments: [])
@@ -164,6 +179,8 @@ public final class RecordingPlayerViewModel {
     }
 
     public func togglePlayPause() {
+        // An explicit play or pause is newer intent than a drag's pending resume.
+        resumePlaybackOnSettle = false
         setPlaying(!isPlaying)
     }
 
@@ -183,6 +200,7 @@ public final class RecordingPlayerViewModel {
     public func skip(by seconds: TimeInterval) async {
         // A seek is a newer intent than any load still in flight — let it win.
         loadGeneration += 1
+        let origin = instant
         let target = timeline.playerTime(at: instant) + seconds
         if target < 0 {
             let previous = RecordingWindow.containing(window.start.addingTimeInterval(-1))
@@ -192,6 +210,10 @@ public final class RecordingPlayerViewModel {
         } else {
             seek(toPlayerTime: target)
         }
+        // Only a move that happened can demote the playhead to history — a forward skip with
+        // nothing newer recorded is a no-op and must leave a live playhead live.
+        guard instant != origin else { return }
+        followsLiveEdge = span.end.timeIntervalSince(instant) <= Self.liveEdgeTolerance
     }
 
     /// Moves the playhead to a wall-clock instant, loading the hour holding it when that is not the
@@ -203,6 +225,7 @@ public final class RecordingPlayerViewModel {
     /// gap away and quietly report the wrong time.
     public func seek(to target: Date) async {
         let clamped = span.clamp(target)
+        followsLiveEdge = span.end.timeIntervalSince(clamped) <= Self.liveEdgeTolerance
         guard window.contains(clamped) else {
             await load(window: RecordingWindow.containing(clamped), seeking: .instant(clamped))
             return
@@ -215,8 +238,13 @@ public final class RecordingPlayerViewModel {
     }
 
     /// Hands the playhead to a drag on the track — the transport would otherwise be driving the
-    /// same instant the finger is.
+    /// same instant the finger is. Playback the user was watching resumes when the drag settles;
+    /// a chained grab (catching a fling mid-flight) keeps the original intent.
     public func beginScrub() {
+        if !isScrubbing {
+            isScrubbing = true
+            resumePlaybackOnSettle = isPlaying
+        }
         setPlaying(false)
     }
 
@@ -226,15 +254,21 @@ public final class RecordingPlayerViewModel {
     public func scrub(to target: Date) {
         let clamped = span.clamp(target)
         instant = clamped
+        followsLiveEdge = span.end.timeIntervalSince(clamped) <= Self.liveEdgeTolerance
         guard window.contains(clamped) else { return }
         hasFootage = timeline.hasFootage(at: clamped)
         guard timeline.playableDuration > 0 else { return }
         movePlayer(toPlayerTime: timeline.playerTime(at: clamped), exact: false)
     }
 
-    /// Settles the drag on its final instant, swapping windows if it ran into another hour.
+    /// Settles the drag on its final instant, swapping windows if it ran into another hour, and
+    /// hands playback back if the drag was what paused it.
     public func endScrub() async {
+        isScrubbing = false
         await seek(to: instant)
+        guard resumePlaybackOnSettle else { return }
+        resumePlaybackOnSettle = false
+        if isPlayable { setPlaying(true) }
     }
 
     /// Jumps to the start of the next activity marker. Does nothing past the last one.
@@ -256,13 +290,27 @@ public final class RecordingPlayerViewModel {
 
     public func goLive() async {
         await seek(to: span.end)
+        // The wall clock runs ahead of the newest recorded frame — segments land seconds late —
+        // so the edge itself usually has no footage. Park a hair inside the newest clip instead,
+        // where the readout, the footage check and the shown frame all agree.
+        guard !hasFootage, timeline.playableDuration > Self.liveSettleBackoff else { return }
+        let playerTime = timeline.playableDuration - Self.liveSettleBackoff
+        apply(instant: timeline.instant(atPlayerTime: playerTime))
+        movePlayer(toPlayerTime: playerTime, exact: true)
     }
 
-    /// The stream played out. Continues into the next hour, or stops — nothing after the newest
-    /// footage has been recorded yet, so this is the live edge.
+    /// The stream played out. Continues into the next hour when there is one. Otherwise playback
+    /// has caught up with the newest recorded footage — and the in-progress hour keeps growing
+    /// behind the loaded copy, so it is refetched once: new footage carries playback on; none
+    /// means the true live edge, and playback stops there until more is recorded.
     func advanceToNextWindow() async {
         if await loadFollowingWindow() { return }
-        setPlaying(false)
+        let playableBeforeRefetch = timeline.playableDuration
+        await load(window: window, seeking: .instant(instant))
+        followsLiveEdge = true
+        if timeline.playableDuration <= playableBeforeRefetch {
+            setPlaying(false)
+        }
     }
 
     /// Loads the hour after the current one. Answers `false` without touching anything when that
@@ -293,6 +341,9 @@ public final class RecordingPlayerViewModel {
             return
         }
         guard generation == loadGeneration else { return }
+        // The live hour's catch-up refetch found nothing new: the player is already parked on the
+        // newest frame, and rebuilding it would only blank the picture for the same frames.
+        if newWindow == window, playback.timeline == timeline, case .ready = display { return }
         window = newWindow
         timeline = playback.timeline
         detachPlayer()

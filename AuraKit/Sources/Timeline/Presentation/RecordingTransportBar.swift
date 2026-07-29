@@ -11,7 +11,7 @@ struct RecordingTransportBar: View {
     enum Density {
         /// The wide panel's control column: the whole cluster on one row, speed as a ladder.
         case wide
-        /// A phone held upright: the whole cluster on one row, speed as a chip.
+        /// A phone held upright: one row — the cluster leading, speed chip and Live trailing.
         case compact
         /// The landscape rail: two short rows, because five circles do not fit across 144 points.
         case narrow
@@ -38,19 +38,21 @@ struct RecordingTransportBar: View {
                 }
             }
         case .compact:
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    previousMarkerButton
-                    skipButton(by: -10, systemImage: "gobackward.10")
-                    playPauseButton
-                    skipButton(by: 10, systemImage: "goforward.10")
-                    nextMarkerButton
-                }
-                HStack(spacing: 8) {
-                    speedChip
-                    liveChip
-                }
+            // The mock's single row: the transport cluster leading, speed and Live trailing.
+            // Small controls on purpose — at regular size the row's minimum width overruns a
+            // phone and silently pushes the whole layout past the screen edges (caught by the
+            // `detail-areas` highlight baseline).
+            HStack(spacing: 6) {
+                previousMarkerButton
+                skipButton(by: -10, systemImage: "gobackward.10")
+                playPauseButton
+                skipButton(by: 10, systemImage: "goforward.10")
+                nextMarkerButton
+                Spacer(minLength: 4)
+                speedChip.fixedSize()
+                liveChip.fixedSize()
             }
+            .controlSize(.small)
         case .narrow:
             VStack(spacing: 8) {
                 HStack(spacing: 8) {

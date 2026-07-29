@@ -979,3 +979,68 @@ history loaded at open is not re-read while the screen stays up, so a server-sid
 only disappears on the next screen entry. Fixing the endpoint upstream (bisect + threadpool) is
 worth filing with Frigate; until then this access pattern is the contract — recorded in
 `/frigate-rest`.
+
+## Timeline detail: top-slot zoomable video, resume-after-scrub, sticky Live, fling, one track language (0.5.2)
+A user-reported batch against the 0.5.0 detail screen and the tab scrubber. Ten items; the preview
+**thumbnail filmstrip stays deferred** (its own follow-up — thumbnails need `AVAssetImageGenerator`
+over the authed preview clips plus a cache, too much rider for this change), and the mock's
+Save-frame / Clip-export remain out of scope per the 0.5.0 decision.
+
+- **The video gets a *slot*, laid out — not floated over.** On the phone the footage was centred in
+  a full-bleed surface with the glass panel overlaid, so the panel covered its lower half. The
+  arrangements are now real stacks: portrait a `VStack` (video slot on top, panel below), landscape
+  an `HStack` (slot beside the rail) — the resting picture **cannot** be covered by construction,
+  and no `@State` height measurement is involved (a measured panel height settles a pass later,
+  which the snapshot suite can't tolerate — the `RecordingScrubTrack` lesson).
+- **The detail video zooms like the live view, and overflows its slot on purpose.**
+  `ZoomableContainer` (the live view's pinch/pan/double-tap container) now takes an explicit
+  `clipsContent`; the phone slots pass `false`, so zoomed footage spills out of the slot and slides
+  **under the glass panel** — by design, the panel refracts it — while the iPad hero keeps clipping
+  to its rounded frame (nothing overlaps it there). The hero chrome and the panel sit outside the
+  container and never scale (the 0.3.5 rule, applied here).
+- **The screenshot suite can now *see* the layout contract.** A `cameraAreaHighlights` environment
+  flag makes `RecordingDetailLayout` outline the **surface** (orange — everything zoomed footage
+  may cover, drawn above the panel since the surface legitimately runs under it) and the **initial
+  camera slot** (green — what the controls must never cover). One `detail-areas` snapshot state
+  records both, so a panel creeping over the slot turns up in a baseline diff instead of on a phone.
+- **Interacting with a timeline resumes the playback it paused.** Both surfaces paused on grab and
+  never resumed. `TimelineTransport` gained `beginInteraction`/`endInteraction` (the scroll phases
+  report begins repeatedly — the play state is captured only on the first; `pause()` stays for the
+  deliberate tile-push stop) and the detail VM does the same for `beginScrub`/`endScrub`, including
+  across a caught fling. An explicit play/pause taken mid-drag clears the pending resume — newest
+  intent wins. The day-overview bar's drag was a raw exact-`seek` per frame; it now runs the same
+  begin/scrub/end trio (cheap tolerant seeks while dragging, exact settle, resume after).
+- **"Live" is an intent the view model owns, not a ≤1s instant comparison.** The chip went red on
+  `goLive` and grey a second later: the periodic time observer reports the player's true position,
+  which parks seconds behind the wall clock (segments land late), and the old
+  `span.end − instant ≤ 1s` read that drift as history. `followsLiveEdge` is now set by deliberate
+  moves that land on the edge (goLive, a drag clamped to the span end, opening a tile at the edge)
+  and cleared only by deliberate moves away — the observer's drift never touches it; the state's
+  `isLive` is stored, not computed. `goLive` also **settles half a second inside the newest clip**
+  (readout, footage check and shown frame agree — parked *at* `span.end` the half-open footage
+  check reads "no footage" for the very frame on screen).
+- **Playing out the live hour refetches it once — revising 0.3.13's "no second fetch".** Playback
+  catching up with the newest footage now refetches the *same* window: new footage carries playback
+  straight on (a de-facto live follow, ~segment latency, chip red); none stops it at the edge. The
+  0.3.13 regression this guarded against — reload + rewind to the top of the hour, forever — stays
+  pinned: the refetch seeks to the caught-up instant (no rewind) and a no-growth result stops
+  playback (no loop), with a value-equal refetch skipping the player rebuild entirely so the
+  picture doesn't blank. Pressing play while parked at the edge self-heals the same way: the player
+  fires end-of-stream, the refetch finds what recorded meanwhile, playback continues.
+- **A thrown track glides.** `ScrubFling` (pure, unit-tested) restates UIScrollView's `.normal`
+  deceleration on a per-second base; the detail track's drag release runs it on a 16ms loop through
+  the existing anchored-scrub path and settles with `endScrub` — so the window swap and the resume
+  behavior fall out unchanged. A new grab cancels the glide but keeps the scrub open (resume intent
+  survives); the span's edges stop a glide dead. The tab's scrubber already had ScrollView inertia.
+- **One track language everywhere (`TimelineTrackStyle`).** The tab's histogram drew severity as
+  bar *color* at a fixed 3pt width; the detail track drew green motion + a marker lane; the day bar
+  drew alert ticks only. All three now share the detail's vocabulary: green motion bars at the
+  **resolution of the data** (hairline-separated), review markers as red/orange **pills in their
+  own lane**, `TimelineHatch` for no-footage (the tab hand-rolled an identical hatch — now the
+  shared one), and the day bar ticks all severities. Each surface keeps its own axis conventions;
+  it is the vocabulary that is unified, not the geometry. Rewriting the tab's gap bands also fixed
+  the **vertical** axis drawing them 1pt tall (inverted coordinates — the vertical axis maps later
+  instants to smaller offsets).
+- **The stacked panel matches the mock.** The clock gained small trailing seconds (the tab's
+  landscape readout shape; AM/PM dropped rather than trailing *after* the seconds), and the
+  portrait transport is the mock's single row — cluster leading, speed + Live trailing.

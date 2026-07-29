@@ -3,10 +3,10 @@ import SwiftUI
 
 import TimelineDomain
 
-/// The whole day at a glance, under the clock: an hourly motion rollup, a red tick per alert,
-/// hatched stretches with no footage, and — outlined in the accent — the slice of it the scrub
-/// track is currently showing. Dragging anywhere on it puts the playhead at that time of day, so a
-/// jump from breakfast to midnight is one gesture instead of a long scroll.
+/// The whole day at a glance, under the clock: an hourly motion rollup, a severity-colored tick
+/// per review marker, hatched stretches with no footage, and — outlined in the accent — the slice
+/// of it the scrub track is currently showing. Dragging anywhere on it puts the playhead at that
+/// time of day, so a jump from breakfast to midnight is one gesture instead of a long scroll.
 struct DayOverviewBar: View {
     let overview: DayOverview
     let instant: Date
@@ -15,10 +15,14 @@ struct DayOverviewBar: View {
     /// having the track's length threaded down to it.
     let zoom: TimelineZoom
     let liveEdge: Date
-    let onSeek: (Date) -> Void
+    let onScrubBegin: () -> Void
+    let onScrub: (Date) -> Void
+    let onScrubEnd: () -> Void
 
-    private static let alertTickThickness: CGFloat = 2
-    private static let alertTickLength: CGFloat = 5
+    @State private var isDragging = false
+
+    private static let markerTickThickness: CGFloat = 2
+    private static let markerTickLength: CGFloat = 5
 
     var body: some View {
         GeometryReader { geometry in
@@ -26,9 +30,21 @@ struct DayOverviewBar: View {
                 draw(in: context, size: size, visible: visible(forWidth: size.width))
             }
             .contentShape(Rectangle())
+            // A scrub, not a per-frame seek: the drag follows with cheap tolerant seeks and the
+            // release settles exactly — and playback the user was watching resumes afterwards.
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { value in onSeek(instant(atX: value.location.x, width: geometry.size.width)) }
+                    .onChanged { value in
+                        if !isDragging {
+                            isDragging = true
+                            onScrubBegin()
+                        }
+                        onScrub(instant(atX: value.location.x, width: geometry.size.width))
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        onScrubEnd()
+                    }
             )
         }
         .frame(height: 24)
@@ -59,7 +75,7 @@ struct DayOverviewBar: View {
         }
 
         let hourWidth = size.width / CGFloat(DayOverview.hoursInDay)
-        let maxBarHeight = size.height - Self.alertTickLength
+        let maxBarHeight = size.height - Self.markerTickLength
         for (hour, intensity) in overview.hourlyMotion.enumerated() where intensity > 0 {
             let height = max(1.5, maxBarHeight * CGFloat(intensity) / 100)
             context.fill(
@@ -71,21 +87,21 @@ struct DayOverviewBar: View {
                         height: height
                     )
                 ),
-                with: .color(.green)
+                with: .color(TimelineTrackStyle.motionColor)
             )
         }
 
-        for alert in overview.alerts {
+        for marker in overview.markers {
             context.fill(
                 Path(
                     CGRect(
-                        x: x(alert) - Self.alertTickThickness / 2,
+                        x: x(marker.start) - Self.markerTickThickness / 2,
                         y: 0,
-                        width: Self.alertTickThickness,
-                        height: Self.alertTickLength
+                        width: Self.markerTickThickness,
+                        height: Self.markerTickLength
                     )
                 ),
-                with: .color(.red)
+                with: .color(TimelineTrackStyle.markerColor(for: marker.severity))
             )
         }
 

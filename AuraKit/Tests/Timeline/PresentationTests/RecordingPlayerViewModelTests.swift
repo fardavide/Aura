@@ -566,6 +566,66 @@ struct RecordingPlayerViewModelTests {
         #expect(!sut.isPlaying)
     }
 
+    @Test func `given a playing recording when a drag settles then playback resumes`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+        await sut.loadIfNeeded()
+        sut.beginScrub()
+
+        // when
+        sut.scrub(to: at(6000))
+        await sut.endScrub()
+
+        // then — the pause was the drag's, not the user's; letting go hands playback back
+        #expect(sut.isPlaying)
+    }
+
+    @Test func `given a paused recording when a drag settles then it stays paused`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+        await sut.loadIfNeeded()
+        sut.togglePlayPause()
+        sut.beginScrub()
+
+        // when
+        sut.scrub(to: at(6000))
+        await sut.endScrub()
+
+        // then
+        #expect(!sut.isPlaying)
+    }
+
+    @Test func `given a drag settling on an hour with no footage then playback is not resumed`() async {
+        // given
+        let repository = FakeCameraRecordingsRepository(.success(twoHours))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+        sut.beginScrub()
+        sut.scrub(to: at(7250))
+
+        // when — the hour the drag settled on turns out to hold nothing playable
+        repository.result = .success([])
+        await sut.endScrub()
+
+        // then
+        #expect(!sut.isPlaying)
+    }
+
+    @Test func `given play toggled twice during a drag then settling leaves it paused`() async {
+        // given — the user pressed play and then pause mid-drag; that explicit intent wins
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+        await sut.loadIfNeeded()
+        sut.beginScrub()
+        sut.togglePlayPause()
+        sut.togglePlayPause()
+
+        // when
+        await sut.endScrub()
+
+        // then
+        #expect(!sut.isPlaying)
+    }
+
     // MARK: - Jumping
 
     @Test func `given markers when jumping forward then the playhead lands on the next marker's start`() async {
@@ -681,14 +741,100 @@ struct RecordingPlayerViewModelTests {
         let sut = makeViewModel(repository: repository, startingAt: at(9000), clock: clock)
         await sut.loadIfNeeded()
 
-        // when — the stream runs out a few seconds later
+        // when — the stream runs out a few seconds later, and the server has nothing newer yet
         clock.instant = at(9012)
         await sut.advanceToNextWindow()
 
-        // then — no rewind to the top of the hour, and no second fetch of the same window
+        // then — one catch-up refetch of the growing hour, no rewind to the top of it, and the
+        // playhead now reads as parked on the live edge
         #expect(!sut.isPlaying)
         #expect(sut.instant == at(9000))
-        #expect(repository.fetchCount == 1)
+        #expect(repository.fetchCount == 2)
+        #expect(sut.state.isLive)
+    }
+
+    @Test func `given new footage when the live hour plays out then playback continues into it`() async {
+        // given
+        let clock = Clock(at(9005))
+        let repository = FakeCameraRecordingsRepository(.success(footage(from: 7200, to: 9005)))
+        let sut = makeViewModel(repository: repository, startingAt: at(9000), clock: clock)
+        await sut.loadIfNeeded()
+
+        // when — by the time the stream runs out, the server has recorded on
+        clock.instant = at(9040)
+        repository.result = .success(footage(from: 7200, to: 9040))
+        await sut.advanceToNextWindow()
+
+        // then — the grown hour is refetched and playback carries on at the live edge
+        #expect(sut.isPlaying)
+        #expect(sut.state.isLive)
+        #expect(repository.fetchCount == 2)
+    }
+
+    // MARK: - Following the live edge
+
+    @Test func `given footage short of the present when going live then it parks on the newest footage`() async {
+        // given — the live hour's footage stops well short of the wall clock
+        let repository = FakeCameraRecordingsRepository(.success(footage(from: 7200, to: 7250)))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.goLive()
+
+        // then — parked a hair inside the newest clip, so the readout matches the shown frame
+        #expect(sut.instant == at(7249.5))
+        #expect(sut.hasFootage)
+        #expect(sut.state.isLive)
+    }
+
+    @Test func `given a recording opened at the live edge then it reads live from the start`() async {
+        // given - when
+        let sut = makeViewModel(segments: footage(from: 7200, to: 7300), startingAt: now)
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.isLive)
+    }
+
+    @Test func `given a live playhead when a forward skip finds nothing newer then it stays live`() async {
+        // given
+        let sut = makeViewModel(segments: footage(from: 7200, to: 7295), startingAt: at(5000))
+        await sut.loadIfNeeded()
+        await sut.goLive()
+
+        // when — nothing past the newest footage exists yet, so the skip is a no-op
+        await sut.skip(by: 10)
+
+        // then — a move that didn't happen must not demote the playhead to history
+        #expect(sut.state.isLive)
+    }
+
+    @Test func `given a live playhead when skipping back then it reads as history`() async {
+        // given
+        let sut = makeViewModel(segments: footage(from: 3600, to: 7300), startingAt: at(5000))
+        await sut.loadIfNeeded()
+        await sut.goLive()
+
+        // when
+        await sut.skip(by: -10)
+
+        // then
+        #expect(!sut.state.isLive)
+    }
+
+    @Test func `given a drag ending at the span end then it reads live`() async {
+        // given
+        let sut = makeViewModel(segments: footage(from: 3600, to: 7300), startingAt: at(5000))
+        await sut.loadIfNeeded()
+        sut.beginScrub()
+
+        // when
+        sut.scrub(to: at(999_999))
+        await sut.endScrub()
+
+        // then
+        #expect(sut.state.isLive)
     }
 }
 

@@ -243,7 +243,75 @@ struct TimelineTransportTests {
         scenario.sut.togglePlayPause()
 
         // when
+        scenario.sut.beginInteraction()
+
+        // then
+        #expect(!scenario.sut.isPlaying)
+    }
+
+    @Test func `given a playing transport when the scrubber is released then playback resumes`() {
+        // given
+        let scenario = Scenario(instant: at(400))
+        scenario.sut.togglePlayPause()
+        scenario.sut.beginInteraction()
+
+        // when
+        scenario.sut.endInteraction()
+
+        // then — the pause was the drag's, not the user's
+        #expect(scenario.sut.isPlaying)
+    }
+
+    @Test func `given a paused transport when the scrubber is released then it stays paused`() {
+        // given
+        let scenario = Scenario(instant: at(400))
+        scenario.sut.beginInteraction()
+
+        // when
+        scenario.sut.endInteraction()
+
+        // then
+        #expect(!scenario.sut.isPlaying)
+    }
+
+    @Test func `given repeated interaction phases then the resume intent survives them`() {
+        // given — a scroll reports tracking, then interacting, then decelerating, each as a begin
+        let scenario = Scenario(instant: at(400))
+        scenario.sut.togglePlayPause()
+        scenario.sut.beginInteraction()
+        scenario.sut.beginInteraction()
+
+        // when
+        scenario.sut.endInteraction()
+
+        // then
+        #expect(scenario.sut.isPlaying)
+    }
+
+    @Test func `given a deliberate pause during an interaction then release does not resume`() {
+        // given — navigation pauses the grid while a drag is still settling
+        let scenario = Scenario(instant: at(400))
+        scenario.sut.togglePlayPause()
+        scenario.sut.beginInteraction()
         scenario.sut.pause()
+
+        // when
+        scenario.sut.endInteraction()
+
+        // then
+        #expect(!scenario.sut.isPlaying)
+    }
+
+    @Test func `given play toggled during an interaction then release respects the explicit intent`() {
+        // given — the user pressed play and then pause mid-drag
+        let scenario = Scenario(instant: at(400))
+        scenario.sut.togglePlayPause()
+        scenario.sut.beginInteraction()
+        scenario.sut.togglePlayPause()
+        scenario.sut.togglePlayPause()
+
+        // when
+        scenario.sut.endInteraction()
 
         // then
         #expect(!scenario.sut.isPlaying)

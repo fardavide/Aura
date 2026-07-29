@@ -25,7 +25,7 @@ public struct LiveVideoLayout<Video: View>: View {
 
     public var body: some View {
         ZStack {
-            ZoomableContainer(onSingleTap: onSingleTap) {
+            ZoomableContainer(onSingleTap: onSingleTap, clipsContent: true) {
                 video
             }
             .background(.black)

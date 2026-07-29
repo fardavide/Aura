@@ -118,14 +118,25 @@ struct RecordingTimelinePanel: View {
             .lineLimit(1)
     }
 
-    /// The big readout. Hours and minutes only: the ruler, the day bar's scale and this all have to
-    /// agree, and the exact second lives on the hero timestamp right above the panel.
+    /// The big readout — hours and minutes, with the exact second trailing small and quiet, the
+    /// same shape the tab's landscape readout uses. The AM/PM marker is dropped rather than
+    /// trailed after the seconds, where it would read as part of them.
     private func clock(size: CGFloat) -> some View {
-        Text(state.instant, format: .dateTime.hour().minute())
-            .font(.system(size: size, weight: .bold, design: .rounded))
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+        HStack(alignment: .firstTextBaseline, spacing: 1) {
+            Text(state.instant, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+                .font(.system(size: size, weight: .bold, design: .rounded))
+            Text(verbatim: secondsSuffix)
+                .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+
+    private var secondsSuffix: String {
+        let second = calendar.component(.second, from: state.instant)
+        return second < 10 ? ":0\(second)" : ":\(second)"
     }
 
     private var zoomPicker: some View {
@@ -161,7 +172,9 @@ struct RecordingTimelinePanel: View {
                 instant: state.instant,
                 zoom: state.zoom,
                 liveEdge: state.span.end,
-                onSeek: actions.seek
+                onScrubBegin: actions.beginScrub,
+                onScrub: actions.scrub,
+                onScrubEnd: actions.endScrub
             )
             DayOverviewScale()
         }

@@ -3,9 +3,11 @@ import SwiftUI
 
 import TimelineDomain
 
-/// The Liquid-Glass scrubber: a time header, a scrollable activity **histogram** (motion length,
-/// colored by review severity, gaps dimmed) with a fixed center playhead, and — horizontal only —
-/// a legend. Scrolling/panning the histogram sets the scrub time.
+/// The Liquid-Glass scrubber: a time header, a scrollable activity **histogram** with a fixed
+/// center playhead, and — horizontal only — a legend. Drawn in the shared `TimelineTrackStyle`
+/// language (green motion at data resolution, red/orange marker pills in their own lane, hatched
+/// gaps), so this track, the detail's and the day bar read as one design. Scrolling/panning the
+/// histogram sets the scrub time.
 ///
 /// Laid out along `axis`: horizontal (a wide card floated at the bottom) or vertical (a tall card
 /// on the right, for iPhone landscape). Time always reads start→end along the scroll axis — left→
@@ -120,16 +122,17 @@ struct ScrollableTimelineView: View {
                 switch phase {
                 case .idle:
                     clock.endScrub()
+                    transport.endInteraction()
                 // Our own re-anchoring while playing — not the user, so it must neither pause
                 // playback nor block the auto-refresh.
                 case .animating:
                     break
                 // Pause auto-refresh while the user is panning so a tick can't yank the histogram,
                 // and hand the playhead over: the drag and the transport would otherwise both be
-                // driving the same clock.
+                // driving the same clock. Playback the user was watching resumes on release.
                 case .tracking, .interacting, .decelerating:
                     clock.beginScrub()
-                    transport.pause()
+                    transport.beginInteraction()
                 }
             }
             // Guard against isScrubbing getting stuck if the view disappears mid-deceleration.
@@ -315,20 +318,41 @@ private struct HistogramTrack: View {
                     : time.timeIntervalSince(span.start) / duration
                 return CGFloat(fraction) * timeExtent
             }
+            /// The band `[from, to]` covers along the time axis, whichever way this axis runs.
+            func timeBand(from start: Date, to end: Date) -> (lo: CGFloat, hi: CGFloat) {
+                let a = pos(start)
+                let b = pos(end)
+                return (Swift.min(a, b), Swift.max(a, b))
+            }
 
             drawGaps(in: context, size: size, isVertical: isVertical, pos: pos)
             drawHourLabels(in: context, size: size, isVertical: isVertical, pos: pos, calendar: calendar)
 
-            let barWidth: CGFloat = 3
-            let maxBarLength = (isVertical ? size.width : size.height) - labelArea
+            // The lane sits against the label gutter; motion grows from the opposite edge, kept
+            // clear of it — the same cross-axis order as the detail's scrub track.
+            let laneStart = labelArea + TimelineTrackStyle.laneInset
+            let maxBarLength = (isVertical ? size.width : size.height)
+                - laneStart - TimelineTrackStyle.laneThickness - TimelineTrackStyle.laneClearance
+            let bucketDuration = timeline.motionBucketDuration
             for bucket in timeline.motion where bucket.intensity > 0 {
-                let barLength = Swift.max(barWidth, maxBarLength * CGFloat(bucket.intensity) / 100)
-                let p = pos(bucket.time)
-                // Horizontal: bars rise from the bottom. Vertical: bars grow rightward from the left gutter.
+                let band = timeBand(from: bucket.time, to: bucket.time.addingTimeInterval(bucketDuration))
+                let barAcross = Swift.max(1, band.hi - band.lo - TimelineTrackStyle.motionBarSeparator)
+                let barLength = Swift.max(2, maxBarLength * CGFloat(bucket.intensity) / 100)
                 let rect = isVertical
-                    ? CGRect(x: labelArea, y: p - barWidth / 2, width: barLength, height: barWidth)
-                    : CGRect(x: p - barWidth / 2, y: size.height - barLength, width: barWidth, height: barLength)
-                context.fill(Path(roundedRect: rect, cornerRadius: barWidth / 2), with: .color(color(at: bucket.time).opacity(0.9)))
+                    ? CGRect(x: size.width - barLength, y: band.lo, width: barLength, height: barAcross)
+                    : CGRect(x: band.lo, y: size.height - barLength, width: barAcross, height: barLength)
+                context.fill(Path(rect), with: .color(TimelineTrackStyle.motionColor))
+            }
+
+            for marker in timeline.markers {
+                // An in-progress marker has no end yet; it runs to the live edge.
+                let band = timeBand(from: marker.start, to: marker.end ?? span.end)
+                let across = Swift.max(band.hi - band.lo, TimelineTrackStyle.minimumMarkerLength)
+                let mid = (band.lo + band.hi) / 2
+                let pill = isVertical
+                    ? CGRect(x: laneStart, y: mid - across / 2, width: TimelineTrackStyle.laneThickness, height: across)
+                    : CGRect(x: mid - across / 2, y: laneStart, width: across, height: TimelineTrackStyle.laneThickness)
+                TimelineTrackStyle.fillMarkerPill(pill, severity: marker.severity, in: context)
             }
         }
         // Horizontal: fixed `length` wide, height from the 68pt strip. Vertical: `length` tall, the
@@ -336,29 +360,16 @@ private struct HistogramTrack: View {
         .frame(width: axis == .horizontal ? length : nil, height: axis == .vertical ? length : nil)
     }
 
-    /// No-footage ranges drawn as a diagonal hatch — distinct from "recorded but no motion".
+    /// No-footage ranges drawn with the shared hatch — distinct from "recorded but no motion".
     /// Spans the full cross-axis: a vertical strip (horizontal track) or a horizontal band (vertical).
     private func drawGaps(in context: GraphicsContext, size: CGSize, isVertical: Bool, pos: (Date) -> CGFloat) {
         for gap in timeline.gaps {
             let start = pos(gap.range.start)
             let end = Swift.max(start + 1, pos(gap.range.end))
             let rect = isVertical
-                ? CGRect(x: 0, y: start, width: size.width, height: end - start)
+                ? CGRect(x: 0, y: Swift.min(start, end), width: size.width, height: abs(end - start))
                 : CGRect(x: start, y: 0, width: end - start, height: size.height)
-            context.fill(Path(rect), with: .color(.gray.opacity(0.08)))
-            context.drawLayer { layer in
-                layer.clip(to: Path(rect))
-                // 45° lines: run length equals the band height so the slope stays diagonal in both axes.
-                let run = rect.height
-                var hatch = Path()
-                var origin = rect.minX - run
-                while origin < rect.maxX {
-                    hatch.move(to: CGPoint(x: origin, y: rect.maxY))
-                    hatch.addLine(to: CGPoint(x: origin + run, y: rect.minY))
-                    origin += 7
-                }
-                layer.stroke(hatch, with: .color(.gray.opacity(0.3)), lineWidth: 1)
-            }
+            TimelineHatch.fill(rect, in: context)
         }
     }
 
@@ -384,16 +395,5 @@ private struct HistogramTrack: View {
             guard let next = calendar.date(byAdding: .hour, value: 1, to: tick) else { return }
             tick = next
         }
-    }
-
-    /// Bar color: red over an alert, orange over a detection, else green (motion).
-    private func color(at time: Date) -> Color {
-        for marker in timeline.markers {
-            let end = marker.end ?? span.end
-            if time >= marker.start, time < end {
-                return marker.severity == .alert ? .red : .orange
-            }
-        }
-        return .green
     }
 }
