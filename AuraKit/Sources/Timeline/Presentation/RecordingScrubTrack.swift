@@ -15,6 +15,7 @@ struct RecordingScrubTrack: View {
     let axis: Axis
     let state: RecordingDetailState
     let actions: RecordingDetailActions
+    let filmstrip: RecordingFilmstripStore
     /// The track's cross-axis size — how tall (horizontal) or wide (vertical) the footage band is.
     let thickness: CGFloat
     /// The glide running after a thrown release. Owned by the panel, which cancels it whenever
@@ -67,6 +68,8 @@ struct RecordingScrubTrack: View {
             timeline: state.dayTimeline,
             span: state.span
         )
+        // Behind the canvas, so the motion, markers and hatching stay legible over the stills.
+        .background { filmstripBackground(length: length) }
         .background(.fill.quaternary)
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .overlay { playhead }
@@ -86,6 +89,22 @@ struct RecordingScrubTrack: View {
             case .decrement: actions.skip(-60)
             @unknown default: break
             }
+        }
+    }
+
+    /// The design's Hour-zoom filmstrip. Only at that density: a day or week of ten-minute stills
+    /// would be sub-cell-width noise, and coarser grids would re-render every cell on each zoom.
+    @ViewBuilder private func filmstripBackground(length: CGFloat) -> some View {
+        switch state.zoom {
+        case .hour:
+            RecordingFilmstrip(
+                axis: axis,
+                viewport: viewport(length: length),
+                span: state.span,
+                store: filmstrip
+            )
+        case .day, .week:
+            EmptyView()
         }
     }
 

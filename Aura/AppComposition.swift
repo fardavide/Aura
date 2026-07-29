@@ -167,6 +167,13 @@ final class AppComposition {
             getDayTimeline: GetDayTimeline(
                 repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),
+            filmstrip: RecordingFilmstripStore(
+                camera: camera.name,
+                previews: GetCameraPreviews(
+                    provider: FrigatePreviewSourceProvider(config: config, httpClient: httpClient)
+                ),
+                imageLoader: FrigatePreviewImageLoader(config: config, httpClient: httpClient)
+            ),
             now: { Date() },
             startingAt: instant,
             days: timelineSpanDays

@@ -967,6 +967,11 @@ private func makeViewModel(
         camera: camera,
         recordings: GetCameraRecordings(repository: repository),
         getDayTimeline: GetDayTimeline(repository: overlays),
+        filmstrip: RecordingFilmstripStore(
+            camera: camera.name,
+            previews: GetCameraPreviews(provider: FakeCameraPreviewProvider()),
+            imageLoader: FakePreviewImageLoader()
+        ),
         now: { clock?.instant ?? now },
         startingAt: instant,
         days: 2
