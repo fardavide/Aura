@@ -152,6 +152,11 @@ func timelineScreen(
                 getDayTimeline: GetDayTimeline(
                     repository: FakeCameraDayTimelineRepository(.success(quietTimelineFixture()))
                 ),
+                filmstrip: RecordingFilmstripStore(
+                    camera: camera.name,
+                    previews: GetCameraPreviews(provider: FakeCameraPreviewProvider()),
+                    imageLoader: FakePreviewImageLoader()
+                ),
                 now: { snapshotNow },
                 startingAt: instant,
                 days: snapshotDays

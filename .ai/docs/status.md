@@ -172,7 +172,18 @@
   hatch); the panel clock gained trailing seconds and the portrait transport is the mock's single
   row. A `cameraAreaHighlights` env flag + `detail-areas` baseline outline the surface and the
   camera slot so panel-over-video regressions show up in snapshots. **Deferred**: the preview
-  thumbnail filmstrip (spawned as its own follow-up task). See `decisions.md`.
+  thumbnail filmstrip (landed in 0.5.3). See `decisions.md`.
+
+- **Timeline detail: Hour-zoom preview filmstrip (0.5.3).** The mock's deferred filmstrip: at Hour
+  zoom the scrub track fills with one preview still per **fixed ten-minute slot**
+  (`FilmstripSlots`), drawn behind the canvas so motion/markers/hatch stay legible. Completed
+  hours render via `AVAssetImageGenerator` over the **authed** per-hour `preview.mp4`
+  (`makeAuthedAsset`, tolerant seeks); the live hour shows the nearest preview frame at or before
+  the slot, upgrading when the hour completes into a clip. Thumbnails are cached per
+  **(material, slot)** in `RecordingFilmstripStore` (bounded, farthest-from-batch eviction);
+  material is fetched once per span so scrubbing costs no requests. Slots with nothing to show
+  degrade to stable placeholder cells — which is exactly what the new `detail-hour` snapshot
+  baseline captures. See `decisions.md`.
 
 - **Timeline overlay reads made server-safe (0.5.1).** Field-reported outage: opening the Timeline
   froze a modest Frigate server (API unresponsive → web UI "offline", HA entity Unavailable, VOD
@@ -185,9 +196,9 @@
   live edge** like the tab's; the tab paints its grid before the overlays; and a walk cut short by
   an unreachable server resumes on a later refresh. See `decisions.md` and `frigate-integration.md`.
 
-Package logic is covered by Swift Testing (455 tests as of 0.5.1, per CI). All four main screens — **Timeline**
+Package logic is covered by Swift Testing (489 tests as of 0.5.3). All four main screens — **Timeline**
 (ready busy / gappy / quiet / **playing**, empty, failed), the **Timeline detail** (playing, paused
-at 8×, week zoom, no footage, live), the **Cameras grid**, the **Events list**, and
+at 8×, week zoom, hour-zoom filmstrip, no footage, live, area highlights), the **Cameras grid**, the **Events list**, and
 **Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
 iPhone + iPad (portrait + landscape) × light + dark on the simulator.

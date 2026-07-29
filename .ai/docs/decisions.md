@@ -1071,3 +1071,44 @@ of the above before landing, and the guards it forced are part of the contract:
 - The tab histogram's **vertical gap bands really were still 1pt** in the first cut (the
   pre-existing `max(start + 1, …)` clamp ran before the reordering, collapsing it) — the band is
   now ordered before the minimum is enforced, which is the fix the earlier bullet describes.
+
+## Timeline detail: the Hour-zoom preview filmstrip (0.5.3)
+The mock's last deferred piece (out of scope in 0.5.0, explicitly spun off in 0.5.2): at Hour zoom
+the scrub track fills with preview stills, one per slot of footage. Day/week zoom stay stills-free
+— a cell there would be sub-cell-width noise, and each zoom flip would re-render every slot.
+
+- **Slots live on a fixed ten-minute epoch grid** (`FilmstripSlots`, the `RecordingWindow`
+  pattern): a slot keeps its identity — and its cached thumbnail — while the viewport slides
+  around it, so scrubbing never re-renders a still. The grid is clipped to the span at both ends;
+  at Hour density (480 pt/h) a slot is an 80pt cell.
+- **Two materials, resolved per slot** (`RecordingFilmstripStore`): a completed hour renders
+  through `AVAssetImageGenerator` over that hour's **authed** low-res `preview.mp4`
+  (`makeAuthedAsset`, extracted from `makeAuthedPlayerItem`; ±30s tolerant seeks — the preview is
+  ~1fps and a slot stands for ten minutes, so the nearest keyframe is indistinguishable and far
+  cheaper). The live hour (no mp4 assembled yet) shows the nearest still preview frame **at or
+  before** the slot — the same `mostRecent(atOrBefore:)` the tiles use, and the filter is also
+  what keeps a historical gap slot from borrowing a *current*-hour still: every listed frame is
+  newer than such a slot, so none qualifies.
+- **Cached per (material, slot), regenerated only on material change.** The cache key is what the
+  thumbnail was rendered from, so the one legitimate churn — the live hour completing into a clip
+  — regenerates exactly those slots, and nothing else ever does. A failed render stays unresolved
+  (retried by a later batch) rather than caching the failure.
+- **Material is fetched once per span**, not per batch: scrubbing slides the slots inside a frozen
+  span, so the clip/frame lists re-read only when the live edge extends it (the 30s overlay
+  refresh cadence) — no fetch-per-drag-frame. A failed clips read keeps the last good material and
+  leaves the span unmarked so the next update retries; frames stay best-effort on top (the tile's
+  rule). The cache is bounded (144 slots ≈ a day); overflow evicts the slots farthest from the
+  batch just requested.
+- **The strip draws behind the track's canvas** so motion, markers, hatching and the pre-span wash
+  stay legible over the stills, and the generation seam (`FilmstripThumbnailGenerating`) is
+  internal — its fake lives in the owning test target, per the internal-seam rule. Cells are
+  hairline-separated (the motion-bar separator), aspect-filled, on both axes via the now-shared
+  `TrackGeometry`.
+- **Snapshots capture the placeholder cells.** Network images can't render in a snapshot, so the
+  store degrades to stable `.fill.tertiary` cells whenever material is missing — the new
+  `detail-hour` baseline records that state across the matrix, and the six existing detail
+  baselines are untouched because the strip is pixel-inert outside Hour zoom.
+- The store rides `RecordingPlayerViewModel` (constructor-injected, built in the composition root
+  with the Frigate preview provider + image loader), so thumbnails survive zoom flips and
+  arrangement changes; the update trigger is a `.task` keyed on (slots, span) — a playhead tick
+  that merely slides the cells re-requests nothing.

@@ -20,7 +20,7 @@ public struct RecordingPlayerView: View {
     }
 
     public var body: some View {
-        RecordingDetailLayout(state: viewModel.state, actions: actions) {
+        RecordingDetailLayout(state: viewModel.state, actions: actions, filmstrip: viewModel.filmstrip) {
             content
         }
         .navigationTitle(viewModel.camera.friendlyName ?? viewModel.camera.name.value)

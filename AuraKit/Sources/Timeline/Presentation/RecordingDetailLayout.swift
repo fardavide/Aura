@@ -23,6 +23,7 @@ import CommonPlayer
 public struct RecordingDetailLayout<Video: View>: View {
     private let state: RecordingDetailState
     private let actions: RecordingDetailActions
+    private let filmstrip: RecordingFilmstripStore
     private let video: Video
 
     #if os(iOS)
@@ -37,10 +38,12 @@ public struct RecordingDetailLayout<Video: View>: View {
     public init(
         state: RecordingDetailState,
         actions: RecordingDetailActions,
+        filmstrip: RecordingFilmstripStore,
         @ViewBuilder video: () -> Video
     ) {
         self.state = state
         self.actions = actions
+        self.filmstrip = filmstrip
         self.video = video()
     }
 
@@ -104,7 +107,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     }
 
     private func panel(_ arrangement: RecordingTimelinePanel.Arrangement) -> some View {
-        RecordingTimelinePanel(arrangement: arrangement, state: state, actions: actions)
+        RecordingTimelinePanel(arrangement: arrangement, state: state, actions: actions, filmstrip: filmstrip)
     }
 
     /// Diagnostics for the screenshot suite: everything zoomed footage may cover. Drawn above the

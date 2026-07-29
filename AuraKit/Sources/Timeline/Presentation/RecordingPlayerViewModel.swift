@@ -31,6 +31,9 @@ public final class RecordingPlayerViewModel {
     }
 
     public let camera: Camera
+    /// The Hour-zoom filmstrip's thumbnails — owned here so the strip survives zoom flips and
+    /// re-layouts, handed to the layout beside `state`.
+    public let filmstrip: RecordingFilmstripStore
     public private(set) var display: Display = .loading
     public private(set) var isPlaying = false
     public private(set) var speed: PlaybackSpeed = .oneX
@@ -116,11 +119,13 @@ public final class RecordingPlayerViewModel {
         camera: Camera,
         recordings: GetCameraRecordings,
         getDayTimeline: GetDayTimeline,
+        filmstrip: RecordingFilmstripStore,
         now: @escaping @MainActor () -> Date,
         startingAt instant: Date,
         days: Int
     ) {
         self.camera = camera
+        self.filmstrip = filmstrip
         self.recordings = recordings
         self.getDayTimeline = getDayTimeline
         self.now = now

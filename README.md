@@ -43,6 +43,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.5.3 — 2026-07-29
+- **The camera timeline shows what happened.** At Hour zoom, the scrub track fills with a
+  filmstrip of preview thumbnails — one still for every ten minutes of footage — so you can see
+  what an hour holds before scrubbing to it. Completed hours draw their stills from the recorded
+  previews; the in-progress hour uses its freshest preview frame, upgrading once the hour's
+  preview is assembled. Stretches with nothing recorded stay as empty cells.
+
 ### 0.5.2 — 2026-07-29
 - **A camera's timeline puts the picture first.** On iPhone the footage now sits at the top of the
   screen, fully visible above the controls, instead of centred and half-hidden behind them — and

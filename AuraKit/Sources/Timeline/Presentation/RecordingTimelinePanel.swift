@@ -19,6 +19,7 @@ struct RecordingTimelinePanel: View {
     let arrangement: Arrangement
     let state: RecordingDetailState
     let actions: RecordingDetailActions
+    let filmstrip: RecordingFilmstripStore
 
     @Environment(\.calendar) private var calendar
     /// The scrub track's release glide. Owned here — above the track, the day bar and the
@@ -119,6 +120,7 @@ struct RecordingTimelinePanel: View {
                 axis: .horizontal,
                 state: state,
                 actions: coordinated,
+                filmstrip: filmstrip,
                 thickness: Self.trackThickness,
                 flingTask: $flingTask
             )
@@ -132,6 +134,7 @@ struct RecordingTimelinePanel: View {
             axis: .vertical,
             state: state,
             actions: coordinated,
+            filmstrip: filmstrip,
             thickness: Self.railTrackThickness,
             flingTask: $flingTask
         )
