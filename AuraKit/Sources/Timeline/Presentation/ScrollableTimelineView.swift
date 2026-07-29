@@ -135,8 +135,12 @@ struct ScrollableTimelineView: View {
                     transport.beginInteraction()
                 }
             }
-            // Guard against isScrubbing getting stuck if the view disappears mid-deceleration.
-            .onDisappear { clock.endScrub() }
+            // Guard against isScrubbing — and a pending playback resume — getting stuck if the
+            // view disappears mid-deceleration.
+            .onDisappear {
+                clock.endScrub()
+                transport.endInteraction()
+            }
             // Simultaneous so the pinch composes with the scroll pan instead of blocking it.
             .simultaneousGesture(magnify)
             .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -364,11 +368,15 @@ private struct HistogramTrack: View {
     /// Spans the full cross-axis: a vertical strip (horizontal track) or a horizontal band (vertical).
     private func drawGaps(in context: GraphicsContext, size: CGSize, isVertical: Bool, pos: (Date) -> CGFloat) {
         for gap in timeline.gaps {
-            let start = pos(gap.range.start)
-            let end = Swift.max(start + 1, pos(gap.range.end))
+            // The vertical axis maps later instants to smaller offsets, so order the band before
+            // enforcing the minimum — clamping against the raw start collapses it to a hairline.
+            let a = pos(gap.range.start)
+            let b = pos(gap.range.end)
+            let lo = Swift.min(a, b)
+            let hi = Swift.max(Swift.max(a, b), lo + 1)
             let rect = isVertical
-                ? CGRect(x: 0, y: Swift.min(start, end), width: size.width, height: abs(end - start))
-                : CGRect(x: start, y: 0, width: end - start, height: size.height)
+                ? CGRect(x: 0, y: lo, width: size.width, height: hi - lo)
+                : CGRect(x: lo, y: 0, width: hi - lo, height: size.height)
             TimelineHatch.fill(rect, in: context)
         }
     }

@@ -1043,4 +1043,31 @@ Save-frame / Clip-export remain out of scope per the 0.5.0 decision.
   instants to smaller offsets).
 - **The stacked panel matches the mock.** The clock gained small trailing seconds (the tab's
   landscape readout shape; AM/PM dropped rather than trailing *after* the seconds), and the
-  portrait transport is the mock's single row — cluster leading, speed + Live trailing.
+  portrait transport is the mock's single row — cluster leading, speed + Live trailing, **small
+  controls** (at regular size the row's minimum width overran the phone and silently pushed the
+  whole layout past the screen edges — the first bug the new `detail-areas` highlight baseline
+  caught), with a `ViewThatFits` two-row fallback for narrow split-view windows and large Dynamic
+  Type.
+
+An adversarial review pass (four dimension reviewers, two refuters per finding) reshaped several
+of the above before landing, and the guards it forced are part of the contract:
+- `advanceToNextWindow`'s post-refetch state writes are gated on **whether the load actually
+  applied** (`load` now answers it) — a scrub or skip taken during the in-flight catch-up is newer
+  intent, and the superseded refetch must neither re-mark the playhead live nor pause what the
+  user resumed.
+- `endScrub` is **scrub-generation guarded**: the settle can suspend on an hour fetch, and a new
+  grab taken meanwhile owns the playhead — the older settle yields, and the resume intent
+  survives to the settle that is actually last. `beginScrub` also invalidates in-flight window
+  loads over loaded content (the drag owns the playhead; a landing load must not yank it) —
+  deliberately not during the very first load, which must keep its right to resolve the spinner.
+- The **glide is owned by the panel**, not the track: every playhead-moving verb runs through a
+  coordinated actions wrapper that settles a running glide first (two drivers would fight over
+  the playhead frame by frame), `beginScrub` cancels without settling so a caught glide's session
+  carries its resume intent into the new grab, and the panel's `onDisappear` settles an abandoned
+  glide. Both draggable strips also settle on **gesture cancellation** (a `@GestureState` reset is
+  the only signal SwiftUI gives when `onEnded` never comes) so playback can't strand paused.
+- `goLive`'s settle runs only over a `.ready` display — after a failed live-hour fetch the
+  timeline still describes the old hour, and settling against it would teleport the readout.
+- The tab histogram's **vertical gap bands really were still 1pt** in the first cut (the
+  pre-existing `max(start + 1, …)` clamp ran before the reordering, collapsing it) — the band is
+  now ordered before the minimum is enforced, which is the fix the earlier bullet describes.

@@ -7,6 +7,8 @@ import Foundation
 /// Pure — the release velocity is fixed at creation and every offset is a function of elapsed
 /// time, so the curve is unit-tested while the driving loop stays a thin piece of view code.
 struct ScrubFling: Equatable {
+    let initialVelocity: CGFloat
+
     /// UIScrollView's `.normal` deceleration factor, restated per second (it is defined per
     /// millisecond), so the same feel carries over to a per-second time base.
     private static let decelerationPerSecond: CGFloat = pow(0.998, 1000)
@@ -14,8 +16,6 @@ struct ScrubFling: Equatable {
     private static let minimumVelocity: CGFloat = 80
     /// The residual speed that counts as stopped — the asymptote is never actually reached.
     private static let restVelocity: CGFloat = 8
-
-    let initialVelocity: CGFloat
 
     /// `nil` when the release was too slow to read as a throw.
     init?(velocity: CGFloat) {

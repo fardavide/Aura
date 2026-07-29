@@ -6,7 +6,11 @@ import Testing
 struct ScrubFlingTests {
 
     @Test func `given a gentle release then no fling starts`() {
-        #expect(ScrubFling(velocity: 40) == nil)
+        // given - when
+        let fling = ScrubFling(velocity: 40)
+
+        // then
+        #expect(fling == nil)
     }
 
     @Test func `given a brisk release then the glide covers the projected distance`() throws {

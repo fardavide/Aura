@@ -611,6 +611,32 @@ struct RecordingPlayerViewModelTests {
         #expect(!sut.isPlaying)
     }
 
+    // The settle can suspend on an hour fetch; a user who grabs the track again during it owns
+    // the playhead — the first settle must yield, and the resume intent must survive to the last.
+    @Test func `given a new grab while a drag settles then the resume survives to the final settle`() async {
+        // given — the drag's settle crosses into the next hour, and the fetch is held open while
+        // the user grabs the track again
+        let repository = FakeCameraRecordingsRepository(.success(twoHours))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+        sut.beginScrub()
+        sut.scrub(to: at(7250))
+        repository.onSegments = { [weak sut] call in
+            guard call == 2 else { return }
+            await sut?.beginScrub()
+            await sut?.scrub(to: at(6000))
+        }
+
+        // when — the first settle lands under the new grab, then that grab settles too
+        await sut.endScrub()
+        let pausedUnderTheNewGrab = sut.isPlaying
+        await sut.endScrub()
+
+        // then
+        #expect(!pausedUnderTheNewGrab)
+        #expect(sut.isPlaying)
+    }
+
     @Test func `given play toggled twice during a drag then settling leaves it paused`() async {
         // given — the user pressed play and then pause mid-drag; that explicit intent wins
         let sut = makeViewModel(segments: fullHour(from: 3600))
@@ -769,6 +795,47 @@ struct RecordingPlayerViewModelTests {
         #expect(sut.isPlaying)
         #expect(sut.state.isLive)
         #expect(repository.fetchCount == 2)
+    }
+
+    // The catch-up refetch suspends on the network; a scrub taken during it is newer intent, and
+    // the refetch landing afterwards must neither re-mark the playhead live nor pause playback
+    // the user just resumed.
+    @Test func `given a scrub during the live hour's catch-up refetch then the newer intent wins`() async {
+        // given — playback at the live edge runs out, and while the grown hour is refetched the
+        // user drags back into history and lets go
+        let clock = Clock(at(9005))
+        let repository = FakeCameraRecordingsRepository(.success(footage(from: 7200, to: 9005)))
+        let sut = makeViewModel(repository: repository, startingAt: at(9000), clock: clock)
+        await sut.loadIfNeeded()
+        repository.onSegments = { [weak sut] call in
+            guard call == 2 else { return }
+            await sut?.beginScrub()
+            await sut?.scrub(to: at(8000))
+            await sut?.endScrub()
+        }
+
+        // when
+        clock.instant = at(9012)
+        await sut.advanceToNextWindow()
+
+        // then — the drag's position and its resumed playback stand
+        #expect(sut.instant == at(8000))
+        #expect(sut.isPlaying)
+        #expect(!sut.state.isLive)
+    }
+
+    @Test func `given the live window failing to load when going live then the readout stays put`() async {
+        // given
+        let repository = FakeCameraRecordingsRepository(.success(fullHour(from: 3600)))
+        let sut = makeViewModel(repository: repository, startingAt: at(5000))
+        await sut.loadIfNeeded()
+
+        // when — the live hour's fetch fails under goLive
+        repository.result = .failure(.serverUnavailable)
+        await sut.goLive()
+
+        // then — no settle against the stale hour's footage: the readout holds where it was
+        #expect(sut.instant == at(5000))
     }
 
     // MARK: - Following the live edge

@@ -102,6 +102,9 @@ public final class RecordingPlayerViewModel {
     /// the settle hands playback back, unless an explicit play/pause taken meanwhile wins.
     private var isScrubbing = false
     private var resumePlaybackOnSettle = false
+    /// Stamps each grab of the track, so a settle that suspended on an hour fetch can tell a
+    /// newer grab took the playhead while it was away — and yield to it.
+    private var scrubGeneration = 0
     /// Stamps each window load so one that lands after a newer request — a second skip, or a seek
     /// the user made while it was in flight — is dropped instead of yanking the playhead back.
     private var loadGeneration = 0
@@ -245,6 +248,11 @@ public final class RecordingPlayerViewModel {
             isScrubbing = true
             resumePlaybackOnSettle = isPlaying
         }
+        scrubGeneration += 1
+        // Over loaded content a grab is also newer intent than any window load still in flight —
+        // the drag owns the playhead, so a landing load must not yank it. (The very first load
+        // stays: discarding it would strand the spinner.)
+        if case .ready = display { loadGeneration += 1 }
         setPlaying(false)
     }
 
@@ -262,10 +270,14 @@ public final class RecordingPlayerViewModel {
     }
 
     /// Settles the drag on its final instant, swapping windows if it ran into another hour, and
-    /// hands playback back if the drag was what paused it.
+    /// hands playback back if the drag was what paused it. The settle can suspend on that swap's
+    /// fetch — a newer grab taken meanwhile owns the playhead, so this one yields to it and the
+    /// resume intent survives to the settle that is actually last.
     public func endScrub() async {
-        isScrubbing = false
+        let generation = scrubGeneration
         await seek(to: instant)
+        guard generation == scrubGeneration else { return }
+        isScrubbing = false
         guard resumePlaybackOnSettle else { return }
         resumePlaybackOnSettle = false
         if isPlayable { setPlaying(true) }
@@ -292,8 +304,10 @@ public final class RecordingPlayerViewModel {
         await seek(to: span.end)
         // The wall clock runs ahead of the newest recorded frame — segments land seconds late —
         // so the edge itself usually has no footage. Park a hair inside the newest clip instead,
-        // where the readout, the footage check and the shown frame all agree.
-        guard !hasFootage, timeline.playableDuration > Self.liveSettleBackoff else { return }
+        // where the readout, the footage check and the shown frame all agree. Only over a loaded
+        // window: after a failed live-hour fetch the timeline is still the old hour's, and
+        // settling against it would teleport the readout to stale footage.
+        guard case .ready = display, !hasFootage, timeline.playableDuration > Self.liveSettleBackoff else { return }
         let playerTime = timeline.playableDuration - Self.liveSettleBackoff
         apply(instant: timeline.instant(atPlayerTime: playerTime))
         movePlayer(toPlayerTime: playerTime, exact: true)
@@ -306,7 +320,9 @@ public final class RecordingPlayerViewModel {
     func advanceToNextWindow() async {
         if await loadFollowingWindow() { return }
         let playableBeforeRefetch = timeline.playableDuration
-        await load(window: window, seeking: .instant(instant))
+        // A user action taken while the refetch was in flight is newer intent — a superseded or
+        // failed refetch must neither re-mark the playhead live nor pause what they resumed.
+        guard await load(window: window, seeking: .instant(instant)) else { return }
         followsLiveEdge = true
         if timeline.playableDuration <= playableBeforeRefetch {
             setPlaying(false)
@@ -323,7 +339,10 @@ public final class RecordingPlayerViewModel {
         return true
     }
 
-    private func load(window newWindow: TimeRange, seeking target: SeekTarget) async {
+    /// Answers whether the window was applied — `false` for a superseded or failed load, so a
+    /// caller with follow-up state changes (the live-hour catch-up) knows to drop them too.
+    @discardableResult
+    private func load(window newWindow: TimeRange, seeking target: SeekTarget) async -> Bool {
         loadGeneration += 1
         let generation = loadGeneration
         let playback: RecordingPlayback
@@ -332,18 +351,18 @@ public final class RecordingPlayerViewModel {
         } catch {
             // A torn-down fetch (the screen was left) is not a server failure — leave the state
             // for whatever replaces it rather than flashing an error on the way out.
-            if Task.isCancelled || generation != loadGeneration { return }
+            if Task.isCancelled || generation != loadGeneration { return false }
             // Tear the old player down first: the error screen hides the transport, so a player
             // left running would keep streaming — and keep moving the playhead — unstoppably.
             detachPlayer()
             display = .failed
             isPlaying = false
-            return
+            return false
         }
-        guard generation == loadGeneration else { return }
+        guard generation == loadGeneration else { return false }
         // The live hour's catch-up refetch found nothing new: the player is already parked on the
         // newest frame, and rebuilding it would only blank the picture for the same frames.
-        if newWindow == window, playback.timeline == timeline, case .ready = display { return }
+        if newWindow == window, playback.timeline == timeline, case .ready = display { return true }
         window = newWindow
         timeline = playback.timeline
         detachPlayer()
@@ -352,7 +371,7 @@ public final class RecordingPlayerViewModel {
             apply(instant: resolve(target))
             display = .noFootage
             isPlaying = false
-            return
+            return true
         }
         let player = makeAuthedPlayer(url: playback.source.url, headers: playback.source.headers)
         attach(player, playing: newWindow)
@@ -361,6 +380,7 @@ public final class RecordingPlayerViewModel {
         // Read the intent now rather than capturing it at call time: a play/pause taken while the
         // fetch was in flight is the newer one and must not be reverted.
         setPlaying(isPlaying)
+        return true
     }
 
     private func resolve(_ target: SeekTarget) -> Date {

@@ -20,6 +20,9 @@ struct DayOverviewBar: View {
     let onScrubEnd: () -> Void
 
     @State private var isDragging = false
+    /// Live while the system considers the drag active — SwiftUI resets it when a gesture is
+    /// cancelled without `onEnded`, which is how the scrub still gets settled then.
+    @GestureState private var dragActive = false
 
     private static let markerTickThickness: CGFloat = 2
     private static let markerTickLength: CGFloat = 5
@@ -34,6 +37,7 @@ struct DayOverviewBar: View {
             // release settles exactly — and playback the user was watching resumes afterwards.
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($dragActive) { _, active, _ in active = true }
                     .onChanged { value in
                         if !isDragging {
                             isDragging = true
@@ -46,6 +50,12 @@ struct DayOverviewBar: View {
                         onScrubEnd()
                     }
             )
+            .onChange(of: dragActive) { _, active in
+                // A cancelled drag never reaches `onEnded` — settle the scrub it left open.
+                guard !active, isDragging else { return }
+                isDragging = false
+                onScrubEnd()
+            }
         }
         .frame(height: 24)
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))

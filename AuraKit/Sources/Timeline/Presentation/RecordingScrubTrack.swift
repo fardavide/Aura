@@ -17,11 +17,16 @@ struct RecordingScrubTrack: View {
     let actions: RecordingDetailActions
     /// The track's cross-axis size — how tall (horizontal) or wide (vertical) the footage band is.
     let thickness: CGFloat
+    /// The glide running after a thrown release. Owned by the panel, which cancels it whenever
+    /// another control takes the playhead.
+    @Binding var flingTask: Task<Void, Never>?
 
     @Environment(\.calendar) private var calendar
     @State private var dragAnchor: Date?
-    /// The glide running after a thrown release; a fresh grab or leaving the screen cancels it.
-    @State private var flingTask: Task<Void, Never>?
+    /// Live while the system considers the drag active. SwiftUI resets it when a gesture is
+    /// *cancelled* (an incoming call, a rotation) without calling `onEnded` — the reset is how
+    /// the scrub still gets settled instead of stranding playback paused.
+    @GestureState private var dragActive = false
 
     /// Keeps a label from being half-cut at either end of the ruler.
     private static let rulerEdgeInset: CGFloat = 18
@@ -51,13 +56,6 @@ struct RecordingScrubTrack: View {
         }
     }
 
-    /// A glide left running when the track leaves the screen would keep scrubbing a view model
-    /// nobody is looking at.
-    private func cancelFling() {
-        flingTask?.cancel()
-        flingTask = nil
-    }
-
     private func viewport(length: CGFloat) -> TimelineViewport {
         TimelineViewport(center: state.instant, pointsPerHour: state.zoom.pointsPerHour, length: length)
     }
@@ -74,7 +72,12 @@ struct RecordingScrubTrack: View {
         .overlay { playhead }
         .contentShape(Rectangle())
         .gesture(drag(length: length))
-        .onDisappear { cancelFling() }
+        .onChange(of: dragActive) { _, active in
+            // A cancelled drag never reaches `onEnded` — settle the scrub it left open.
+            guard !active, dragAnchor != nil else { return }
+            dragAnchor = nil
+            actions.endScrub()
+        }
         .accessibilityLabel("Timeline")
         .accessibilityValue(Text(state.instant, format: .dateTime.hour().minute().second()))
         .accessibilityAdjustableAction { direction in
@@ -110,11 +113,11 @@ struct RecordingScrubTrack: View {
 
     private func drag(length: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 2)
+            .updating($dragActive) { _, active, _ in active = true }
             .onChanged { value in
                 let anchor = dragAnchor ?? {
-                    // Grabbing the track catches any glide still running; the scrub the glide
-                    // began stays open, so the resume-on-settle intent survives the new grab.
-                    cancelFling()
+                    // The panel's coordinated `beginScrub` catches any glide still running; the
+                    // scrub the glide began stays open, so the resume intent survives the grab.
                     actions.beginScrub()
                     dragAnchor = state.instant
                     return state.instant
