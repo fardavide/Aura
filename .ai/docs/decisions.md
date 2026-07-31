@@ -1133,3 +1133,22 @@ Two small user-called improvements, one of them with an architectural edge worth
   the detail's toolbar while the stack keeps owning navigation. It is offered even when a camera has
   no go2rtc stream — the recordings are there either way — and the instant is read as the push
   resolves, so the recordings open at the live edge rather than at whenever the view was built.
+
+### The snapshot gate did not catch the Hour default — the area budget has a small-chrome blind spot
+Recorded because it falsifies a claim the previous entry made in good faith. The 0.5.0 tolerance note
+says `precision` (the **area** budget, 0.98) "is the real gate … a moved control, a wrong colour or
+dropped text blows past ΔE 13 over far more than 2% of the frame". This change is a counterexample:
+switching the tab's default density relabels the zoom pill (**Day → Hour**, the pill resizing with
+the word) and redraws the histogram bars at 4× density, and **all four Timeline states passed on CI
+against references that still depict "Day"**. 2% of an iPhone frame is ~59k pixels; the pill is ~11k
+and the bars, being thin strips over a mostly-empty track, add roughly as much — about 1% together,
+comfortably inside the budget.
+
+The tolerance is **not** being changed here: tightening `precision` is what the glass drift already
+spends `perceptualPrecision` on, and trading one for the other needs a local measurement pass, not a
+guess. What changes is the rule of use — a green snapshot run means *nothing moved across a large
+area*, not *the screen is unchanged*, so **baselines are re-recorded whenever a change alters what a
+screen depicts, green run or not**. A stale reference is worse than a red one: it silently becomes
+what every later diff is measured against, and the same budget then hides drift stacked on top of an
+image that was already wrong. The Timeline-tab references are in exactly that state until they are
+re-recorded locally against the Hour default.

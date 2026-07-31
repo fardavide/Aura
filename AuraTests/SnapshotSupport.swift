@@ -190,8 +190,15 @@ extension View {
 //     runner, whose ΔE scoring reads higher than a local one's — CI measured a worst pixel at ~10.1
 //     where 0.95 allowed only 5, which is what turned PR #30 red.
 //   - `precision` is the **area** budget: the fraction of pixels allowed to exceed that threshold.
-//     This is the real gate, and it stays tight — a moved control, a wrong colour or dropped text
-//     blows past ΔE 13 over far more than 2% of the frame.
+//     It gates whatever repaints a large share of a frame — a relaid-out screen, a wrong background,
+//     a control that moved. It does **not** gate small chrome: 2% of an iPhone frame is ~59k pixels,
+//     and 0.5.4 walked straight through it. That change flipped the scrubber's default zoom, which
+//     relabels the pill (Day → Hour, and the pill resizes with the word) and redraws the histogram
+//     bars at 4× density — yet all four Timeline states passed against references that still show
+//     "Day", because the repainted area is ~1% of the frame.
+// So read a green run as "nothing moved across a large area", not as "the screen is unchanged", and
+// re-record baselines whenever a change alters what a screen depicts even if the suite stayed green
+// — a stale reference silently becomes the thing every later diff is measured against.
 // See `decisions.md`.
 private let snapshotPrecision: Float = 0.98
 private let snapshotPerceptualPrecision: Float = 0.87
