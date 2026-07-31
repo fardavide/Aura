@@ -185,6 +185,17 @@
   degrade to stable placeholder cells — which is exactly what the new `detail-hour` snapshot
   baseline captures. See `decisions.md`.
 
+- **Hour default + live-stream → timeline link (0.5.4).** The Timeline tab's scrubber now opens at
+  **Hour** zoom, matching the per-camera detail (which already did) — the live edge is readable on
+  entry instead of a few points wide; the pill and the pinch still reach Day and Week. **The
+  Timeline-tab baselines still depict the old "Day" pill and must be re-recorded locally — the
+  snapshot job stayed green because the repainted area is under its 2% budget, so CI will not
+  force this** (see the blind-spot note in `decisions.md`). And a camera's
+  live stream gained a **Timeline** toolbar button opening that camera's recordings at the live
+  edge. The Cameras vertical still doesn't depend on the Timeline one: `CameraGridView` is generic
+  over an injected destination builder that the composition root fills with `RecordingPlayerView`,
+  pushed as a `CameraTimelineRoute`. See `decisions.md`.
+
 - **Timeline overlay reads made server-safe (0.5.1).** Field-reported outage: opening the Timeline
   froze a modest Frigate server (API unresponsive → web UI "offline", HA entity Unavailable, VOD
   playback starved). Root cause: Frigate 0.17's `/api/recordings/unavailable` runs an

@@ -29,7 +29,17 @@ struct RootView: View {
                         CameraGridView(
                             viewModel: composition.cameraGridViewModel(for: connection),
                             onOpenSettings: { showingSettings = true },
-                            makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, connection: connection) }
+                            makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, connection: connection) },
+                            // The live stream's Timeline button lands here. `Date()` is read as the
+                            // push resolves, so the recordings open at the live edge — the moment
+                            // the stream was showing.
+                            cameraTimeline: { camera in
+                                RecordingPlayerView(
+                                    viewModel: composition.recordingPlayerViewModel(
+                                        for: camera, at: Date(), connection: connection
+                                    )
+                                )
+                            }
                         )
                     } label: {
                         Label("Cameras", systemImage: "video")

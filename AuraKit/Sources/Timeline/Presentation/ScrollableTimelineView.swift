@@ -24,7 +24,10 @@ struct ScrollableTimelineView: View {
     let transport: TimelineTransport
     let onScrub: (Date) -> Void
 
-    @State private var pointsPerHour: CGFloat = TimelineZoom.day.pointsPerHour
+    // Opens at the finest preset, matching the per-camera timeline: the track is anchored at the
+    // live edge, so what a screen entry is about is the last stretch of footage — at day density
+    // that is a few points wide. The pill and the pinch still reach day and week.
+    @State private var pointsPerHour: CGFloat = TimelineZoom.hour.pointsPerHour
     @GestureState private var pinchBaseline: CGFloat?
     @State private var scrollPosition = ScrollPosition()
     @State private var histogramViewport: CGFloat = 0

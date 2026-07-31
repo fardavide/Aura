@@ -114,8 +114,9 @@ private func cameraGridScreen(
     return CameraGridView(
         viewModel: viewModel,
         onOpenSettings: {},
-        // Unused: the detail factory is never invoked in a grid snapshot (no navigation happens).
-        makeDetailViewModel: { CameraDetailViewModel(camera: $0, streamProvider: FakeCameraStreamProvider()) }
+        // Unused: neither destination is built in a grid snapshot (no navigation happens).
+        makeDetailViewModel: { CameraDetailViewModel(camera: $0, streamProvider: FakeCameraStreamProvider()) },
+        cameraTimeline: { _ in EmptyView() }
     )
 }
 
