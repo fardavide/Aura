@@ -2,10 +2,14 @@ import SwiftUI
 
 import CamerasDomain
 
-public struct CameraGridView: View {
+/// The camera grid, and the stack that pushes one camera's live stream — and, from there, that
+/// camera's recordings. The recordings screen belongs to the Timeline vertical, so it arrives as
+/// an injected builder rather than as a dependency of this one.
+public struct CameraGridView<CameraTimeline: View>: View {
     @State private var viewModel: CameraGridViewModel
     private let onOpenSettings: () -> Void
     private let makeDetailViewModel: (Camera) -> CameraDetailViewModel
+    private let cameraTimeline: (Camera) -> CameraTimeline
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -13,11 +17,13 @@ public struct CameraGridView: View {
     public init(
         viewModel: CameraGridViewModel,
         onOpenSettings: @escaping () -> Void,
-        makeDetailViewModel: @escaping (Camera) -> CameraDetailViewModel
+        makeDetailViewModel: @escaping (Camera) -> CameraDetailViewModel,
+        @ViewBuilder cameraTimeline: @escaping (Camera) -> CameraTimeline
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onOpenSettings = onOpenSettings
         self.makeDetailViewModel = makeDetailViewModel
+        self.cameraTimeline = cameraTimeline
     }
 
     public var body: some View {
@@ -25,7 +31,10 @@ public struct CameraGridView: View {
             content
                 .navigationTitle("Cameras")
                 .navigationDestination(for: Camera.self) { camera in
-                    CameraDetailView(viewModel: makeDetailViewModel(camera))
+                    CameraDetailView(camera: camera, viewModel: makeDetailViewModel(camera))
+                }
+                .navigationDestination(for: CameraTimelineRoute.self) { route in
+                    cameraTimeline(route.camera)
                 }
                 .toolbar {
                     Button(action: onOpenSettings) {

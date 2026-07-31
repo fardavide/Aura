@@ -43,6 +43,14 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.5.4 — 2026-07-31
+- **Timelines open on the hour.** The Timeline tab's scrubber now starts at Hour zoom, like a
+  camera's own timeline does — the last stretch of footage is readable the moment the screen opens,
+  instead of squeezed into a few points at Day zoom. The pill and pinch still reach Day and Week.
+- **Jump from a camera to its recordings.** A camera's live stream has a Timeline button in the
+  title bar that opens that camera's timeline at the live edge, so you can rewind what you are
+  watching without going through the Timeline tab and finding the camera again.
+
 ### 0.5.3 — 2026-07-29
 - **The camera timeline shows what happened.** At Hour zoom, the scrub track fills with a
   filmstrip of preview thumbnails — one still for every ten minutes of footage — so you can see

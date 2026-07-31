@@ -1112,3 +1112,24 @@ the scrub track fills with preview stills, one per slot of footage. Day/week zoo
   with the Frigate preview provider + image loader), so thumbnails survive zoom flips and
   arrangement changes; the update trigger is a `.task` keyed on (slots, span) — a playhead tick
   that merely slides the cells re-requests nothing.
+
+## Timelines open at Hour zoom; the live stream links to its camera's timeline (0.5.4)
+Two small user-called improvements, one of them with an architectural edge worth recording.
+
+- **Hour is the default density on both timelines.** The tab's scrubber opened at Day while the
+  per-camera detail already opened at Hour (unchanged since 0.5.0) — so the two surfaces disagreed,
+  and the tab's live edge, which is what a screen entry is about, arrived a few points wide. The
+  tab's initial density is now the Hour preset; the pill and the pinch still reach Day and Week,
+  and nothing else about the scale changes. This moves every Timeline-tab snapshot baseline (the
+  histogram is drawn at 480 pt/h instead of 120), so those references must be re-recorded locally.
+- **The live stream carries a Timeline button, and the Cameras vertical still does not depend on
+  the Timeline one.** The destination is `RecordingPlayerView` — a Timeline screen — reached from a
+  Cameras screen, which a direct `CamerasPresentation → TimelinePresentation` edge would buy at the
+  cost of the first feature-to-feature *presentation* dependency in the package. Instead the grid
+  takes the destination as an injected `@ViewBuilder` (`CameraGridView` is generic over it) and the
+  composition root supplies it, exactly as it already supplies view-model factories: the link is
+  wired where every other cross-feature wiring lives, and neither vertical learns about the other.
+  The push is a `CameraTimelineRoute` value registered on the grid's stack, so the button sits in
+  the detail's toolbar while the stack keeps owning navigation. It is offered even when a camera has
+  no go2rtc stream — the recordings are there either way — and the instant is read as the push
+  resolves, so the recordings open at the live edge rather than at whenever the view was built.
