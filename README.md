@@ -43,6 +43,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.5.5 — 2026-08-03
+- **A live stream comes back when you do.** Returning to Aura with a camera's live view open used
+  to leave a frozen picture that only playing again fixed by going back to Cameras and reopening
+  the stream. The view now picks the stream back up at the live edge — including when it hands
+  back from a Picture-in-Picture window, and when you had paused it, on the next play. Merely
+  switching windows or dismissing a banner still leaves playback untouched.
+
 ### 0.5.4 — 2026-07-31
 - **Timelines open on the hour.** The Timeline tab's scrubber now starts at Hour zoom, like a
   camera's own timeline does — the last stretch of footage is readable the moment the screen opens,

@@ -3,6 +3,7 @@ import AVFoundation
 #endif
 import AVKit
 import Observation
+import SwiftUI
 
 /// Owns the live `AVPlayer`, its Picture-in-Picture controller, and the playback state the custom
 /// overlay controls bind to. It replaces `AVPlayerViewController`/`AVPlayerView`: the video is
@@ -13,6 +14,11 @@ import Observation
 /// Playback is started from `start()` (the view's `onAppear`), not `init`, and the player is built
 /// lazily — so the throwaway instances SwiftUI constructs and discards on every `LiveVideoView`
 /// re-init never open a stream or register an observer.
+///
+/// Anything that can leave the stream idle — an audio-session interruption, the app being
+/// backgrounded — makes the current item unplayable rather than merely paused, because a live HLS
+/// window rolls off in seconds. Recovery is therefore always the same move: swap in a fresh item,
+/// which starts at the live edge.
 @MainActor
 @Observable
 public final class LivePlayerModel {
@@ -25,6 +31,11 @@ public final class LivePlayerModel {
     @ObservationIgnored private let url: URL
     @ObservationIgnored private let headers: [String: String]
     @ObservationIgnored private var didStart = false
+    @ObservationIgnored private var didEnterBackground = false
+    // Set whenever the current item can no longer show live video (its window rolled off while the
+    // app was away). Cleared by rebuilding the item, which is deferred until the picture is ours to
+    // resume — the user may be paused, or Picture-in-Picture may still own it.
+    @ObservationIgnored private var needsFreshLiveItem = false
     // Retained so an active PiP session keeps its source layer alive after the hosting view is torn
     // down (see `PictureInPictureRetainer`).
     @ObservationIgnored private var playerLayer: AVPlayerLayer?
@@ -63,6 +74,29 @@ public final class LivePlayerModel {
         observeInterruptions()
     }
 
+    /// Recovers the stream when the app comes back from the background. The system stops feeding a
+    /// backgrounded video layer, and by the time the user returns the live HLS window has rolled
+    /// past everything the item buffered — `play()` then has nothing left to show, so the layer sits
+    /// on its last frame until the screen is opened afresh. Losing *focus* is not backgrounding (a
+    /// banner on iOS, another app's window on macOS): playback survives it, so it must not reload.
+    public func handleScenePhase(_ phase: ScenePhase) {
+        // Only a stream we actually opened can go stale — recovering one we never started would
+        // build the lazy player behind `start()`'s back.
+        guard didStart else { return }
+        switch phase {
+        case .background:
+            didEnterBackground = true
+        case .inactive:
+            break
+        case .active:
+            guard didEnterBackground else { return }
+            didEnterBackground = false
+            recoverAfterBackground()
+        @unknown default:
+            break
+        }
+    }
+
     /// Wires Picture-in-Picture to the host's layer once it exists. Called from the representable's
     /// `make…View`; re-entrant calls (SwiftUI updates) are ignored so the controller is built once.
     public func attach(playerLayer: AVPlayerLayer) {
@@ -88,7 +122,13 @@ public final class LivePlayerModel {
 
     public func togglePlayPause() {
         isPlaying.toggle()
-        if isPlaying { player.play() } else { player.pause() }
+        if !isPlaying {
+            player.pause()
+        } else if needsFreshLiveItem {
+            resumeAtLiveEdge()
+        } else {
+            player.play()
+        }
     }
 
     public func toggleMute() {
@@ -110,6 +150,9 @@ public final class LivePlayerModel {
         if active {
             PictureInPictureRetainer.retain(self)
         } else {
+            // The picture is the inline layer's again. Recover before releasing the retainer, which
+            // may be dropping the last reference to this model.
+            if isPlaying, needsFreshLiveItem { resumeAtLiveEdge() }
             PictureInPictureRetainer.release(self)
         }
     }
@@ -134,10 +177,22 @@ public final class LivePlayerModel {
         #endif
     }
 
+    /// Picture-in-Picture kept playing while the app was away and still owns the picture, and a
+    /// stream the user paused stays paused — in both cases the stale item is only marked, and the
+    /// rebuild happens when playback is handed back or resumed.
+    private func recoverAfterBackground() {
+        guard isPlaying, !isPictureInPictureActive else {
+            needsFreshLiveItem = true
+            return
+        }
+        resumeAtLiveEdge()
+    }
+
     private func resumeAtLiveEdge() {
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
+        needsFreshLiveItem = false
         player.replaceCurrentItem(with: makeAuthedPlayerItem(url: url, headers: headers))
         player.play()
         isPlaying = true

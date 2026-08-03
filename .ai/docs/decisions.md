@@ -1152,3 +1152,39 @@ screen depicts, green run or not**. A stale reference is worse than a red one: i
 what every later diff is measured against, and the same budget then hides drift stacked on top of an
 image that was already wrong. The Timeline-tab references are in exactly that state until they are
 re-recorded locally against the Hour default.
+
+## A live stream is rebuilt on return from the background, not resumed (0.5.5)
+Reported bug: coming back to the app with a camera's live view open left a frozen picture that no
+control could revive — only leaving for Cameras and reopening the stream worked.
+
+Two independent causes, one repair. The system stops feeding a backgrounded video layer, so playback
+is stopped by the time the user returns and nothing re-starts it: `onAppear` (which owns `start()`)
+does not re-fire for a view that never disappeared. And even when it is re-started, `play()` has
+nothing to show — a live HLS window rolls off in seconds, so the item the player is holding is stale
+or outright failed after any stint away. That is the same shape as the audio-session interruption
+handled since 0.2.x, and it takes the same repair: **swap in a fresh item, which starts at the live
+edge**, rather than un-pausing the old one. `LiveVideoView` forwards `scenePhase` to the model, which
+latches on `.background` and rebuilds on the next `.active`.
+
+Three refinements the naive "rebuild on `.active`" misses:
+
+- **Losing focus is not backgrounding.** A banner on iOS or another app's window on macOS only makes
+  the scene `.inactive`, and playback survives it — rebuilding there would reload the stream every
+  time the user glances at another Mac window. Only a real `.background` arms the latch, so the
+  `.background → .inactive → .active` return still fires exactly once.
+- **The rebuild waits for the picture to be ours.** Picture-in-Picture kept playing while the app was
+  away and still owns the video when the scene goes `.active`; a stream the user paused should stay
+  paused. Both cases only *mark* the item stale, and the rebuild happens where playback is handed
+  back (PiP stopping) or resumed (the play button) — which also fixes pressing play after a
+  background, previously a second way to get a picture that never comes. The PiP branch recovers
+  *before* releasing the session retainer, which may be dropping the last reference to the model.
+  Ordering between the scene phase and the PiP delegate callbacks is not guaranteed, and this shape
+  is correct either way round.
+- **A model that never started is left alone.** Lifecycle recovery is gated on `didStart` so it
+  cannot build the lazy `AVPlayer` behind `start()`'s back — the 0.3.5 invariant that keeps the
+  throwaway `LivePlayerModel` instances SwiftUI discards from opening authed streams.
+
+The five paths are unit-tested against a real `AVPlayer` in `CommonPlayerTests` by asserting item
+*identity* across the transitions (rebuilt vs. kept) — no server, no simulator, and nothing that
+depends on a frame actually decoding. What that cannot cover is the failure itself: only a device
+suspends the layer and rolls the live window off, so the on-device check is recorded in `status.md`.
