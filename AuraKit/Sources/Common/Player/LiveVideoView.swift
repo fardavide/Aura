@@ -8,6 +8,7 @@ public struct LiveVideoView: View {
     @State private var model: LivePlayerModel
     @State private var areControlsVisible = true
     @State private var autoHide: Task<Void, Never>?
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(url: URL, headers: [String: String]) {
         _model = State(initialValue: LivePlayerModel(url: url, headers: headers))
@@ -38,6 +39,9 @@ public struct LiveVideoView: View {
             scheduleAutoHide()
         }
         .onDisappear { autoHide?.cancel() }
+        // The stream goes stale while the app is away and `onAppear` doesn't re-fire on the way
+        // back, so nothing else would restart it.
+        .onChange(of: scenePhase) { _, phase in model.handleScenePhase(phase) }
     }
 
     private func toggleControls() {

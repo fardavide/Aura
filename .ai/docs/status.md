@@ -257,6 +257,11 @@ not snapshot-tested — they center on video players that can't render in a snap
   covered by the package or snapshot tests. Confirm: pinch zooms only the video (controls stay put);
   no stray aspect-fill pinch; PiP starts from the button and **survives navigating away**; auto-PiP
   on backgrounding still hands back cleanly; the audio-interruption live-edge recovery still works.
+- **Verify the return-from-background recovery on device (0.5.5)** — the reported frozen picture is
+  fixed by a scene-phase rebuild whose *paths* are unit-tested, but the failure it repairs only
+  happens on a real device. Confirm all three: leave and re-enter the app with the live view open;
+  the same with auto-PiP engaging (the hand-back must not double-reload or drop the picture); and
+  paused-across-a-background, where the next play must come back live.
 - Push notifications — out of MVP scope.
 
 ## Runtime config still needed (before the grid loads a real server)
