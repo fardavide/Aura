@@ -58,6 +58,8 @@ public final class ServerSettingsViewModel {
         switch error {
         case .invalidHost: "Enter a valid host."
         case .invalidPort: "Port must be between 1 and 65535."
+        // Saving a connection cannot fail this way; the icon picker reports its own failures.
+        case .iconChangeFailed: "Something went wrong. Try again."
         }
     }
 }

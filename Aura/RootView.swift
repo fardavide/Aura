@@ -77,6 +77,7 @@ struct RootView: View {
                     viewModel: composition.settingsViewModel(),
                     makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                     makeCameraOrderViewModel: nil,
+                    makeAppIconViewModel: appIconViewModelFactory,
                     onDone: reload
                 )
             }
@@ -88,7 +89,8 @@ struct RootView: View {
                 makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                 makeCameraOrderViewModel: connection.map { connection in
                     { composition.cameraOrderViewModel(for: connection) }
-                }
+                },
+                makeAppIconViewModel: appIconViewModelFactory
             ) {
                 showingSettings = false
                 reload()
@@ -100,6 +102,11 @@ struct RootView: View {
             #endif
         }
         .onAppear(perform: reload)
+    }
+
+    /// `nil` where the system cannot swap the icon, which is what hides the row on macOS.
+    private var appIconViewModelFactory: (() -> AppIconViewModel)? {
+        composition.supportsAppIconChoice ? { composition.appIconViewModel() } : nil
     }
 
     private func reload() {

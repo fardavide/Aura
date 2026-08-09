@@ -216,6 +216,12 @@ iPhone + iPad (portrait + landscape) × light + dark on the simulator.
 Reference PNGs are committed beside the tests. macOS is excluded (AppKit offscreen rendering can't
 capture glass faithfully — see `decisions.md`). The detail screens (live camera, event clip) are
 not snapshot-tested — they center on video players that can't render in a snapshot.
+- **Slice 11 — app icon + picker (0.5.6).** The shipped icon is a lit ring (halo) instead of a stock
+  camera glyph, with a drawn dark-appearance variant and drawn — not downsampled — small macOS sizes.
+  Settings › Appearance › App Icon offers six alternates (Heavy, Thin, Sweep, Aurora, Signal,
+  Daylight), all treatments of the same ring. The system owns the current choice; nothing is stored
+  beside it. iOS-only: the row is absent on macOS, via an optional factory rather than `#if os`.
+  **Verified in the simulator — picker switches the icon and the Home Screen follows.**
 
 ## Next
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a

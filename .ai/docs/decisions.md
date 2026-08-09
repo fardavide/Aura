@@ -1188,3 +1188,41 @@ The five paths are unit-tested against a real `AVPlayer` in `CommonPlayerTests` 
 *identity* across the transitions (rebuilt vs. kept) — no server, no simulator, and nothing that
 depends on a frame actually decoding. What that cannot cover is the failure itself: only a device
 suspends the layer and rolls the live window off, so the on-device check is recorded in `status.md`.
+
+## A user-chosen app icon; the system stores the choice (0.5.6)
+
+The shipped icon is a lit ring — a halo, for the name — replacing a stock camera glyph on a blue
+gradient. Six alternates ride along, all treatments of the same ring rather than different marks,
+so switching between them still leaves the same app on the Home Screen.
+
+Four decisions worth keeping:
+
+- **The system is the source of truth for which icon is showing.** There is no preference mirrored
+  into `UserDefaults` beside it. The platform already remembers the choice across launches and
+  reinstalls, and a second copy could only ever drift from it — so the switcher reads through, and
+  the settings repository is untouched by this feature. This is the one preference in the app that
+  is *not* stored by us, which is why it hangs off its own boundary instead of `SettingsRepository`.
+- **The dark appearance keeps the hue.** An early idea was to put the amber variant in the dark
+  slot. That slot is not a second icon: it fires on the system appearance setting, which has
+  nothing to do with the app, so a hue change there reads as a different app every time the phone
+  goes dark. It also only pays off in one appearance of four — tinted and clear are derived from
+  luminance and discard colour entirely. The dark artwork is therefore the same ring re-lit for a
+  dark ground, and the amber ships as an alternate the user picks deliberately.
+- **Where the platform cannot swap icons, the row is absent, not disabled.** The capability is a
+  property on the switcher, and the composition root turns it into an optional view-model factory —
+  the same shape already used to hide Camera Order before a server is configured. macOS therefore
+  loses the row without a single `#if os` in feature code.
+- **Alternates live in the asset catalog**, declared through `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`
+  with `INCLUDE_ALL_APPICON_ASSETS`, which generates the `CFBundleAlternateIcons` entries at build
+  time — no loose PNGs at the bundle root and no hand-written plist. Both settings are scoped to the
+  iOS SDKs, because the alternates are iOS-only and an unscoped setting makes every macOS build warn
+  that it cannot find them.
+
+Verified end-to-end in the simulator rather than by inspection: the picker switches the icon and the
+Home Screen follows. That run also settled an open question — **iOS still shows its own "You have
+changed the icon" alert**, and there is no supported way to suppress it, so the picker is written as
+a deliberate choice rather than a toggle.
+
+Icon artwork is generated from SVG rather than hand-drawn per size: full-bleed square and opaque
+(the system applies the mask; baking the squircle would double it), with the small macOS sizes drawn
+from a simplified body — the echo rings turn to mush below 32pt — instead of downsampled.

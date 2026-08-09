@@ -42,6 +42,16 @@ struct SettingsSnapshotTests {
         assertScreenSnapshot(view, named: "menu")
     }
 
+    @Test func `given a chosen alternate when the icon picker is shown then it matches the reference`() {
+        // given — the preview artwork comes from the app bundle, so this also proves the
+        // asset names in the picker match the catalog
+        let viewModel = appIconViewModel(FakeAppIconSwitcher(current: .signal))
+        viewModel.onAppear()
+
+        // then
+        assertScreenSnapshot(NavigationStack { AppIconView(viewModel: viewModel) }, named: "app-icon")
+    }
+
     @Test func `given no saved connection when the server form is shown then it matches the reference`() {
         // given
         let viewModel = serverSettingsViewModel(FakeSettingsRepository())
@@ -98,7 +108,16 @@ private func settingsMenu(
         viewModel: viewModel,
         makeServerSettingsViewModel: { serverSettingsViewModel(repository) },
         makeCameraOrderViewModel: makeCameraOrderViewModel,
+        makeAppIconViewModel: { appIconViewModel(FakeAppIconSwitcher()) },
         onDone: {}
+    )
+}
+
+@MainActor
+private func appIconViewModel(_ switcher: FakeAppIconSwitcher) -> AppIconViewModel {
+    AppIconViewModel(
+        loadAppIcon: LoadAppIcon(switcher: switcher),
+        changeAppIcon: ChangeAppIcon(switcher: switcher)
     )
 }
 

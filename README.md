@@ -43,6 +43,16 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.5.6 — 2026-08-09
+- **A new app icon, and six more to pick from.** Aura's icon is a lit ring instead of a stock
+  camera glyph, and Settings › Appearance › App Icon offers six alternates — Heavy, Thin, Sweep,
+  Aurora, Signal and Daylight — that change the Home Screen icon as soon as you tap one. iOS
+  shows its own confirmation when the icon changes; that alert comes from the system, not Aura.
+  The row is absent on macOS, which has no swappable icon.
+- **The icon has a real dark version.** Previously the system guessed one from the light artwork;
+  now there is a proper dark-mode icon, and the small macOS sizes are drawn rather than shrunk,
+  so the ring stays readable at 16 points.
+
 ### 0.5.5 — 2026-08-03
 - **A live stream comes back when you do.** Returning to Aura with a camera's live view open used
   to leave a frozen picture that only playing again fixed by going back to Cameras and reopening
