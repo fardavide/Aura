@@ -120,6 +120,41 @@ struct CameraOrderUseCaseTests {
     }
 }
 
+@MainActor
+struct AppIconUseCaseTests {
+
+    @Test func `given a chosen icon when loading then it is returned`() {
+        // given
+        let switcher = FakeAppIconSwitcher(current: .signal)
+
+        // when - then
+        #expect(LoadAppIcon(switcher: switcher).execute() == .signal)
+    }
+
+    @Test func `when changing the icon then the system applies it`() async throws {
+        // given
+        let switcher = FakeAppIconSwitcher()
+
+        // when
+        try await ChangeAppIcon(switcher: switcher).execute(.aurora)
+
+        // then
+        #expect(switcher.appliedIcons == [.aurora])
+        #expect(switcher.current() == .aurora)
+    }
+
+    @Test func `given the system rejects the change when changing then it throws and the icon is unchanged`() async {
+        // given
+        let switcher = FakeAppIconSwitcher(current: .halo, applyResult: .failure(.iconChangeFailed))
+
+        // when - then
+        await #expect(throws: SettingsError.iconChangeFailed) {
+            try await ChangeAppIcon(switcher: switcher).execute(.heavy)
+        }
+        #expect(switcher.current() == .halo)
+    }
+}
+
 private func settings(host: String, port: Int) -> ConnectionSettings {
     ConnectionSettings(scheme: .http, host: host, port: port, username: nil, password: nil)
 }

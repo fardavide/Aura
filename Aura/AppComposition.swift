@@ -22,6 +22,7 @@ import TimelinePresentation
 final class AppComposition {
     private let settingsRepository: any SettingsRepository
     private let httpClient: any HttpClient
+    private let appIconSwitcher = SystemAppIconSwitcher()
     /// How much history the Timeline scrolls over — the same on the tab and on one camera's
     /// detail, so a tile tapped at some instant opens onto the axis it was scrubbed on.
     private let timelineSpanDays = 7
@@ -45,6 +46,19 @@ final class AppComposition {
         SettingsViewModel(
             loadTheme: LoadTheme(repository: settingsRepository),
             saveTheme: SaveTheme(repository: settingsRepository)
+        )
+    }
+
+    /// `false` where the system has no alternate icon to switch to, so Settings omits the row
+    /// rather than offering a picker that fails on every tap.
+    var supportsAppIconChoice: Bool {
+        appIconSwitcher.isSupported
+    }
+
+    func appIconViewModel() -> AppIconViewModel {
+        AppIconViewModel(
+            loadAppIcon: LoadAppIcon(switcher: appIconSwitcher),
+            changeAppIcon: ChangeAppIcon(switcher: appIconSwitcher)
         )
     }
 
