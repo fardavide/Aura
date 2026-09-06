@@ -10,7 +10,7 @@ let package = Package(
             targets: [
                 "CamerasEntities",
                 "CamerasDomain", "CamerasData",
-                "CommonNetwork", "CommonFrigate", "CommonKeychain", "CommonPlayer",
+                "CommonNetwork", "CommonFrigate", "CommonKeychain", "CommonPlayer", "CommonDesign",
                 "SettingsDomain", "SettingsData",
                 "CamerasPresentation", "SettingsPresentation",
                 "EventsDomain", "EventsData", "EventsPresentation",
@@ -89,11 +89,25 @@ let package = Package(
 
         .target(name: "CommonKeychain", path: "Sources/Common/Keychain"),
 
-        .target(name: "CommonPlayer", path: "Sources/Common/Player"),
+        .target(name: "CommonPlayer", dependencies: ["CommonDesign"], path: "Sources/Common/Player"),
         .testTarget(
             name: "CommonPlayerTests",
-            dependencies: ["CommonPlayer"],
+            dependencies: ["CommonPlayer", "CommonDesign"],
             path: "Tests/Common/PlayerTests"
+        ),
+
+        // Aurora design system: colour catalog, bundled Urbanist (OFL) and the shared chrome
+        // (backgrounds, sheets, chips, badges, gradient button, segmented control, track
+        // vocabulary). Pure SwiftUI/CoreText; no feature or Frigate knowledge.
+        .target(
+            name: "CommonDesign",
+            path: "Sources/Common/Design",
+            resources: [.process("Resources")]
+        ),
+        .testTarget(
+            name: "CommonDesignTests",
+            dependencies: ["CommonDesign"],
+            path: "Tests/Common/DesignTests"
         ),
 
         .target(
@@ -109,7 +123,7 @@ let package = Package(
 
         .target(
             name: "CamerasPresentation",
-            dependencies: ["CamerasDomain", "CamerasEntities", "CommonPlayer"],
+            dependencies: ["CamerasDomain", "CamerasEntities", "CommonPlayer", "CommonDesign"],
             path: "Sources/Cameras/Presentation"
         ),
         .testTarget(
@@ -120,7 +134,7 @@ let package = Package(
 
         .target(
             name: "SettingsPresentation",
-            dependencies: ["SettingsDomain", "CamerasDomain", "CamerasEntities"],
+            dependencies: ["SettingsDomain", "CamerasDomain", "CamerasEntities", "CommonDesign"],
             path: "Sources/Settings/Presentation"
         ),
         .testTarget(
@@ -153,12 +167,12 @@ let package = Package(
 
         .target(
             name: "EventsPresentation",
-            dependencies: ["EventsDomain", "CamerasEntities", "CommonPlayer"],
+            dependencies: ["EventsDomain", "CamerasDomain", "CamerasEntities", "CommonPlayer", "CommonDesign"],
             path: "Sources/Events/Presentation"
         ),
         .testTarget(
             name: "EventsPresentationTests",
-            dependencies: ["EventsPresentation", "EventsDomain", "CamerasEntities", "TestDoubles"],
+            dependencies: ["EventsPresentation", "EventsDomain", "CamerasDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Events/PresentationTests"
         ),
 
@@ -186,12 +200,12 @@ let package = Package(
 
         .target(
             name: "TimelinePresentation",
-            dependencies: ["TimelineDomain", "CamerasDomain", "CamerasEntities", "CommonPlayer"],
+            dependencies: ["TimelineDomain", "CamerasDomain", "CamerasEntities", "CommonPlayer", "CommonDesign"],
             path: "Sources/Timeline/Presentation"
         ),
         .testTarget(
             name: "TimelinePresentationTests",
-            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities", "SettingsDomain", "TestDoubles"],
+            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities", "SettingsDomain", "CommonDesign", "TestDoubles"],
             path: "Tests/Timeline/PresentationTests"
         ),
     ],

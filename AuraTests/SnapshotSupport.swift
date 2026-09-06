@@ -5,6 +5,7 @@ import SnapshotTesting
 
 import CamerasDomain
 import CamerasEntities
+import CommonDesign
 import SettingsDomain
 import TestDoubles
 import TimelineDomain
@@ -177,6 +178,9 @@ extension View {
             .environment(\.locale, Locale(identifier: "en_US_POSIX"))
             .environment(\.calendar, calendar)
             .environment(\.timeZone, .gmt)
+            // Freezes the live-pill blink and the segmented-control slide on their first frame —
+            // without it, an idle animation can be mid-transition at capture time.
+            .environment(\.designMotion, .still)
     }
 }
 
