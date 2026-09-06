@@ -42,10 +42,21 @@ final class AppComposition {
         LoadTheme(repository: settingsRepository).execute()
     }
 
-    func settingsViewModel() -> SettingsViewModel {
+    /// `connection` is `nil` before a server is configured — the menu then has no Camera Order
+    /// row and nothing to count.
+    func settingsViewModel(for connection: ConnectionSettings?) -> SettingsViewModel {
         SettingsViewModel(
             loadTheme: LoadTheme(repository: settingsRepository),
-            saveTheme: SaveTheme(repository: settingsRepository)
+            saveTheme: SaveTheme(repository: settingsRepository),
+            loadConnection: LoadConnection(repository: settingsRepository),
+            getCameras: connection.map { connection in
+                GetCameras(
+                    repository: FrigateCamerasRepository(
+                        configProvider: configProvider(config: serverConfig(from: connection))
+                    )
+                )
+            },
+            loadAppIcon: appIconSwitcher.isSupported ? LoadAppIcon(switcher: appIconSwitcher) : nil
         )
     }
 

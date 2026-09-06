@@ -210,7 +210,8 @@
 Package logic is covered by Swift Testing (489 tests as of 0.5.3). All four main screens — **Timeline**
 (ready busy / gappy / quiet / **playing**, empty, failed), the **Timeline detail** (playing, paused
 at 8×, week zoom, hour-zoom filmstrip, no footage, live, area highlights), the **Cameras grid**, the **Events list**, and
-**Settings** (each across its loaded/empty/failed or first-run/saved/error states) — are covered
+**Settings** (each across its loaded/empty/failed or first-run/saved/error states, plus a
+Camera Order populated/empty pair and a menu state whose camera count read fails) — are covered
 by **screenshot tests** (app-hosted `AuraTests`, `swift-snapshot-testing`, test-only) across
 iPhone + iPad (portrait + landscape) × light + dark on the simulator.
 Reference PNGs are committed beside the tests. macOS is excluded (AppKit offscreen rendering can't
@@ -222,6 +223,18 @@ not snapshot-tested — they center on video players that can't render in a snap
   Daylight), all treatments of the same ring. The system owns the current choice; nothing is stored
   beside it. iOS-only: the row is absent on macOS, via an optional factory rather than `#if os`.
   **Verified in the simulator — picker switches the icon and the Home Screen follows.**
+- **App shell + Settings: Aurora restyle (0.5.7).** The Settings sheet is now flush to the bottom
+  (r30 top corners, grabber, gradient rim), painted on the `CommonDesign` sheet colour with its own
+  head washes and glow; the menu's rows gained live summaries — Server shows `host:port` (or "Not
+  configured"), Camera Order shows the current enabled-camera count (omitted, not dashed, while
+  unknown or on a failed read), App Icon shows the current icon's artwork and name. The Theme picker
+  is `AuroraSegmentedControl` in its recessed-well container; Done is disabled with a stated reason
+  before a server exists; the sheet now reloads the root on every dismissal (Done or swipe), so a
+  theme picked and then swiped away still applies. `ServerSettingsView`'s Save moved to a pinned
+  bottom gradient button so it survives the keyboard in compact height; `CameraOrderView` gained a
+  "no cameras" empty state. The tab bar itself is untouched system chrome — its active colour comes
+  entirely from the now-filled `AccentColor` asset (pink pair), which is also the app's one link
+  colour.
 
 ## Next
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a

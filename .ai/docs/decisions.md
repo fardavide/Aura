@@ -1264,3 +1264,31 @@ Five decisions worth keeping:
   plan's own documented fallback instead (`.headline`, `.screenTitle`, `.rowSummary`, `.compact`,
   and the flat capsule spelled inline from `.auroraChipFill`/`.auroraChipBorder`) and says so at the
   point of use, so nothing was blocked and nothing silently drifted from the mock's intent.
+
+## Aurora restyle: Settings is a flush aurora sheet with row summaries (0.5.7)
+
+The Settings sheet drops the 0.5.0 floating-card idiom for a full-width sheet flush to the bottom,
+rounded only on top (r30) with the system grabber and the gradient rim, presented on the
+`CommonDesign` sheet colour — the same colour the screen paints behind its own form, so the
+presented chrome and the content agree; the darker backdrop colour is the mock's page *behind* the
+sheet and has no place in the app. The menu is still a grouped `Form` (macOS keeps `.grouped` and
+the reserved sheet frame) themed with flat catalog tokens, never a second glass layer — which is
+why the theme control uses the recessed-well container rather than the glass one. Three rows gained
+summaries so the menu answers before it is tapped: Server shows `host:port` (or 'Not configured' on
+first run), Camera Order shows the live camera count (omitted, not dashed, until it arrives or when
+the read fails — the pushed screen owns the error), App Icon shows the current icon's artwork and
+name read through the system switcher (no mirrored preference). That count costs a real
+`/api/config` read when the menu appears, and the pushed order screen costs another: the camera list
+deliberately never serves the cached config (0.3.12), and the provider coalesces only reads already
+in flight — accepted, because a stale count on the screen that reorders cameras is worse than a
+request. The Theme picker is the `CommonDesign` segmented control because a system segmented
+`Picker` cannot take the gradient selection; it still saves on change, and the sheet now reloads the
+root on *every* dismissal (Done or swipe) so a chosen theme always applies. Done is disabled with a
+stated reason on first run, when there is nothing yet to dismiss to. Navigation-bar titles are
+Urbanist via a principal toolbar item, so the sheet head matches the rows under it. The tab bar
+stays the untouched system bar: its active colour, the Done/Save/Retry buttons and every link are
+tinted by the now-filled `AccentColor` (pink pair), which is also where the spec's `#C9B8FF` link
+colour was collapsed — one accent, not two; on macOS that accent only shows when the user's system
+accent is Multicolour, which is the platform's rule, not ours. Server's Save moved from the toolbar
+to a bottom safe-area inset as the gradient action button, the one place the full gradient is
+allowed on this screen, and the one placement that survives a keyboard in compact height.
