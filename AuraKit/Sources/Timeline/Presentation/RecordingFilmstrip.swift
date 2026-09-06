@@ -46,9 +46,15 @@ struct RecordingFilmstrip: View {
         )
         Group {
             if let image = store.images[slot] {
+                // The 30% scrim keeps motion bars, marker pills and the playhead legible over a
+                // bright still (mock L753).
                 image.resizable().scaledToFill()
+                    .overlay { Color.black.opacity(0.3) }
             } else {
-                Rectangle().fill(.fill.tertiary)
+                // Nothing fetched yet, or nothing recorded to fetch — either way this isn't "no
+                // footage", so it draws nothing and lets the track well's own colour show through
+                // rather than reaching for `.auroraNoFootage` (which is near-white in light mode).
+                Color.clear
             }
         }
         .frame(width: rect.width, height: rect.height)

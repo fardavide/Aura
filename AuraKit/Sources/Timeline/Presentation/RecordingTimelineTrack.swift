@@ -1,12 +1,13 @@
 import Foundation
 import SwiftUI
 
+import CommonDesign
 import TimelineDomain
 
-/// The scrub track for one camera: motion rising from the baseline, a lane of review markers above
-/// it, hatched stretches with no footage, a divider at each midnight, and a dashed line at the live
-/// edge. Centre-anchored — the playhead is fixed at the middle, drawn by the enclosing view, and
-/// this is the footage sliding under it.
+/// The scrub track for one camera: motion rising from the dark well floor, a lane of review markers
+/// above it, hatched stretches with no footage, a divider at each midnight, and a dashed line at the
+/// live edge. Centre-anchored — the playhead is fixed at the middle, drawn by the enclosing view,
+/// and this is the footage sliding under it.
 ///
 /// Laid out along `axis`. Horizontal runs past→future left→right with the lane on top and the
 /// motion rising from the bottom; vertical mirrors it — newest at the top, lane on the left, motion
@@ -28,9 +29,9 @@ struct RecordingTimelineTrack: View {
             let visible = viewport.visible
 
             if span.start > visible.start {
-                context.fill(
-                    Path(geometry.rect(from: visible.start, to: span.start, crossFrom: 0, crossTo: geometry.crossExtent)),
-                    with: .color(.gray.opacity(0.05))
+                TimelineHatch.fill(
+                    geometry.rect(from: visible.start, to: span.start, crossFrom: 0, crossTo: geometry.crossExtent),
+                    in: context
                 )
             }
             if span.end < visible.end {
@@ -48,15 +49,10 @@ struct RecordingTimelineTrack: View {
 
             drawDayDividers(in: context, geometry: geometry, calendar: calendar)
             drawMotion(in: context, geometry: geometry)
-            drawBaseline(in: context, geometry: geometry)
             drawMarkers(in: context, geometry: geometry)
 
             if visible.contains(span.end) {
-                context.stroke(
-                    geometry.line(at: span.end),
-                    with: .color(.secondary),
-                    style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])
-                )
+                context.stroke(geometry.line(at: span.end), with: AuroraTrack.nowLine, style: AuroraTrack.nowLineStyle)
             }
         }
     }
@@ -66,7 +62,7 @@ struct RecordingTimelineTrack: View {
         var midnight = calendar.startOfDay(for: visible.start)
         while midnight < visible.end {
             if midnight > visible.start {
-                context.stroke(geometry.line(at: midnight), with: .color(.secondary.opacity(0.35)), lineWidth: 1)
+                context.stroke(geometry.line(at: midnight), with: AuroraTrack.midnight, lineWidth: AuroraTrack.midnightLineWidth)
             }
             guard let next = calendar.date(byAdding: .day, value: 1, to: midnight) else { return }
             midnight = next
@@ -97,10 +93,6 @@ struct RecordingTimelineTrack: View {
                 with: .color(TimelineTrackStyle.motionColor(intensity: bucket.intensity))
             )
         }
-    }
-
-    private func drawBaseline(in context: GraphicsContext, geometry: TrackGeometry) {
-        context.stroke(geometry.baseline, with: .color(.secondary.opacity(0.25)), lineWidth: 1)
     }
 
     private func drawMarkers(in context: GraphicsContext, geometry: TrackGeometry) {

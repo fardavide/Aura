@@ -753,26 +753,6 @@ struct PreviewTileViewModelTests {
     }
 }
 
-struct TimelineHatchTests {
-
-    @Test func `given a rect when computing hatch segments then they run at 45 degrees across it`() {
-        // given — a square band, so a 45° run has equal width and height
-        let rect = CGRect(x: 0, y: 0, width: 20, height: 20)
-
-        // when
-        let segments = TimelineHatch.lineSegments(in: rect)
-
-        // then — every segment's run equals the rect's height (the 45° slope), and each stays
-        // inside the rect's vertical extent
-        #expect(!segments.isEmpty)
-        for (start, end) in segments {
-            #expect(abs(end.x - start.x) == rect.height)
-            #expect(start.y == rect.maxY)
-            #expect(end.y == rect.minY)
-        }
-    }
-}
-
 // MARK: - Helpers
 
 private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }

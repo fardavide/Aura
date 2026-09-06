@@ -1,5 +1,6 @@
 import SwiftUI
 
+import CommonDesign
 import CommonPlayer
 
 /// The Timeline-detail screen's on-screen composition: one camera's footage with the timeline panel
@@ -14,8 +15,9 @@ import CommonPlayer
 ///
 /// The video is pinch-zoomable everywhere. On the phones its **slot** is unclipped, so zoomed
 /// footage overflows it and slides under the glass instead of stopping at an invisible line; the
-/// iPad hero clips to its rounded frame, since nothing overlaps it. The chrome and the panel live
-/// outside the zoom and never scale.
+/// iPad hero clips to its frame, since nothing overlaps it. The chrome and the panel live outside
+/// the zoom and never scale. The slot itself is full-bleed everywhere — no rim, no corner radius,
+/// no inset (the mock's only framed video is the Live screen's, not this one).
 ///
 /// Split out from `RecordingPlayerView` so every arrangement can be screenshot-tested over a
 /// placeholder, with literal state and no player — and with `cameraAreaHighlights` on, the
@@ -33,7 +35,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     @Environment(\.cameraAreaHighlights) private var cameraAreaHighlights
 
     private static var railWidth: CGFloat { 168 }
-    private static var splitPanelMaxWidth: CGFloat { 1100 }
+    private static var splitPanelMaxWidth: CGFloat { 1_100 }
 
     public init(
         state: RecordingDetailState,
@@ -48,59 +50,93 @@ public struct RecordingDetailLayout<Video: View>: View {
     }
 
     public var body: some View {
-        switch arrangement {
-        case .stacked: stacked
-        case .rail: rail
-        case .split: split
+        // A `GeometryReader` reads the real safe-area insets in one layout pass — a `@State`
+        // measurement settles a pass later, which would leave the panel content misjudging the
+        // indicator's height for one frame (0.5.2 snapshot-determinism rule).
+        GeometryReader { proxy in
+            arrangedContent(insets: proxy.safeAreaInsets)
         }
     }
 
-    private var stacked: some View {
-        VStack(spacing: 12) {
-            slot(clipped: false)
-            panel(.stacked)
-                .padding(.horizontal, 12)
+    @ViewBuilder
+    private func arrangedContent(insets: EdgeInsets) -> some View {
+        switch arrangement {
+        case .stacked: stacked(insets: insets)
+        case .rail: rail(insets: insets)
+        case .split: split(insets: insets)
         }
-        .padding(.bottom, 8)
+    }
+
+    private func stacked(insets: EdgeInsets) -> some View {
+        VStack(spacing: 0) {
+            slot(clipped: false)
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .padding(.top, 8)
+            Spacer(minLength: 12)
+            panel(.stacked)
+                .padding(.bottom, insets.bottom)
+                .auroraSheet(edge: .bottom, showsGrabber: false)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.black)
+        .auroraBackground()
+        .ignoresSafeArea(.container, edges: .bottom)
         .overlay { surfaceHighlight }
     }
 
-    private var rail: some View {
+    private func rail(insets: EdgeInsets) -> some View {
         HStack(spacing: 10) {
             slot(clipped: false)
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .padding(.leading, 10)
+                .padding(.vertical, 10)
             panel(.rail)
                 .frame(width: Self.railWidth)
-                .padding(.trailing, 10)
-                .padding(.vertical, 10)
+                .padding(.trailing, insets.trailing)
+                .padding(.bottom, insets.bottom)
+                .auroraSheet(edge: .trailing, showsGrabber: false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.black)
+        .auroraBackground()
+        // Both ignored edges carry content (the rail and, inside it, the new Live pill row), so
+        // both are paid back above — a single blanket `[.bottom, .trailing]` here with only the
+        // trailing edge repaid is exactly how the rail's last row ends up under the indicator.
+        .ignoresSafeArea(.container, edges: [.trailing, .bottom])
         .overlay { surfaceHighlight }
     }
 
-    private var split: some View {
-        VStack(spacing: 16) {
+    private func split(insets: EdgeInsets) -> some View {
+        VStack(spacing: 0) {
             slot(clipped: true)
-                .background(.black)
+                .background(Color.auroraBase)
                 .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                // Absorbs the free height instead of a trailing `Spacer` — with a content-height
+                // sheet under a fixed-height slot, an 11" iPad portrait would otherwise open a
+                // ≈370pt void between the two.
+                .frame(maxWidth: Self.splitPanelMaxWidth)
+                .frame(maxHeight: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
                 .overlay { surfaceHighlight }
             panel(.split)
-            Spacer(minLength: 0)
+                .padding(.bottom, insets.bottom)
+                .auroraSheet(edge: .bottom, showsGrabber: false)
         }
-        .frame(maxWidth: Self.splitPanelMaxWidth)
-        .frame(maxWidth: .infinity)
-        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .auroraBackground()
+        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     /// The zoomable video area. At rest the video letterboxes inside this slot — the one part of
     /// the screen the panel never covers. The chrome overlays the slot *outside* the zoom, so the
     /// badges stay put and legible while the picture scales under them.
+    ///
+    /// The letterbox colour sits in two different places depending on `clipped`: unclipped
+    /// (stacked/rail), it rides *inside* the zoom with the video, since the container has no fixed
+    /// boundary to paint behind; clipped (split), the caller paints it *outside*, fixed behind the
+    /// container's own bounds, so it doesn't pan or scale with a pinch the way the picture does.
     private func slot(clipped: Bool) -> some View {
         ZoomableContainer(onSingleTap: {}, clipsContent: clipped) {
-            video
+            if clipped { video } else { video.background(Color.auroraBase) }
         }
         .overlay { RecordingHeroOverlay(state: state) }
         .overlay { slotHighlight }
@@ -114,7 +150,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// panel on purpose — the surface legitimately runs under it.
     @ViewBuilder private var surfaceHighlight: some View {
         if cameraAreaHighlights {
-            areaHighlight(.orange, label: "SURFACE", labelAt: .bottomTrailing)
+            areaHighlight(CameraAreaHighlights.surface, label: "SURFACE", labelAt: .bottomTrailing)
         }
     }
 
@@ -122,7 +158,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// outline in a baseline is a layout regression.
     @ViewBuilder private var slotHighlight: some View {
         if cameraAreaHighlights {
-            areaHighlight(.green, label: "CAMERA SLOT", labelAt: .bottomLeading)
+            areaHighlight(CameraAreaHighlights.slot, label: "CAMERA SLOT", labelAt: .bottomLeading)
         }
     }
 
@@ -134,7 +170,7 @@ public struct RecordingDetailLayout<Video: View>: View {
             }
             .overlay(alignment: alignment) {
                 Text(label)
-                    .font(.system(size: 10, weight: .heavy))
+                    .auroraText(.overline)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)

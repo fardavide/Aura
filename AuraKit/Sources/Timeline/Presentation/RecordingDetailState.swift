@@ -55,6 +55,17 @@ public struct RecordingDetailState: Equatable, Sendable {
         MarkerNavigator.marker(at: instant, in: dayTimeline.markers)
     }
 
+    /// Whether the "previous activity" transport button would move the playhead — false at the
+    /// start of the marker list, so the button can disable itself instead of pressing to nothing.
+    public var hasPreviousMarker: Bool {
+        MarkerNavigator.marker(before: instant, in: dayTimeline.markers) != nil
+    }
+
+    /// The same, forward.
+    public var hasNextMarker: Bool {
+        MarkerNavigator.marker(after: instant, in: dayTimeline.markers) != nil
+    }
+
     /// The calendar day the playhead is in — what the stepper walks and the overview bar draws.
     func day(in calendar: Calendar) -> TimeRange {
         TimeRange.day(containing: instant, in: calendar)

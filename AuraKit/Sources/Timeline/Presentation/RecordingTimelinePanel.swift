@@ -1,11 +1,14 @@
 import Foundation
 import SwiftUI
 
-/// The Liquid-Glass panel that carries the whole time axis: the day the playhead is in, the clock,
-/// the zoom, the day-overview bar, the scrub track with its ruler, and the transport.
+import CommonDesign
+
+/// The panel that carries the whole time axis: the day the playhead is in, the clock, the zoom,
+/// the day-overview bar, the scrub track with its ruler, and the transport.
 ///
 /// One set of parts in three arrangements — what changes between a phone, a phone on its side and a
-/// big window is the panel, not the controls it holds.
+/// big window is the panel, not the controls it holds. The glass, rim and glow are the enclosing
+/// `auroraSheet` — this only lays out its content (tokens §4: one glass layer per surface).
 struct RecordingTimelinePanel: View {
     enum Arrangement {
         /// A card across the bottom of a phone held upright.
@@ -28,12 +31,12 @@ struct RecordingTimelinePanel: View {
 
     private static let trackThickness: CGFloat = 72
     private static let railTrackThickness: CGFloat = 50
-    private static let controlsWidth: CGFloat = 260
+    private static let controlsWidth: CGFloat = 300
+    private static let splitPanelMaxWidth: CGFloat = 1_100
 
     var body: some View {
         content
             .padding(arrangement == .rail ? 12 : 16)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             // A glide outliving the panel (a rotation mid-glide) would leave the scrub session
             // open and playback stranded paused — settle it on the way out.
             .onDisappear { interruptGlide() }
@@ -80,7 +83,7 @@ struct RecordingTimelinePanel: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 3) {
                         dayStepper
-                        clock(size: 30)
+                        clock
                     }
                     Spacer(minLength: 8)
                     zoomPicker
@@ -90,7 +93,7 @@ struct RecordingTimelinePanel: View {
             }
         case .rail:
             VStack(spacing: 10) {
-                clock(size: 22)
+                clock
                 dayLabel
                 zoomChip
                 verticalAxis
@@ -101,13 +104,15 @@ struct RecordingTimelinePanel: View {
                 horizontalAxis
                     .frame(maxWidth: .infinity)
                 VStack(alignment: .leading, spacing: 12) {
-                    clock(size: 34)
+                    clock
                     dayStepper
                     zoomPicker
                     RecordingTransportBar(state: state, actions: coordinated, density: .wide)
                 }
                 .frame(width: Self.controlsWidth)
             }
+            .frame(maxWidth: Self.splitPanelMaxWidth)
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -141,40 +146,54 @@ struct RecordingTimelinePanel: View {
         .frame(maxHeight: .infinity)
     }
 
-    /// `‹ SUN, JAN 11 ›` — the day the playhead is in, and a step either side of it.
+    /// `‹ SUN, JAN 11 ›` — the day the playhead is in, and a step either side of it. Disabled at
+    /// either end of the span — `stepDay` clamps there (`RecordingPlayerViewModel.seek(to:)`), and
+    /// `›` at the live edge is the state this screen opens in when pushed from the live camera, not
+    /// an edge case (Dead-control audit).
     private var dayStepper: some View {
-        HStack(spacing: 5) {
+        let canStepBack = state.instant > state.span.start
+        let canStepForward = state.instant < state.span.end
+        return HStack(spacing: 6) {
             Button { coordinated.stepDay(-1) } label: { Image(systemName: "chevron.left") }
+                .frame(width: 16, height: 16)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .disabled(!canStepBack)
+                .opacity(canStepBack ? 1 : 0.45)
                 .accessibilityLabel("Previous day")
             dayLabel
             Button { coordinated.stepDay(1) } label: { Image(systemName: "chevron.right") }
+                .frame(width: 16, height: 16)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .disabled(!canStepForward)
+                .opacity(canStepForward ? 1 : 0.45)
                 .accessibilityLabel("Next day")
         }
-        .font(.caption2.weight(.bold))
+        .auroraText(.overline)
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(.auroraTextSecondary)
     }
 
     private var dayLabel: some View {
         Text(state.instant, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
-            .font(.caption2.weight(.bold))
+            .auroraText(.overline)
             .textCase(.uppercase)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.auroraTextSecondary)
             .lineLimit(1)
     }
 
     /// The big readout — hours and minutes, with the exact second trailing small and quiet, the
     /// same shape the tab's landscape readout uses. The AM/PM marker is dropped rather than
     /// trailed after the seconds, where it would read as part of them.
-    private func clock(size: CGFloat) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 1) {
+    private var clock: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 1) {
             Text(state.instant, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
-                .font(.system(size: size, weight: .bold, design: .rounded))
+                .auroraNumerals(.clockDetail)
             Text(verbatim: secondsSuffix)
-                .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
+                .auroraNumerals(.clockDetailSeconds)
+                .foregroundStyle(.auroraTextSecondary)
         }
-        .monospacedDigit()
         .lineLimit(1)
         .minimumScaleFactor(0.7)
     }
@@ -184,15 +203,16 @@ struct RecordingTimelinePanel: View {
         return second < 10 ? ":0\(second)" : ":\(second)"
     }
 
+    /// R3/R16: the flat `.well` container avoids nesting a second `glassEffect` inside the sheet's
+    /// own, and the full brand gradient (not the violet→pink badge gradient) is what the mock uses
+    /// for a control that is itself the screen's primary action.
     private var zoomPicker: some View {
-        Picker("Zoom", selection: Binding(get: { state.zoom }, set: coordinated.selectZoom)) {
-            ForEach(TimelineZoom.allCases, id: \.self) { zoom in
-                Text(zoom.title).tag(zoom)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .font(.footnote.weight(.bold))
+        AuroraSegmentedControl(
+            options: TimelineZoom.allCases,
+            selection: Binding(get: { state.zoom }, set: coordinated.selectZoom),
+            container: .well,
+            selectedFill: .diagonal
+        ) { $0.title }
     }
 
     /// The rail has no room for the ladder — one chip cycling the same three densities.
@@ -201,10 +221,10 @@ struct RecordingTimelinePanel: View {
             coordinated.selectZoom(state.zoom.next)
         } label: {
             Label(state.zoom.title, systemImage: state.zoom.icon)
-                .font(.footnote.weight(.semibold))
                 .frame(maxWidth: .infinity)
+                .auroraBadge(.neutral)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
         .accessibilityLabel("Zoom")
         .accessibilityValue(state.zoom.title)
     }
