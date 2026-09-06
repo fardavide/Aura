@@ -1387,3 +1387,51 @@ Timeline detail's video slot gains a border for the first time here, reversing t
 ("Timeline detail is a flush sheet on a full-bleed video slot") — full consistency with Live's framed
 card won out over that screen's original full-bleed-only treatment. It reuses Live's card constants
 exactly (22pt corner radius, 1.5pt rim) so the two screens' resting video reads identically.
+
+## The zoomed picture grows unbound past its own frame, instead of staying boxed inside it (0.6.2)
+
+0.6.1 above shipped a frame that faded its border and an ambient bleed together, but never changed
+what the *picture itself* was allowed to do: `ZoomableContainer` was always given an explicit,
+fixed-size frame (the rest-state card's own dimensions), so a pinch only ever scaled the picture
+*inside* that fixed box, clipped hard at its edge — "fills the screen" was never literally true, no
+matter how far you zoomed, and an ambient blurred copy behind the box (`AuroraZoomBleed`, now
+deleted) grew unclipped in its place, which from the user's side read as "the picture goes behind
+glass" rather than as the picture itself getting bigger. Reported directly from a TestFlight build,
+clarified over two rounds after an initial wrong fix (scaling `auroraFrame`'s own clip radius, which
+still only affected the frame, not the picture's growth) — the working description: "I want the box
+to stay where it is, visually... the image and the box [are] unbound. The image is inside the box,
+but while zooming the image grows (with blur effect), and the box fades. When the image reaches the
+full screen, the box should be completely faded... The box (border) should not grow in size."
+
+Fixed by giving `ZoomableContainer` **no explicit frame of its own** in `LiveVideoLayout` — it now
+expands to the full live canvas (the enclosing `ZStack`'s `.frame(maxWidth: .infinity, maxHeight:
+.infinity)` already provides that), and clips only at that outer boundary. `video` inside it is
+still sized to the card's rest dimensions, so at scale 1 it reads exactly as before; scaled up by a
+pinch, the same picture now grows past where the frame sits, eventually filling the whole canvas.
+The frame itself (`AuroraZoomFrame`, replacing `auroraFrame` on this codepath) is a plain,
+non-clipping overlay sized once to the card's rest dimensions — it never resizes, only fades
+(`AuroraZoomChrome.borderOpacity`), exactly matching "the box should not grow in size." The border
+effect's own timing was already correct and unchanged; what changed is what it's layered over.
+
+`AuroraZoomChrome.glassOpacity` became `imageBlurRadius: CGFloat` (same hump-shaped curve, same
+timing) — a constant screen-space `.blur()` applied to the picture *after* it's scaled, not a
+separate ghost layer's opacity. This directly implements "the image grows (with blur effect)... the
+more you zoom, the more the image un-blurs" — the picture blurs as it starts growing past the frame,
+then sharpens back up as it approaches filling the canvas, ending fully sharp with zero blur and zero
+border. Verified with a throwaway diagnostic at realistic phone-screen dimensions and the real
+`maxBlurRadius` (24pt) before touching production code, given two prior wrong guesses on this exact
+feature in the same session.
+
+Timeline detail's slot keeps its existing size (the caller's `.aspectRatio(16/9, contentMode: .fit)`)
+as **both** the rest-state card and the outer growth boundary, since zoomed footage must still never
+spill into the timeline panel beside it (an existing, unrelated constraint) — there is no separate,
+larger canvas to grow into there, only the same border-fade-and-blur-then-sharpen treatment as Live.
+
+At rest (scale 1, `borderOpacity` 1, `imageBlurRadius` 0) every code path is unchanged from 0.6.1, so
+the full screenshot suite passed with zero baseline changes — confirmed before this was wired in.
+
+A side effect worth knowing about: since `ZoomableContainer` on Live now spans the full canvas from
+the start (not just the small card), its pinch/pan gesture recognizers — attached to that same view
+— are recognized across the whole canvas too, not just within the card's small visible bounds. This
+incidentally addresses a separate complaint ("it is difficult to zoom, as you can act only on the
+box") without any gesture-specific change.
