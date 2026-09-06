@@ -1226,3 +1226,41 @@ a deliberate choice rather than a toggle.
 Icon artwork is generated from SVG rather than hand-drawn per size: full-bleed square and opaque
 (the system applies the mask; baking the squircle would double it), with the small macOS sizes drawn
 from a simplified body — the echo rings turn to mush below 32pt — instead of downsampled.
+
+## Timeline tab: Aurora restyle keeps the scrolling strip and adds a hero tile (0.5.7)
+
+The tab is restyled, not redesigned: it keeps its scrolling 7-day strip (fixed centre playhead,
+pinch zoom, pause-on-grab, auto-refresh) rather than the mock's fixed 24h well, so several things
+the mock draws do not exist here and are omitted rather than faked — the `00:00…24:00` axis label
+row, the day/night mood pill (no data source), and the dashed "now" line (the span always ends at
+`now()`, so the line would sit on the track's own trailing edge, half-clipped, marking a boundary
+the edge already marks).
+
+Five decisions worth keeping:
+
+- **The hero tile exists on compact width only**, driven by a `ReviewMarker` that now carries a
+  `camera` and a tracked-object `label` (both required, no defaults). It is the camera with the
+  most-recently-started active alert, falling back to the first camera — so a hero position always
+  exists, it just isn't always caused by an alert. The hero and the grid live in **one** `ForEach`
+  behind a custom `HeroGridLayout`, so a hero swap is a reorder, not a re-parent: `Camera.id`
+  preserves identity across the flip, and a tile's player/`.task`s never rebuild because of it.
+- **The hero follows the playhead at 1Hz**, and only from `load()`/`refresh()`/that loop — never
+  from `scrub(to:)`, which fires once per scroll offset (up to 60–120Hz during a drag or fling).
+  Recomputing the hero at that rate would republish `@Observable` state and re-lay-out the grid
+  mid-fling; a one-second latency on an alert boundary is imperceptible.
+- **iPad takes a fixed 3-column grid (no hero); macOS keeps `TimelineGridLayout.bestFit`** (0.3.4
+  stands) — a third size-class property, `usesFixedColumnGrid`, carries the split. It is a
+  *platform* discriminator as much as a size-class one (iOS regular width vs. macOS, which reports
+  regular width too but has no room for a 28pt title in its title bar), so it also gates the
+  screen's large toolbar title away from the Mac title bar. It is the file's third `#if os(iOS)`
+  site, beside the two existing size-class properties.
+- **The Timeline tab's inline sheet is grabber-less**, amending decision #5's "grabber on all three
+  sheets": this card is not dismissable by drag, so drawing the grabber would advertise a drag that
+  does nothing — the dead-control rule extends to affordances, not just whole controls. The
+  presented Settings sheet is unaffected and keeps its drag indicator.
+- **Not every token the plan asked for landed in CommonDesign.** `AuroraTextStyle.titleCompact` /
+  `.screenTitleCompact`, `AuroraNumeralStyle.tileClock`, `AuroraBadgeSize.compactWord` and a flat
+  (non-`glassEffect`) `auroraChip` variant were requested but not added; every call site takes the
+  plan's own documented fallback instead (`.headline`, `.screenTitle`, `.rowSummary`, `.compact`,
+  and the flat capsule spelled inline from `.auroraChipFill`/`.auroraChipBorder`) and says so at the
+  point of use, so nothing was blocked and nothing silently drifted from the mock's intent.

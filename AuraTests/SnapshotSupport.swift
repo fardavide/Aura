@@ -62,14 +62,38 @@ func richTimelineFixture() -> DayTimeline {
         return MotionBucket(time: at(hour: hour), intensity: Int(value))
     }
     let markers: [ReviewMarker] = [
-        ReviewMarker(start: at(hour: 9), end: at(hour: 9.6), severity: .alert),
-        ReviewMarker(start: at(hour: 15.5), end: at(hour: 16.2), severity: .detection),
-        ReviewMarker(start: at(hour: 33), end: at(hour: 34), severity: .alert),
-        ReviewMarker(start: at(hour: 46.5), end: nil, severity: .detection),
+        ReviewMarker(camera: CameraName("front_door"), start: at(hour: 9), end: at(hour: 9.6), severity: .alert, label: "Person"),
+        ReviewMarker(camera: CameraName("driveway"), start: at(hour: 15.5), end: at(hour: 16.2), severity: .detection, label: "Car"),
+        ReviewMarker(camera: CameraName("backyard"), start: at(hour: 33), end: at(hour: 34), severity: .alert, label: "Person"),
+        ReviewMarker(camera: CameraName("garage"), start: at(hour: 46.5), end: nil, severity: .detection, label: "Motion"),
     ]
     let gaps = [FootageGap(range: TimeRange(start: at(hour: 19), end: at(hour: 21)))]
     return DayTimeline(markers: markers, motion: motion, gaps: gaps)
 }
+
+/// An alerting camera: an **in-progress** alert (`end: nil`) on `front_door`, started before
+/// `snapshotNow`, plus a completed detection on `driveway`. Drives the hero to `front_door`
+/// (≠ the first camera) so `ready-hero-alert` exercises the hero swap and its badge.
+func heroAlertTimelineFixture() -> DayTimeline {
+    let markers: [ReviewMarker] = [
+        ReviewMarker(
+            camera: CameraName("front_door"), start: snapshotNow.addingTimeInterval(-600), end: nil,
+            severity: .alert, label: "Person"
+        ),
+        ReviewMarker(
+            camera: CameraName("driveway"),
+            start: snapshotNow.addingTimeInterval(-3_600), end: snapshotNow.addingTimeInterval(-3_300),
+            severity: .detection, label: "Car"
+        ),
+    ]
+    return DayTimeline(markers: markers, motion: [], gaps: [])
+}
+
+/// A base64 1×1 **opaque** PNG (no alpha) — `.resizable().scaledToFill()` fills the tile with one
+/// flat colour, so a footage-bearing baseline is stable across machines.
+let solidPreviewPng = Data(base64Encoded:
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAD0lEQVR4AQEEAPv/AICAgAMEAYGkH5BXAAAAAElFTkSuQmCC"
+)!
 
 /// Footage but no detected activity — exercises the empty histogram with cameras present.
 func quietTimelineFixture() -> DayTimeline {
@@ -99,7 +123,12 @@ func gappyTimelineFixture() -> DayTimeline {
 func timelineScreen(
     cameras: Result<[Camera], CamerasError>,
     timeline: Result<DayTimeline, TimelineError>,
-    playing: Bool = false
+    playing: Bool = false,
+    // Defaults (no clips, no frames, no image) drive every tile to `.unavailable` — today's
+    // behaviour, unchanged for every existing call site. `ready-hero-alert` hands in real
+    // material; `ready-tile-failed` hands in a provider whose `clipsResult` is a failure.
+    previews: FakeCameraPreviewProvider = FakeCameraPreviewProvider(),
+    imageLoader: FakePreviewImageLoader = FakePreviewImageLoader()
 ) async -> some View {
     let viewModel = TimelineScreenViewModel(
         observeCameras: ObserveCameras(
@@ -116,11 +145,8 @@ func timelineScreen(
         viewModel.transport.togglePlayPause()
     }
 
-    // No preview material and no recordings — every tile resolves to the `.unavailable`
-    // placeholder, playing or not, since video never renders in a snapshot.
-    let previews = GetCameraPreviews(provider: FakeCameraPreviewProvider())
+    let previews = GetCameraPreviews(provider: previews)
     let recordings = GetCameraRecordings(repository: FakeCameraRecordingsRepository(.success([])))
-    let imageLoader = FakePreviewImageLoader()
     var tiles: [CameraName: PreviewTileViewModel] = [:]
     if case let .success(all) = cameras {
         for camera in all where camera.isEnabled {
@@ -134,6 +160,10 @@ func timelineScreen(
             tiles[camera.name] = tile
         }
     }
+    // The frame path's image decode finishes in a detached `@MainActor` task (itself hopping off
+    // and back on to await the image loader), so `prepare(...)` alone can leave a tile on
+    // `.loading` a few run-loop turns longer — a helper-local wait, no production change.
+    for _ in 0..<5 { await Task.yield() }
 
     return TimelineScreenView(
         viewModel: viewModel,
