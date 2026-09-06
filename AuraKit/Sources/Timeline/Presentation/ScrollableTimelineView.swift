@@ -74,6 +74,8 @@ struct ScrollableTimelineView: View {
                 }
             }
             .padding(.init(top: 18, leading: 32, bottom: 24, trailing: 32))
+            // Clears the floating tab bar on iPad (macOS has none — a no-op there).
+            .safeAreaPadding(.bottom)
         }
     }
 
