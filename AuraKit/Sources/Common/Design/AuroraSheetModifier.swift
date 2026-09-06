@@ -38,12 +38,19 @@ extension View {
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(30)
             .overlay(alignment: .top) {
-                UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous)
-                    .strokeBorder(AuroraGradient.rim, lineWidth: 1)
-                    .ignoresSafeArea()
-                Rectangle()
-                    .fill(Color.auroraSheetBorder)
-                    .frame(height: 1)
+                // One composed view, one `ignoresSafeArea()` applied to the whole thing — not two
+                // loose siblings (the rim ignoring safe area, the hairline not) in the same
+                // `.overlay` closure. Verified those two disagreeing on their own safe-area
+                // treatment is what put the hairline somewhere in the middle of the sheet instead
+                // of at its top edge.
+                ZStack(alignment: .top) {
+                    UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous)
+                        .strokeBorder(AuroraGradient.rim, lineWidth: 1)
+                    Rectangle()
+                        .fill(Color.auroraSheetBorder)
+                        .frame(height: 1)
+                }
+                .ignoresSafeArea()
             }
     }
 }
