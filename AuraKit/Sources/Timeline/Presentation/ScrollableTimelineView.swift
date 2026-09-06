@@ -62,8 +62,10 @@ struct ScrollableTimelineView: View {
                 TimelineTransportControls(arrangement: .stack, transport: transport)
             }
             .padding(16)
-            // Clears the floating tab bar — the mock's own bottom padding under the transport row.
-            .safeAreaPadding(.bottom)
+            // No safe-area clearance here: `.auroraSheet(edge:)` (below, in `body`) already
+            // ignores the container safe area so the card sits flush behind the floating tab
+            // bar per decision #5 — padding for it here would double-reserve the same space and
+            // push the visible card up, leaving a gap between it and the bar.
         case .row:
             HStack(spacing: 24) {
                 TimelineClockLabel(clock: clock, arrangement: .row).frame(width: 190, alignment: .leading)
@@ -74,8 +76,7 @@ struct ScrollableTimelineView: View {
                 }
             }
             .padding(.init(top: 18, leading: 32, bottom: 24, trailing: 32))
-            // Clears the floating tab bar on iPad (macOS has none — a no-op there).
-            .safeAreaPadding(.bottom)
+            // No safe-area clearance here either — see the `.stack` case above.
         }
     }
 
