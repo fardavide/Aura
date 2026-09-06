@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 
+import CommonDesign
 import TimelineDomain
 
 /// The whole day at a glance, under the clock: an hourly motion rollup, a severity-colored tick
@@ -30,7 +31,7 @@ struct DayOverviewBar: View {
     var body: some View {
         GeometryReader { geometry in
             Canvas { context, size in
-                draw(in: context, size: size, visible: visible(forWidth: size.width))
+                draw(in: &context, size: size, visible: visible(forWidth: size.width))
             }
             .contentShape(Rectangle())
             // A scrub, not a per-frame seek: the drag follows with cheap tolerant seeks and the
@@ -57,13 +58,12 @@ struct DayOverviewBar: View {
                 onScrubEnd()
             }
         }
-        .frame(height: 24)
-        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .frame(height: 26)
+        .auroraTrackWell(cornerRadius: 7)
         .accessibilityLabel("Day overview")
     }
 
-    private func draw(in context: GraphicsContext, size: CGSize, visible: TimeRange) {
+    private func draw(in context: inout GraphicsContext, size: CGSize, visible: TimeRange) {
         let day = overview.day
         let length = day.end.timeIntervalSince(day.start)
         guard length > 0, size.width > 0 else { return }
@@ -97,7 +97,7 @@ struct DayOverviewBar: View {
                         height: height
                     )
                 ),
-                with: .color(TimelineTrackStyle.motionColor)
+                with: .color(TimelineTrackStyle.motionColor(intensity: intensity))
             )
         }
 
@@ -122,13 +122,16 @@ struct DayOverviewBar: View {
             height: size.height - 1.2
         )
         let windowShape = Path(roundedRect: window, cornerRadius: 4)
-        context.fill(windowShape, with: .style(.tint.opacity(0.16)))
-        context.stroke(windowShape, with: .style(.tint), lineWidth: 1.3)
+        context.fill(windowShape, with: .color(.auroraGradientViolet.opacity(0.16)))
+        context.stroke(windowShape, with: .color(.auroraGradientViolet), lineWidth: 1.3)
 
-        var playhead = Path()
-        playhead.move(to: CGPoint(x: x(instant), y: 0))
-        playhead.addLine(to: CGPoint(x: x(instant), y: size.height))
-        context.stroke(playhead, with: .style(.tint), lineWidth: 1.6)
+        AuroraTrack.drawPlayheadLine(
+            in: &context,
+            line: CGRect(
+                x: x(instant) - AuroraTrack.playheadLineWidth / 2, y: 0,
+                width: AuroraTrack.playheadLineWidth, height: size.height
+            )
+        )
     }
 
     private func visible(forWidth width: CGFloat) -> TimeRange {
@@ -147,14 +150,13 @@ struct DayOverviewBar: View {
 struct DayOverviewScale: View {
     var body: some View {
         HStack {
-            ForEach(Array(stride(from: 0, through: 24, by: 4)), id: \.self) { hour in
+            ForEach(Array(stride(from: 0, through: 24, by: 6)), id: \.self) { hour in
                 Text(hour < 10 ? "0\(hour)" : "\(hour)")
                 if hour != 24 { Spacer(minLength: 0) }
             }
         }
-        .font(.system(size: 9.5, weight: .semibold))
-        .monospacedDigit()
-        .foregroundStyle(.tertiary)
+        .auroraNumerals(.axisLabel)
+        .foregroundStyle(.auroraTextSecondary)
         .accessibilityHidden(true)
     }
 }

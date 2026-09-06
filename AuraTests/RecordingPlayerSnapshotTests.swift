@@ -82,6 +82,41 @@ struct RecordingPlayerSnapshotTests {
         // then
         assertScreenSnapshot(view, named: "detail-areas")
     }
+
+    @Test func `given the playhead inside a detection marker then the hero badge is amber`() {
+        // given — 15.5–16.2 h in `richTimelineFixture()` is a detection marker
+        let view = recordingDetail(state: detailState(instant: snapshotSpanStart.addingTimeInterval(15.8 * 3600)))
+
+        // then
+        assertScreenSnapshot(view, named: "detail-detection")
+    }
+
+    @Test func `given the playhead at the start of the span then the region before it is hatched`() {
+        // given — every other fixture sits well inside the two-day span, so the widest zoom never
+        // shows the "before this camera's history" hatch; parking near the start at week zoom does
+        let view = recordingDetail(
+            state: detailState(instant: snapshotSpanStart.addingTimeInterval(0.5 * 3600), zoom: .week)
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "detail-span-start")
+    }
+
+    @Test func `given an unreachable server then the failure card fits the video slot`() {
+        // given — the app-wide failure idiom, squeezed from the full remaining column into the
+        // 16:9 slot now that the picture is pinned to that aspect ratio
+        let view = RecordingDetailLayout(state: detailState(), actions: .inert, filmstrip: emptyFilmstrip()) {
+            ContentUnavailableView(
+                "Can't reach the server",
+                systemImage: "wifi.slash",
+                description: Text("Check your connection settings.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+
+        // then
+        assertScreenSnapshot(view, named: "detail-failed")
+    }
 }
 
 // MARK: - View builder

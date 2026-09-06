@@ -13,15 +13,15 @@ import TestDoubles
 @MainActor
 struct SettingsSnapshotTests {
 
-    @Test func `given no connection when the menu is shown then it matches the reference`() {
+    @Test func `given no connection when the menu is shown then it matches the reference`() async {
         // given — first run: no camera-order row yet
-        let view = settingsMenu(repository: FakeSettingsRepository(), makeCameraOrderViewModel: nil)
+        let view = await settingsMenu(repository: FakeSettingsRepository(), cameras: nil, appIcon: FakeAppIconSwitcher())
 
         // then
         assertScreenSnapshot(view, named: "menu-first-run")
     }
 
-    @Test func `given a configured server when the menu is shown then it matches the reference`() {
+    @Test func `given a configured server when the menu is shown then it matches the reference`() async {
         // given
         let repository = FakeSettingsRepository(
             connection: ConnectionSettings(
@@ -30,16 +30,29 @@ struct SettingsSnapshotTests {
             ),
             theme: .dark
         )
-        let view = settingsMenu(repository: repository) {
-            CameraOrderViewModel(
-                getCameras: GetCameras(repository: FakeCamerasRepository(.success(snapshotCameras()))),
-                loadCameraOrder: LoadCameraOrder(repository: repository),
-                saveCameraOrder: SaveCameraOrder(repository: repository)
-            )
-        }
+        let view = await settingsMenu(
+            repository: repository, cameras: .success(snapshotCameras()), appIcon: FakeAppIconSwitcher()
+        )
 
         // then
         assertScreenSnapshot(view, named: "menu")
+    }
+
+    @Test func `given the cameras read fails when the menu is shown then the count is omitted`() async {
+        // given
+        let repository = FakeSettingsRepository(
+            connection: ConnectionSettings(
+                scheme: .https, host: "frigate.local", port: 8_971,
+                username: "admin", password: "hunter2"
+            ),
+            theme: .dark
+        )
+        let view = await settingsMenu(
+            repository: repository, cameras: .failure(.unreachable), appIcon: FakeAppIconSwitcher()
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "menu-count-unknown")
     }
 
     @Test func `given a chosen alternate when the icon picker is shown then it matches the reference`() {
@@ -90,6 +103,22 @@ struct SettingsSnapshotTests {
         // then
         assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-host")
     }
+
+    @Test func `given four cameras when the order screen is shown then it matches the reference`() async {
+        // given
+        let view = await cameraOrder(snapshotCameras())
+
+        // then
+        assertScreenSnapshot(view, named: "camera-order")
+    }
+
+    @Test func `given a server with no cameras when the order screen is shown then it explains`() async {
+        // given
+        let view = await cameraOrder([])
+
+        // then
+        assertScreenSnapshot(view, named: "camera-order-empty")
+    }
 }
 
 // MARK: - View builders
@@ -97,20 +126,47 @@ struct SettingsSnapshotTests {
 @MainActor
 private func settingsMenu(
     repository: FakeSettingsRepository,
-    makeCameraOrderViewModel: (() -> CameraOrderViewModel)?
-) -> some View {
+    cameras: Result<[Camera], CamerasError>?,
+    appIcon: FakeAppIconSwitcher
+) async -> some View {
     let viewModel = SettingsViewModel(
         loadTheme: LoadTheme(repository: repository),
-        saveTheme: SaveTheme(repository: repository)
+        saveTheme: SaveTheme(repository: repository),
+        loadConnection: LoadConnection(repository: repository),
+        getCameras: cameras.map { GetCameras(repository: FakeCamerasRepository($0)) },
+        loadAppIcon: LoadAppIcon(switcher: appIcon)
     )
     viewModel.onAppear()
+    await viewModel.load()
     return SettingsView(
         viewModel: viewModel,
         makeServerSettingsViewModel: { serverSettingsViewModel(repository) },
-        makeCameraOrderViewModel: makeCameraOrderViewModel,
-        makeAppIconViewModel: { appIconViewModel(FakeAppIconSwitcher()) },
+        // Derived from the same `cameras` as the view model's count, so the row and the count
+        // always agree (nil → nil, a result → the same fixture).
+        makeCameraOrderViewModel: cameras.map { cameras in
+            {
+                CameraOrderViewModel(
+                    getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
+                    loadCameraOrder: LoadCameraOrder(repository: repository),
+                    saveCameraOrder: SaveCameraOrder(repository: repository)
+                )
+            }
+        },
+        makeAppIconViewModel: { appIconViewModel(appIcon) },
         onDone: {}
     )
+}
+
+@MainActor
+private func cameraOrder(_ cameras: [Camera]) async -> some View {
+    let settings = FakeSettingsRepository()
+    let viewModel = CameraOrderViewModel(
+        getCameras: GetCameras(repository: FakeCamerasRepository(.success(cameras))),
+        loadCameraOrder: LoadCameraOrder(repository: settings),
+        saveCameraOrder: SaveCameraOrder(repository: settings)
+    )
+    await viewModel.load()
+    return NavigationStack { CameraOrderView(viewModel: viewModel) }
 }
 
 @MainActor

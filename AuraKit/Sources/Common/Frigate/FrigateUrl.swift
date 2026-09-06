@@ -44,6 +44,16 @@ public enum FrigateMediaUrl {
         makeUrl(base: base, path: "api/events/\(eventId)/thumbnail.jpg")
     }
 
+    /// An event's full-frame still (the thumbnail is an object crop). Only served when the event
+    /// has `has_snapshot`; `height` bounds the transfer for a card-sized image.
+    public static func snapshot(base: URL, eventId: String, height: Int) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/events/\(eventId)/snapshot.jpg",
+            queryItems: [URLQueryItem(name: "height", value: String(height))]
+        )
+    }
+
     /// An event's recorded clip.
     public static func clip(base: URL, eventId: String) -> URL {
         makeUrl(base: base, path: "api/events/\(eventId)/clip.mp4")

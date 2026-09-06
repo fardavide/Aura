@@ -1,6 +1,7 @@
 import SwiftUI
 
 import CamerasDomain
+import CommonDesign
 
 /// The camera grid, and the stack that pushes one camera's live stream — and, from there, that
 /// camera's recordings. The recordings screen belongs to the Timeline vertical, so it arrives as
@@ -28,18 +29,15 @@ public struct CameraGridView<CameraTimeline: View>: View {
 
     public var body: some View {
         NavigationStack {
-            content
+            screen
+                .auroraBackground()
                 .navigationTitle("Cameras")
+                .auroraHiddenNavigationBar()
                 .navigationDestination(for: Camera.self) { camera in
                     CameraDetailView(camera: camera, viewModel: makeDetailViewModel(camera))
                 }
                 .navigationDestination(for: CameraTimelineRoute.self) { route in
                     cameraTimeline(route.camera)
-                }
-                .toolbar {
-                    Button(action: onOpenSettings) {
-                        Image(systemName: "gearshape")
-                    }
                 }
         }
         .task {
@@ -55,39 +53,83 @@ public struct CameraGridView<CameraTimeline: View>: View {
 
     private let refreshInterval: Duration = .seconds(2)
 
+    /// The pinned header + chip rows over the scrolling wall — every piece outside the `switch` in
+    /// `content`, so the title and the gear render in every state (`.loading`, `.loaded`, `.empty`
+    /// and `.failed` alike). `.empty` in particular has no actions of its own, so losing the gear
+    /// there would strand the user with no route to Settings.
+    private var screen: some View {
+        VStack(alignment: .leading, spacing: verticalSizeClass == .compact ? 8 : 12) {
+            header
+            if verticalSizeClass != .compact && viewModel.hasSummaryChips {
+                summaryChips(leadingPadding: contentPadding)
+            }
+            groupChipsRow
+            content
+        }
+    }
+
+    @ViewBuilder private var header: some View {
+        HStack(spacing: 8) {
+            if verticalSizeClass == .compact {
+                // The tab bar already names the tab, and a title row + two chip rows would eat too
+                // much of a ~390pt-tall window — one row does the header's whole job here.
+                if viewModel.hasSummaryChips {
+                    summaryChips(leadingPadding: 0)
+                } else {
+                    Spacer()
+                }
+            } else {
+                Text("Cameras").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
+                Spacer(minLength: 8)
+            }
+            gearButton
+        }
+        .padding(.horizontal, contentPadding)
+    }
+
+    private func summaryChips(leadingPadding: CGFloat) -> some View {
+        CameraSummaryChips(
+            rightNow: viewModel.rightNow,
+            todayChipText: viewModel.todayChipText,
+            todayBreakdownText: viewModel.todayBreakdownText,
+            freeBytes: viewModel.storage?.freeBytes,
+            retentionChipText: viewModel.retentionChipText,
+            offlineChipText: viewModel.offlineChipText,
+            leadingPadding: leadingPadding
+        )
+    }
+
+    private var gearButton: some View {
+        Button(action: onOpenSettings) {
+            Image(systemName: "gearshape")
+                .auroraText(.chip)
+                .foregroundStyle(.auroraTextPrimary)
+                .auroraChip()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
+    }
+
+    @ViewBuilder private var groupChipsRow: some View {
+        if !viewModel.groups.isEmpty {
+            GroupChips(
+                groups: viewModel.groups,
+                selected: viewModel.selectedGroupName,
+                onSelect: viewModel.selectGroup,
+                leadingPadding: contentPadding
+            )
+        }
+    }
+
     @ViewBuilder private var content: some View {
         switch viewModel.state {
         case .loading:
-            ProgressView()
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
-            ScrollView {
-                VStack(spacing: 14) {
-                    header
-                    SummaryCard(
-                        rightNow: viewModel.rightNow,
-                        todayEvents: viewModel.todayEvents,
-                        storage: viewModel.storage
-                    )
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(viewModel.visibleCameras) { camera in
-                            NavigationLink(value: camera) {
-                                CameraTileView(
-                                    camera: camera,
-                                    activity: viewModel.activity(for: camera),
-                                    isOffline: viewModel.isOffline(camera),
-                                    imageData: viewModel.previewImage(for: camera)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.vertical)
-            }
-            .refreshable { await viewModel.load() }
+            wallScroller
         case .empty:
             ContentUnavailableView("No cameras", systemImage: "video.slash")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let error):
             ContentUnavailableView {
                 Label("Couldn't load cameras", systemImage: "exclamationmark.triangle")
@@ -97,57 +139,69 @@ public struct CameraGridView<CameraTimeline: View>: View {
                 Button("Retry") { Task { await viewModel.load() } }
                 Button("Settings", action: onOpenSettings)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    /// A full-width vertical list in iPhone portrait (compact width, regular height); a uniform
-    /// 3-up grid in iPhone landscape (compact height); a width-adaptive grid on iPad and macOS.
-    private var columns: [GridItem] {
+    /// The one `ScrollView` on screen. A group whose cameras are all disabled/hidden shows an empty
+    /// state instead of the wall — the group chip must never look like it did nothing. No
+    /// `.scrollClipDisabled()`: scrolled tiles must never paint over the pinned header.
+    private var wallScroller: some View {
+        ScrollView {
+            if viewModel.visibleCameras.isEmpty {
+                ContentUnavailableView("No cameras in this group", systemImage: "video.slash")
+                    .frame(maxWidth: .infinity, minHeight: 280)
+            } else {
+                wall
+                    .padding(.horizontal, contentPadding)
+                    .padding(.bottom, 24)
+            }
+        }
+        .refreshable { await viewModel.load() }
+    }
+
+    /// One `ForEach` inside `CameraWallLayout`, so a hero swap re-proposes a size and flips a style
+    /// parameter rather than re-parenting a tile — the tile's decoded-image `@State` survives.
+    /// Hero order and hero styling both come from `wallStyle.hasHero`: the compact-height 3-up wall
+    /// (no hero) iterates `visibleCameras` in place, so an alert never reshuffles it.
+    private var wall: some View {
+        CameraWallLayout(style: wallStyle, spacing: 12) {
+            ForEach(wallStyle.hasHero ? viewModel.wallCameras : viewModel.visibleCameras) { camera in
+                NavigationLink(value: camera) {
+                    CameraTileView(
+                        camera: camera,
+                        activity: viewModel.activity(for: camera),
+                        isOffline: viewModel.isOffline(camera),
+                        imageData: viewModel.previewImage(for: camera),
+                        style: wallStyle.hasHero && camera.id == viewModel.heroCamera?.id ? .hero : .tile
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .animation(.smooth(duration: 0.35), value: viewModel.heroCamera)
+        .background {
+            AuroraGlow()
+                .padding(.horizontal, -contentPadding)
+                .padding(.vertical, -12)
+        }
+    }
+
+    /// A full-width vertical list in iPhone portrait (compact width, regular height), with a hero
+    /// on top; a uniform 3-up grid in iPhone landscape (compact height), no hero; a 2fr/1fr hero
+    /// leading layout on iPad and macOS (regular width).
+    private var wallStyle: CameraWallLayout.Style {
         if verticalSizeClass == .compact {
-            return Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+            return .uniform(columns: 3)
         }
         if horizontalSizeClass == .compact {
-            return [GridItem(.flexible())]
+            return .heroTop
         }
-        return [GridItem(.adaptive(minimum: 300), spacing: 12)]
+        return .heroLeading
     }
 
-    /// The chips row (only when the server defines groups) with the live/offline count pinned at the
-    /// trailing edge so it stays put while the chips scroll.
-    private var header: some View {
-        HStack(spacing: 8) {
-            if viewModel.groups.isEmpty {
-                Spacer()
-            } else {
-                GroupChips(
-                    groups: viewModel.groups,
-                    selected: viewModel.selectedGroupName,
-                    onSelect: viewModel.selectGroup
-                )
-            }
-            liveCountPill
-                .padding(.leading, viewModel.groups.isEmpty ? 0 : 4)
-                .padding(.trailing)
-        }
-        .padding(.top, 4)
-    }
-
-    private var liveCountPill: some View {
-        HStack(spacing: 6) {
-            Circle().fill(.green).frame(width: 7, height: 7)
-            Text(countLabel)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(.thinMaterial, in: Capsule())
-    }
-
-    private var countLabel: String {
-        let live = "\(viewModel.liveCount) live"
-        guard viewModel.offlineCount > 0 else { return live }
-        return "\(live) · \(viewModel.offlineCount) offline"
+    private var contentPadding: CGFloat {
+        horizontalSizeClass == .compact ? 16 : 24
     }
 
     private func message(for error: CamerasError) -> String {

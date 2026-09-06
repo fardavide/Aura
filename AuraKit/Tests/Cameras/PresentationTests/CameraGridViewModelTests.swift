@@ -143,7 +143,7 @@ struct CameraGridViewModelTests {
 
     // MARK: Live / offline counts
 
-    @Test func `given a preview resolves when loading then the camera is counted live`() async {
+    @Test func `given a preview resolves when loading then the camera is not offline`() async {
         // given
         let sut = makeViewModel(
             repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
@@ -154,7 +154,6 @@ struct CameraGridViewModelTests {
         await sut.load()
 
         // then
-        #expect(sut.liveCount == 1)
         #expect(sut.offlineCount == 0)
         #expect(sut.isOffline(enabledCamera("driveway")) == false)
     }
@@ -170,7 +169,6 @@ struct CameraGridViewModelTests {
         await sut.load()
 
         // then
-        #expect(sut.liveCount == 0)
         #expect(sut.offlineCount == 1)
         #expect(sut.isOffline(enabledCamera("driveway")) == true)
     }
@@ -299,6 +297,323 @@ struct CameraGridViewModelTests {
 
         // then
         #expect(sut.rightNow == nil)
+    }
+
+    // MARK: Hero
+
+    @Test func `given an alert and a detection when reading the hero camera then the alerting camera is the hero`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("front_door")])),
+            activity: FakeCameraActivityRepository(.success([
+                activity("driveway", label: "Car", severity: .detection, startedAt: 200),
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.heroCamera?.name == CameraName("front_door"))
+    }
+
+    @Test func `given only detections when reading the hero camera then the first camera is the hero`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("garage")])),
+            activity: FakeCameraActivityRepository(.success([
+                activity("garage", label: "Dog", severity: .detection, startedAt: 200),
+            ]))
+        )
+
+        // when
+        await sut.load()
+
+        // then — pins the difference from `rightNow`, which *would* pick `garage` (its only activity)
+        #expect(sut.heroCamera?.name == CameraName("driveway"))
+    }
+
+    @Test func `given no activity when reading the hero camera then the first camera is the hero`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("garage")]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.heroCamera?.name == CameraName("driveway"))
+    }
+
+    @Test func `given two alerts when reading the hero camera then the most recent one wins`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("front_door")])),
+            activity: FakeCameraActivityRepository(.success([
+                activity("driveway", label: "Person", severity: .alert, startedAt: 100),
+                activity("front_door", label: "Person", severity: .alert, startedAt: 200),
+            ]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.heroCamera?.name == CameraName("front_door"))
+    }
+
+    @Test func `given a selected group when reading the hero camera then an alert outside the group is ignored`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("front_door")])),
+            activity: FakeCameraActivityRepository(.success([
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ])),
+            groups: FakeCameraGroupsRepository([group("Outdoor", ["driveway"])])
+        )
+        await sut.load()
+
+        // when
+        sut.selectGroup("Outdoor")
+
+        // then
+        #expect(sut.heroCamera?.name == CameraName("driveway"))
+    }
+
+    @Test func `given no cameras when reading the hero camera then there is none`() async {
+        // given
+        let sut = makeViewModel(repository: FakeCamerasRepository(.success([])))
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.heroCamera == nil)
+    }
+
+    @Test func `given an alert when reading the wall cameras then the hero leads and the rest keep their order`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([
+                enabledCamera("driveway"), enabledCamera("front_door"), enabledCamera("garage"),
+            ])),
+            activity: FakeCameraActivityRepository(.success([
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.wallCameras.map(\.name) == [
+            CameraName("front_door"), CameraName("driveway"), CameraName("garage"),
+        ])
+    }
+
+    @Test func `given a selected group when reading the wall cameras then only its members are listed`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("kitchen")])),
+            groups: FakeCameraGroupsRepository([group("Indoor", ["kitchen"])])
+        )
+        await sut.load()
+
+        // when
+        sut.selectGroup("Indoor")
+
+        // then
+        #expect(sut.wallCameras.map(\.name) == [CameraName("kitchen")])
+    }
+
+    // MARK: Chips
+
+    @Test func `given today's events when reading the today chip then it counts them`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            today: FakeTodayEventsRepository(.success(
+                Array(repeating: "person", count: 9) + Array(repeating: "car", count: 5)
+            ))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.todayChipText == "14 today")
+    }
+
+    @Test func `given no tally when reading the today chip then there is none`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            today: FakeTodayEventsRepository(.failure(.unreachable))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.todayChipText == nil)
+    }
+
+    @Test func `given labelled events when reading the today breakdown then the two most frequent are listed`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            today: FakeTodayEventsRepository(.success(
+                Array(repeating: "person", count: 9) + Array(repeating: "car", count: 5)
+            ))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.todayBreakdownText == "9 person · 5 car")
+    }
+
+    @Test func `given no labelled events when reading the today breakdown then there is none`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            today: FakeTodayEventsRepository(.success([]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.todayBreakdownText == nil)
+    }
+
+    @Test func `given a retention when reading the retention chip then it names the days kept`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            storage: FakeRecordingStorageRepository(
+                RecordingStorage(freeBytes: 1_000, totalBytes: 2_000, retentionDays: 14)
+            )
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.retentionChipText == "14 days kept")
+    }
+
+    @Test func `given a one day retention when reading the retention chip then the day is singular`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            storage: FakeRecordingStorageRepository(
+                RecordingStorage(freeBytes: 1_000, totalBytes: 2_000, retentionDays: 1)
+            )
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.retentionChipText == "1 day kept")
+    }
+
+    @Test func `given storage without a retention when reading the retention chip then there is none`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            storage: FakeRecordingStorageRepository(
+                RecordingStorage(freeBytes: 1_000, totalBytes: 2_000, retentionDays: nil)
+            )
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.retentionChipText == nil)
+    }
+
+    @Test func `given an unreachable camera when reading the offline chip then it counts it`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            imageLoader: FakeCameraImageLoader(image: nil)
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.offlineChipText == "1 offline")
+    }
+
+    @Test func `given every camera reachable when reading the offline chip then there is none`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            imageLoader: FakeCameraImageLoader(image: Data([0x01]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.offlineChipText == nil)
+    }
+
+    @Test func `given a selected group when reading right now then activity outside the group is ignored`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("front_door")])),
+            activity: FakeCameraActivityRepository(.success([
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ])),
+            groups: FakeCameraGroupsRepository([group("Outdoor", ["driveway"])])
+        )
+        await sut.load()
+
+        // when
+        sut.selectGroup("Outdoor")
+
+        // then
+        #expect(sut.rightNow == nil)
+    }
+
+    @Test func `given a selected group when reading the offline chip then only its members are counted`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("kitchen")])),
+            groups: FakeCameraGroupsRepository([group("Indoor", ["kitchen"])]),
+            imageLoader: FakeCameraImageLoader(image: nil)
+        )
+        await sut.load()
+
+        // when
+        sut.selectGroup("Indoor")
+
+        // then
+        #expect(sut.offlineChipText == "1 offline")
+    }
+
+    @Test func `given no summary data when reading whether there are chips then there are none`() async {
+        // given
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway")])),
+            today: FakeTodayEventsRepository(.failure(.unreachable)),
+            storage: FakeRecordingStorageRepository(nil),
+            imageLoader: FakeCameraImageLoader(image: Data([0x01]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.hasSummaryChips == false)
     }
 
     // MARK: Summary card

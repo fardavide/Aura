@@ -34,20 +34,6 @@ struct TrackGeometry {
         return path
     }
 
-    /// The line the motion bars stand on, along the far cross edge.
-    var baseline: Path {
-        var path = Path()
-        switch axis {
-        case .horizontal:
-            path.move(to: CGPoint(x: 0, y: size.height - 0.5))
-            path.addLine(to: CGPoint(x: size.width, y: size.height - 0.5))
-        case .vertical:
-            path.move(to: CGPoint(x: size.width - 0.5, y: 0))
-            path.addLine(to: CGPoint(x: size.width - 0.5, y: size.height))
-        }
-        return path
-    }
-
     /// Trims a rect along the **time** axis, never below a hairline — the separator between
     /// neighbouring bars, which must not consume a bar that is already thin.
     func narrowed(_ rect: CGRect, by points: CGFloat) -> CGRect {

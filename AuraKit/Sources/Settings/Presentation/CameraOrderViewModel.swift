@@ -26,11 +26,17 @@ public final class CameraOrderViewModel {
     }
 
     public func load() async {
-        state = .loading
+        // Refresh in place: only a first load or a retry from `.failed` shows the spinner — a
+        // re-appearance behind an already-`.loaded` list must not blank it while it refreshes.
+        if case .failed = state { state = .loading }
         do {
             let cameras = try await getCameras.execute()
             state = .loaded(cameras.sorted(byPreference: loadCameraOrder.execute()))
         } catch {
+            // A failed refresh keeps the last known list — the row that pushed here already showed
+            // a true count, and losing it to a transient read failure would be a worse experience
+            // than a stale one.
+            if case .loaded = state { return }
             state = .failed(error)
         }
     }

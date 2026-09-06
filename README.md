@@ -43,6 +43,23 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.0 — 2026-09-06
+- **A new look: Aurora.** A blue→violet→pink gradient runs through every screen — under the
+  glass sheets and panels, on the selected segment, on alert badges and the primary action.
+  The tab bar is now a neutral floating system bar with a coloured active icon; sheets (Timeline,
+  Timeline detail, Settings) sit flush to the bottom, rounded only on top.
+- **Cameras gets a hero.** Whichever camera has the current alert (or the first camera, if none
+  does) is shown large at the top, with a chip row for today's activity, storage and offline
+  count — replacing the old summary card.
+- **Events shows its alerts.** A "Latest Alert" card leads the list, rows carry an ALERT tag when
+  Frigate flags them as one, and label chips filter the list — all read from Frigate's own
+  alert/detection classification.
+- **Live and Timeline detail get a framed video card** with the gradient rim and a floating glass
+  control pill, and Timeline's histogram now colours motion by intensity with a gradient playhead.
+- **Settings rows show what they lead to** — the server host, the camera count, the app icon
+  preview — before you tap in.
+- Bundles the Urbanist typeface (SIL Open Font License) for headings and titles.
+
 ### 0.5.6 — 2026-08-09
 - **A new app icon, and six more to pick from.** Aura's icon is a lit ring instead of a stock
   camera glyph, and Settings › Appearance › App Icon offers six alternates — Heavy, Thin, Sweep,

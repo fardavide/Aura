@@ -1,6 +1,9 @@
+import Foundation
 import Testing
 
 import CamerasDomain
+import CamerasEntities
+import TestDoubles
 import TimelineDomain
 
 /// Screenshot tests for the timeline screen across its states, captured on every device +
@@ -59,5 +62,35 @@ struct TimelineScreenSnapshotTests {
 
         // then
         assertScreenSnapshot(view, named: "failed")
+    }
+
+    // The six states above settle every tile to `.unavailable` (no clips, no frames, no image), so
+    // none of them photograph the footage-bearing chrome (scrim, name, clock, badge) or the hero
+    // swap — this is the one state that does.
+    @Test func `given an alerting camera when ready then it matches the reference`() async {
+        // given — deterministic footage on every tile, plus an in-progress alert on front_door
+        // (not the first camera), so the hero swap and the badge both render
+        let previews = FakeCameraPreviewProvider(
+            frames: [PreviewFrame(camera: CameraName("front_door"), time: snapshotNow, fileName: "preview_front_door-1.webp")]
+        )
+        let view = await timelineScreen(
+            cameras: .success(snapshotCameras()),
+            timeline: .success(heroAlertTimelineFixture()),
+            previews: previews,
+            imageLoader: FakePreviewImageLoader(image: solidPreviewPng)
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "ready-hero-alert")
+    }
+
+    @Test func `given a camera whose material fails to load when ready then it matches the reference`() async {
+        // given — every tile's clips read fails, so `loadFromScratch` lands on `display = .failed`
+        let previews = FakeCameraPreviewProvider()
+        previews.clipsResult = .failure(.unreachable)
+        let view = await timelineScreen(cameras: .success(snapshotCameras()), timeline: .success(quietTimelineFixture()), previews: previews)
+
+        // then
+        assertScreenSnapshot(view, named: "ready-tile-failed")
     }
 }

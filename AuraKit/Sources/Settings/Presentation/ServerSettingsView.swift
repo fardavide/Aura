@@ -1,5 +1,6 @@
 import SwiftUI
 
+import CommonDesign
 import SettingsDomain
 
 /// Pushed from the main settings screen; Save persists the connection and pops back.
@@ -13,7 +14,7 @@ public struct ServerSettingsView: View {
 
     public var body: some View {
         Form {
-            Section("Server") {
+            Section {
                 Picker("Scheme", selection: $viewModel.scheme) {
                     ForEach(ConnectionSettings.Scheme.allCases, id: \.self) { scheme in
                         Text(scheme.rawValue.uppercased()).tag(scheme)
@@ -29,25 +30,49 @@ public struct ServerSettingsView: View {
                     #if os(iOS)
                     .keyboardType(.numberPad)
                     #endif
+            } header: {
+                Text("Server")
+                    .auroraText(.sectionHeading)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.auroraTextQuaternary)
             }
-            Section("Authentication (optional)") {
+            .listRowBackground(Color.auroraSettingsRow)
+            Section {
                 TextField("Username", text: $viewModel.username)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     #endif
                 SecureField("Password", text: $viewModel.password)
+            } header: {
+                Text("Authentication (optional)")
+                    .auroraText(.sectionHeading)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.auroraTextQuaternary)
             }
+            .listRowBackground(Color.auroraSettingsRow)
             if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage).foregroundStyle(.red)
+                Text(errorMessage).auroraText(.caption).foregroundStyle(.auroraLive)
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Server")
-        .toolbar {
+        .auroraText(.body)
+        .scrollContentBackground(.hidden)
+        .background(.auroraSettingsSheet)
+        .safeAreaInset(edge: .bottom) {
             Button("Save") {
                 viewModel.save()
                 if viewModel.didSave { dismiss() }
+            }
+            .buttonStyle(.auroraGradient(glow: true))
+            .frame(maxWidth: .infinity)
+            .padding(16)
+        }
+        .navigationTitle("Server")
+        .toolbarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Server").auroraText(.headline)
             }
         }
         .onAppear { viewModel.onAppear() }

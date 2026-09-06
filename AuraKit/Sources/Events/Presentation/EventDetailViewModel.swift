@@ -13,7 +13,10 @@ public final class EventDetailViewModel {
         case failed
     }
 
-    public let title: String
+    public let label: String
+    public let severity: EventSeverity
+    public let startTime: Date
+    public let duration: Duration?
     public private(set) var state: State
 
     private let event: Event
@@ -22,7 +25,10 @@ public final class EventDetailViewModel {
     public init(event: Event, clipLoader: any EventClipLoading) {
         self.event = event
         self.clipLoader = clipLoader
-        title = event.label
+        label = event.label
+        severity = event.severity
+        startTime = event.startTime
+        duration = event.endTime.map { Duration.seconds($0.timeIntervalSince(event.startTime)) }
         state = event.hasClip ? .loading : .unavailable
     }
 

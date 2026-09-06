@@ -7,6 +7,7 @@ public struct Event: Equatable, Hashable, Sendable, Identifiable {
     public let id: EventId
     public let camera: CameraName
     public let label: String
+    public let severity: EventSeverity
     public let subLabel: String?
     public let startTime: Date
     /// Nil while the event is still in progress.
@@ -20,6 +21,7 @@ public struct Event: Equatable, Hashable, Sendable, Identifiable {
         id: EventId,
         camera: CameraName,
         label: String,
+        severity: EventSeverity,
         subLabel: String?,
         startTime: Date,
         endTime: Date?,
@@ -31,6 +33,7 @@ public struct Event: Equatable, Hashable, Sendable, Identifiable {
         self.id = id
         self.camera = camera
         self.label = label
+        self.severity = severity
         self.subLabel = subLabel
         self.startTime = startTime
         self.endTime = endTime

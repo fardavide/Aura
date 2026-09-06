@@ -23,10 +23,23 @@ extension [ReviewMarkerDto] {
         compactMap { dto in
             guard let severity = dto.severity.reviewSeverity else { return nil }
             return ReviewMarker(
+                camera: CameraName(dto.camera),
                 start: Date(timeIntervalSince1970: dto.startTime),
                 end: dto.endTime.map { Date(timeIntervalSince1970: $0) },
-                severity: severity
+                severity: severity,
+                label: dto.data?.objects?.first?.capitalized ?? severity.fallbackLabel
             )
+        }
+    }
+}
+
+private extension ReviewSeverity {
+    /// The badge word when Frigate attached no tracked object — the same vocabulary
+    /// `ReviewActivityMapper` uses.
+    var fallbackLabel: String {
+        switch self {
+        case .alert: "Alert"
+        case .detection: "Motion"
         }
     }
 }

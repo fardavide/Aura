@@ -42,10 +42,21 @@ final class AppComposition {
         LoadTheme(repository: settingsRepository).execute()
     }
 
-    func settingsViewModel() -> SettingsViewModel {
+    /// `connection` is `nil` before a server is configured — the menu then has no Camera Order
+    /// row and nothing to count.
+    func settingsViewModel(for connection: ConnectionSettings?) -> SettingsViewModel {
         SettingsViewModel(
             loadTheme: LoadTheme(repository: settingsRepository),
-            saveTheme: SaveTheme(repository: settingsRepository)
+            saveTheme: SaveTheme(repository: settingsRepository),
+            loadConnection: LoadConnection(repository: settingsRepository),
+            getCameras: connection.map { connection in
+                GetCameras(
+                    repository: FrigateCamerasRepository(
+                        configProvider: configProvider(config: serverConfig(from: connection))
+                    )
+                )
+            },
+            loadAppIcon: appIconSwitcher.isSupported ? LoadAppIcon(switcher: appIconSwitcher) : nil
         )
     }
 
@@ -125,7 +136,15 @@ final class AppComposition {
             getEvents: GetEvents(
                 repository: FrigateEventsRepository(config: config, httpClient: httpClient)
             ),
-            thumbnailLoader: FrigateEventThumbnailLoader(config: config, httpClient: httpClient)
+            // Friendly camera names for the rows and the hero — the same `/api/config` read the
+            // other tabs use, scoped to this screen's lifetime.
+            getCameras: GetCameras(
+                repository: FrigateCamerasRepository(configProvider: configProvider(config: config))
+            ),
+            thumbnailLoader: FrigateEventThumbnailLoader(config: config, httpClient: httpClient),
+            snapshotLoader: FrigateEventSnapshotLoader(config: config, httpClient: httpClient),
+            now: { Date() },
+            calendar: .current
         )
     }
 

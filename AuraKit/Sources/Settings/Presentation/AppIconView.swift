@@ -1,5 +1,6 @@
 import SwiftUI
 
+import CommonDesign
 import SettingsDomain
 
 public struct AppIconView: View {
@@ -20,14 +21,23 @@ public struct AppIconView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .listRowBackground(Color.auroraSettingsRow)
             } footer: {
                 if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage).foregroundStyle(.red)
+                    Text(errorMessage).auroraText(.caption).foregroundStyle(.auroraLive)
                 }
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(.auroraSettingsSheet)
         .navigationTitle("App Icon")
+        .toolbarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("App Icon").auroraText(.headline)
+            }
+        }
         .onAppear { viewModel.onAppear() }
     }
 }
@@ -45,6 +55,8 @@ private struct AppIconRow: View {
                 .frame(width: 60, height: 60)
                 .clipShape(RoundedRectangle(cornerRadius: 13.5, style: .continuous))
             Text(icon.rawValue.capitalized)
+                .auroraText(.headline)
+                .foregroundStyle(.auroraTextPrimary)
             Spacer()
             if isChosen {
                 Image(systemName: "checkmark")

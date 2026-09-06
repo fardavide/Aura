@@ -2,6 +2,7 @@ import SwiftUI
 
 import CamerasDomain
 import CamerasPresentation
+import CommonDesign
 import EventsDomain
 import EventsPresentation
 import SettingsDomain
@@ -74,7 +75,7 @@ struct RootView: View {
                 .onChange(of: selectedTab) { iconBounces[selectedTab, default: 0] += 1 }
             } else {
                 SettingsView(
-                    viewModel: composition.settingsViewModel(),
+                    viewModel: composition.settingsViewModel(for: nil),
                     makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                     makeCameraOrderViewModel: nil,
                     makeAppIconViewModel: appIconViewModelFactory,
@@ -83,9 +84,9 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(theme.colorScheme)
-        .sheet(isPresented: $showingSettings) {
+        .sheet(isPresented: $showingSettings, onDismiss: reload) {
             SettingsView(
-                viewModel: composition.settingsViewModel(),
+                viewModel: composition.settingsViewModel(for: connection),
                 makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                 makeCameraOrderViewModel: connection.map { connection in
                     { composition.cameraOrderViewModel(for: connection) }
@@ -93,8 +94,8 @@ struct RootView: View {
                 makeAppIconViewModel: appIconViewModelFactory
             ) {
                 showingSettings = false
-                reload()
             }
+            .auroraSettingsSheet()
             // macOS sheets size to their root content and don't grow when the inner
             // NavigationStack pushes a detail, so the drill-in camera list needs room reserved here.
             #if os(macOS)

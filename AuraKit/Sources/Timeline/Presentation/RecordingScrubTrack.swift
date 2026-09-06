@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+import CommonDesign
+
 /// The draggable scrub track with its ruler and the fixed centre playhead.
 ///
 /// The length it draws against is read inside a `GeometryReader`, not stored — a measurement routed
@@ -31,9 +33,9 @@ struct RecordingScrubTrack: View {
 
     /// Keeps a label from being half-cut at either end of the ruler.
     private static let rulerEdgeInset: CGFloat = 18
-    private static let rulerThickness: CGFloat = 15
+    private static let rulerThickness: CGFloat = 18
     private static let rulerWidth: CGFloat = 42
-    private static let spacing: CGFloat = 5
+    private static let spacing: CGFloat = 4
     private static let cornerRadius: CGFloat = 12
 
     @ViewBuilder var body: some View {
@@ -70,8 +72,7 @@ struct RecordingScrubTrack: View {
         )
         // Behind the canvas, so the motion, markers and hatching stay legible over the stills.
         .background { filmstripBackground(length: length) }
-        .background(.fill.quaternary)
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .auroraTrackWell(cornerRadius: Self.cornerRadius)
         .overlay { playhead }
         .contentShape(Rectangle())
         .gesture(drag(length: length))
@@ -111,23 +112,7 @@ struct RecordingScrubTrack: View {
     /// A line across the track at the centre with a small knob at its head — the one thing on the
     /// panel that never moves, because everything else is measured against it.
     private var playhead: some View {
-        ZStack(alignment: axis == .horizontal ? .top : .leading) {
-            Rectangle()
-                .fill(.tint)
-                .frame(width: axis == .horizontal ? 2 : nil, height: axis == .vertical ? 2 : nil)
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(.tint)
-                .frame(width: 12, height: 12)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(.background, lineWidth: 2)
-                }
-                .offset(
-                    x: axis == .horizontal ? 0 : -3,
-                    y: axis == .horizontal ? -3 : 0
-                )
-        }
-        .allowsHitTesting(false)
+        AuroraPlayhead(axis: axis)
     }
 
     private func drag(length: CGFloat) -> some Gesture {
@@ -198,7 +183,7 @@ struct RecordingScrubTrack: View {
             // Claims the full cross-axis size so `.position` has a box to place labels in.
             Color.clear
             ForEach(ticks) { tick in
-                label(for: tick)
+                tickMark(for: tick)
                     .fixedSize()
                     .position(
                         x: axis == .horizontal ? tick.position : Self.rulerWidth / 2,
@@ -206,18 +191,31 @@ struct RecordingScrubTrack: View {
                     )
             }
         }
-        .font(.system(size: 10, weight: .semibold))
-        .monospacedDigit()
+        .auroraNumerals(.rulerLabel)
         .accessibilityHidden(true)
+    }
+
+    /// The horizontal ruler draws a 1×5pt tick line above every label (mock L769); the rail's
+    /// vertical ruler has no mock and stays labels-only — a tick line there would collide with the
+    /// labels in its narrow 42pt gutter.
+    @ViewBuilder private func tickMark(for tick: TimelineRulerTick) -> some View {
+        if axis == .horizontal {
+            VStack(spacing: 2) {
+                Rectangle().fill(.auroraTextSecondary.opacity(0.5)).frame(width: 1, height: 5)
+                label(for: tick)
+            }
+        } else {
+            label(for: tick)
+        }
     }
 
     @ViewBuilder private func label(for tick: TimelineRulerTick) -> some View {
         if tick.isDayBoundary {
             Text(tick.instant, format: .dateTime.weekday(.abbreviated))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.auroraTextSecondary)
         } else {
             Text(tick.instant, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute())
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.auroraTextSecondary)
         }
     }
 }

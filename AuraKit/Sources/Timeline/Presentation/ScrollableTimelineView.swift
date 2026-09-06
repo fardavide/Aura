@@ -1,23 +1,25 @@
 import Foundation
 import SwiftUI
 
+import CommonDesign
 import TimelineDomain
 
-/// The Liquid-Glass scrubber: a time header, a scrollable activity **histogram** with a fixed
-/// center playhead, and — horizontal only — a legend. Drawn in the shared `TimelineTrackStyle`
-/// language (green motion at data resolution, red/orange marker pills in their own lane, hatched
-/// gaps), so this track, the detail's and the day bar read as one design. Scrolling/panning the
-/// histogram sets the scrub time.
+/// The scrubber card: a time header, a scrollable activity **histogram** with a fixed center
+/// playhead, and the transport. Drawn in the shared `TimelineTrackStyle` language (intensity-
+/// coloured motion, gradient/amber marker pills in their own lane, hatched gaps), so this track,
+/// the detail's and the day bar read as one design. Scrolling/panning the histogram sets the scrub
+/// time.
 ///
-/// Laid out along `axis`: horizontal (a wide card floated at the bottom) or vertical (a tall card
-/// on the right, for iPhone landscape). Time always reads start→end along the scroll axis — left→
-/// right when horizontal, top→bottom when vertical — with the newest end anchored under the playhead.
+/// Laid out per `arrangement` — `.stack` (a wide card flush to the bottom), `.row` (a single-row
+/// card, iPad/macOS) or `.rail` (a tall card flush to the trailing edge, iPhone landscape). Time
+/// always reads start→end along the scroll axis — left→right when horizontal, top→bottom when
+/// vertical — with the newest end anchored under the playhead.
 ///
 /// The card also carries the transport, and playback scrolls the histogram rather than moving the
 /// playhead: the playhead is fixed at the centre by design, so "the clock advanced" and "the track
 /// slid past" are the same thing.
 struct ScrollableTimelineView: View {
-    let axis: Axis
+    let arrangement: TimelineCardArrangement
     let span: TimeRange
     let timeline: DayTimeline
     let clock: ScrubClock
@@ -34,68 +36,95 @@ struct ScrollableTimelineView: View {
 
     var body: some View {
         glassCard
-            .padding(axis == .vertical ? .vertical : .horizontal)
-            .padding(axis == .vertical ? .trailing : .bottom, 8)
+            .auroraSheet(edge: arrangement.sheetEdge, showsGrabber: false)
     }
 
     @ViewBuilder private var glassCard: some View {
-        if axis == .vertical {
-            // Measure the available space and size the content to it explicitly: `maxHeight: .infinity`
-            // does not survive `glassEffect` on-device (the glass hugs the header), so the histogram
-            // would collapse. A definite frame from a GeometryReader makes the card span the full height.
+        switch arrangement {
+        case .rail:
+            // Measure the available space and size the content to it explicitly: `maxHeight:
+            // .infinity` does not survive `glassEffect` on-device (the glass hugs the header), so
+            // the histogram would collapse. A definite frame from a GeometryReader makes the card
+            // span the full height.
             GeometryReader { geo in
                 VStack(alignment: .leading, spacing: 12) {
                     header
                     histogram
-                    TimelineTransportControls(axis: .vertical, transport: transport)
+                    TimelineTransportControls(arrangement: .rail, transport: transport)
                 }
                 .padding(16)
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             }
-        } else {
+        case .stack:
             VStack(alignment: .leading, spacing: 12) {
                 header
                 histogram
-                TimelineTransportControls(axis: .horizontal, transport: transport)
-                legend
+                TimelineTransportControls(arrangement: .stack, transport: transport)
             }
             .padding(16)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            // Clears the floating tab bar — the mock's own bottom padding under the transport row.
+            .safeAreaPadding(.bottom)
+        case .row:
+            HStack(spacing: 24) {
+                TimelineClockLabel(clock: clock, arrangement: .row).frame(width: 190, alignment: .leading)
+                histogram
+                VStack(spacing: 10) {
+                    TimelineTransportControls(arrangement: .row, transport: transport)
+                    zoomButton
+                }
+            }
+            .padding(.init(top: 18, leading: 32, bottom: 24, trailing: 32))
+            // Clears the floating tab bar on iPad (macOS has none — a no-op there).
+            .safeAreaPadding(.bottom)
         }
     }
 
     @ViewBuilder private var header: some View {
-        if axis == .vertical {
+        switch arrangement {
+        case .rail:
             // The slim card stacks the readout over the zoom pill (no room for them side by side).
             VStack(alignment: .leading, spacing: 10) {
-                TimelineClockLabel(clock: clock, axis: .vertical)
-                Button { zoom(to: zoomPreset.next.pointsPerHour) } label: {
-                    Label(zoomPreset.title, systemImage: zoomPreset.icon)
-                }
-                .font(.subheadline.weight(.semibold))
-                .buttonStyle(.glass)
+                TimelineClockLabel(clock: clock, arrangement: .rail)
+                zoomButton
             }
-        } else {
+        case .stack:
             HStack(alignment: .firstTextBaseline) {
-                TimelineClockLabel(clock: clock, axis: .horizontal)
+                TimelineClockLabel(clock: clock, arrangement: .stack)
                 Spacer()
-                Button(zoomPreset.title) { zoom(to: zoomPreset.next.pointsPerHour) }
-                    .font(.subheadline.weight(.semibold))
-                    .buttonStyle(.glass)
+                zoomButton
             }
+        // `.row` renders no header — the clock is its own fixed-width column and the zoom pill
+        // moves into the transport column (see `glassCard`); this branch is never reached.
+        case .row:
+            EmptyView()
         }
+    }
+
+    /// One tap steps `zoomPreset.next` and re-anchors. Flat (not `.auroraChip`'s glass capsule):
+    /// this pill sits **inside** `.auroraSheet`, and CommonDesign's `auroraChip(over:)` always
+    /// applies `glassEffect` — one glass layer per surface, so the flat capsule is spelled inline
+    /// from the chip's own catalog tokens instead.
+    private var zoomButton: some View {
+        Button { zoom(to: zoomPreset.next.pointsPerHour) } label: {
+            Text(zoomPreset.title)
+                .auroraText(.chip)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.auroraChipFill, in: Capsule())
+                .overlay { Capsule().strokeBorder(.auroraChipBorder, lineWidth: 1) }
+        }
+        .buttonStyle(.plain)
     }
 
     private var histogram: some View {
         GeometryReader { geo in
-            let isVertical = axis == .vertical
+            let isVertical = arrangement.axis == .vertical
             let viewport = isVertical ? geo.size.height : geo.size.width
-            let scale = TimelineScale(axis: axis, span: span, pointsPerHour: pointsPerHour, viewport: viewport)
+            let scale = TimelineScale(axis: arrangement.axis, span: span, pointsPerHour: pointsPerHour, viewport: viewport)
             ScrollView(isVertical ? .vertical : .horizontal, showsIndicators: false) {
                 scrollStack {
                     endSpacer(viewport / 2)
-                    HistogramTrack(axis: axis, span: span, timeline: timeline, length: scale.contentLength)
+                    HistogramTrack(axis: arrangement.axis, span: span, timeline: timeline, length: scale.contentLength)
                     endSpacer(viewport / 2)
                 }
             }
@@ -146,23 +175,21 @@ struct ScrollableTimelineView: View {
             }
             // Simultaneous so the pinch composes with the scroll pan instead of blocking it.
             .simultaneousGesture(magnify)
-            .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
+            .auroraTrackWell()
+            .overlay(alignment: .center) {
+                AuroraPlayhead(axis: arrangement.axis)
+                    .padding(arrangement.axis == .horizontal ? .vertical : .horizontal, 3)
             }
-            .overlay(alignment: .center) { playhead }
         }
         // The zoom pill lives outside the GeometryReader — keep the measured viewport around for
         // its re-anchor math.
         .onGeometryChange(for: CGFloat.self) { proxy in
-            axis == .vertical ? proxy.size.height : proxy.size.width
+            arrangement.axis == .vertical ? proxy.size.height : proxy.size.width
         } action: { histogramViewport = $0 }
-        // Horizontal: a fixed 68pt strip (as the bottom card). Vertical: claim all the height the
-        // full-height card leaves below the header, so the histogram (and the glass) fill it.
-        .frame(height: axis == .horizontal ? 68 : nil)
-        .frame(maxHeight: axis == .vertical ? .infinity : nil)
+        // `.stack`/`.row`: a fixed strip (60 / 72pt). `.rail`: claim all the height the full-height
+        // card leaves below the header, so the histogram (and the well) fill it.
+        .frame(height: arrangement.histogramLength)
+        .frame(maxHeight: arrangement.histogramLength == nil ? .infinity : nil)
     }
 
     /// The preset the pill shows — after a pinch, the one nearest the continuous density.
@@ -193,8 +220,8 @@ struct ScrollableTimelineView: View {
         let clamped = TimelineZoom.clamped(density)
         guard clamped != pointsPerHour else { return }
         pointsPerHour = clamped
-        let scale = TimelineScale(axis: axis, span: span, pointsPerHour: clamped, viewport: histogramViewport)
-        if axis == .vertical {
+        let scale = TimelineScale(axis: arrangement.axis, span: span, pointsPerHour: clamped, viewport: histogramViewport)
+        if arrangement.axis == .vertical {
             scrollPosition.scrollTo(y: scale.offset(for: clock.instant))
         } else {
             scrollPosition.scrollTo(x: scale.offset(for: clock.instant))
@@ -204,7 +231,7 @@ struct ScrollableTimelineView: View {
     /// Lays the two padding spacers and the track along the scroll axis.
     @ViewBuilder
     private func scrollStack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        if axis == .vertical {
+        if arrangement.axis == .vertical {
             VStack(spacing: 0, content: content)
         } else {
             HStack(spacing: 0, content: content)
@@ -214,80 +241,43 @@ struct ScrollableTimelineView: View {
     /// A half-viewport spacer so the track's start/end can reach the centered playhead.
     private func endSpacer(_ half: CGFloat) -> some View {
         Color.clear
-            .frame(width: axis == .horizontal ? half : nil, height: axis == .vertical ? half : nil)
-    }
-
-    /// The fixed center playhead: a blue line across the track, perpendicular to the scroll axis.
-    /// The fixed center playhead: a blue line across the track, perpendicular to the scroll axis.
-    private var playhead: some View {
-        GeometryReader { geo in
-            Path { path in
-                if axis == .vertical {
-                    let midY = geo.size.height / 2
-                    path.move(to: CGPoint(x: 0, y: midY))
-                    path.addLine(to: CGPoint(x: geo.size.width, y: midY))
-                } else {
-                    let midX = geo.size.width / 2
-                    path.move(to: CGPoint(x: midX, y: 0))
-                    path.addLine(to: CGPoint(x: midX, y: geo.size.height))
-                }
-            }
-            .stroke(.blue, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-        }
-        .allowsHitTesting(false)
-    }
-
-    /// Horizontal (bottom card) only — the vertical card drops the legend to give the histogram the
-    /// full card height; its colors read directly off the bars.
-    private var legend: some View {
-        HStack(spacing: 16) {
-            legendItem(.green, "Motion")
-            legendItem(.red, "Alert")
-            legendItem(.orange, "Detection")
-            legendItem(.gray.opacity(0.4), "No footage")
-            Spacer()
-        }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-    }
-
-    private func legendItem(_ color: Color, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 8, height: 8)
-            Text(label)
-        }
+            .frame(width: arrangement.axis == .horizontal ? half : nil, height: arrangement.axis == .vertical ? half : nil)
     }
 }
 
-/// Time readout, isolated so only it re-renders as the clock moves while scrubbing. Horizontal (the
-/// bottom card) stacks the date over a large H:MM; vertical (the slim landscape card) drops the date
-/// and trails smaller seconds after the time.
+/// Time readout, isolated so only it re-renders as the clock moves while scrubbing. `.stack`/`.row`
+/// stack the day over a large `H:MM` with trailing seconds; `.rail` keeps a single line (no room for
+/// the day, and the rail has read this way since 0.4.0).
 private struct TimelineClockLabel: View {
     @Environment(\.calendar) private var calendar
     let clock: ScrubClock
-    let axis: Axis
+    let arrangement: TimelineCardArrangement
 
     var body: some View {
-        switch axis {
-        case .horizontal:
-            VStack(alignment: .leading, spacing: 0) {
+        switch arrangement {
+        case .stack, .row:
+            VStack(alignment: .leading, spacing: 3) {
                 Text(clock.instant, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .auroraText(.overline)
                     .textCase(.uppercase)
-                Text(clock.instant, format: .dateTime.hour().minute())
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .monospacedDigit()
+                    .foregroundStyle(.auroraTextSecondary)
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    // AM/PM is dropped, not moved: the day line above already says which day it
+                    // is, and a third `Text` would break this 34/16 baseline pair.
+                    Text(clock.instant, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+                        .auroraNumerals(.clockTab)
+                    Text(verbatim: secondsLabel)
+                        .auroraNumerals(.clockTabSeconds)
+                        .foregroundStyle(.auroraTextSecondary)
+                }
             }
-        case .vertical:
+        case .rail:
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(clock.instant, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .monospacedDigit()
+                    .auroraNumerals(.clockTab)
                 Text(verbatim: secondsLabel)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .auroraNumerals(.clockTabSeconds)
+                    .foregroundStyle(.auroraTextSecondary)
             }
         }
     }
@@ -333,6 +323,7 @@ private struct HistogramTrack: View {
             }
 
             drawGaps(in: context, size: size, isVertical: isVertical, pos: pos)
+            drawMidnightLines(in: context, size: size, isVertical: isVertical, pos: pos, calendar: calendar)
             drawHourLabels(in: context, size: size, isVertical: isVertical, pos: pos, calendar: calendar)
 
             // The lane sits against the label gutter; motion grows from the opposite edge, kept
@@ -348,7 +339,7 @@ private struct HistogramTrack: View {
                 let rect = isVertical
                     ? CGRect(x: size.width - barLength, y: band.lo, width: barLength, height: barAcross)
                     : CGRect(x: band.lo, y: size.height - barLength, width: barAcross, height: barLength)
-                context.fill(Path(rect), with: .color(TimelineTrackStyle.motionColor))
+                context.fill(Path(rect), with: .color(TimelineTrackStyle.motionColor(intensity: bucket.intensity)))
             }
 
             for marker in timeline.markers {
@@ -362,8 +353,8 @@ private struct HistogramTrack: View {
                 TimelineTrackStyle.fillMarkerPill(pill, severity: marker.severity, in: context)
             }
         }
-        // Horizontal: fixed `length` wide, height from the 68pt strip. Vertical: `length` tall, the
-        // Canvas filling the card's width (so bars have room to grow rightward).
+        // Horizontal: fixed `length` wide, height from the strip's fixed height. Vertical: `length`
+        // tall, the Canvas filling the card's width (so bars have room to grow rightward).
         .frame(width: axis == .horizontal ? length : nil, height: axis == .vertical ? length : nil)
     }
 
@@ -384,6 +375,28 @@ private struct HistogramTrack: View {
         }
     }
 
+    /// A divider at every local midnight in the span — the fixed 24h axis the mock draws does not
+    /// exist here (decision #3 keeps the scrolling strip), but a midnight still separates two real
+    /// days, so it is drawn.
+    private func drawMidnightLines(in context: GraphicsContext, size: CGSize, isVertical: Bool, pos: (Date) -> CGFloat, calendar: Calendar) {
+        var midnight = calendar.startOfDay(for: span.start)
+        while midnight < span.end {
+            if midnight > span.start {
+                var line = Path()
+                if isVertical {
+                    line.move(to: CGPoint(x: 0, y: pos(midnight)))
+                    line.addLine(to: CGPoint(x: size.width, y: pos(midnight)))
+                } else {
+                    line.move(to: CGPoint(x: pos(midnight), y: 0))
+                    line.addLine(to: CGPoint(x: pos(midnight), y: size.height))
+                }
+                context.stroke(line, with: AuroraTrack.midnight, lineWidth: AuroraTrack.midnightLineWidth)
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: midnight) else { return }
+            midnight = next
+        }
+    }
+
     /// Faint time labels every 6h in the gutter, leaving the bars flush to the opposite edge.
     private func drawHourLabels(in context: GraphicsContext, size: CGSize, isVertical: Bool, pos: (Date) -> CGFloat, calendar: Calendar) {
         guard var tick = calendar.nextDate(
@@ -398,7 +411,7 @@ private struct HistogramTrack: View {
                     ? Text(verbatim: hour < 10 ? "0\(hour)" : "\(hour)")
                     : Text(tick, format: .dateTime.hour().minute())
                 context.draw(
-                    label.font(.system(size: 9)).foregroundStyle(.tertiary),
+                    label.font(.auroraNumerals(.axisLabel)).foregroundStyle(.auroraTextTertiary),
                     at: point,
                     anchor: .center
                 )

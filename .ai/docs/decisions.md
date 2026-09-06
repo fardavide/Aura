@@ -1226,3 +1226,130 @@ a deliberate choice rather than a toggle.
 Icon artwork is generated from SVG rather than hand-drawn per size: full-bleed square and opaque
 (the system applies the mask; baking the squircle would double it), with the small macOS sizes drawn
 from a simplified body — the echo rings turn to mush below 32pt — instead of downsampled.
+
+## Timeline tab: Aurora restyle keeps the scrolling strip and adds a hero tile (0.6.0)
+
+The tab is restyled, not redesigned: it keeps its scrolling 7-day strip (fixed centre playhead,
+pinch zoom, pause-on-grab, auto-refresh) rather than the mock's fixed 24h well, so several things
+the mock draws do not exist here and are omitted rather than faked — the `00:00…24:00` axis label
+row, the day/night mood pill (no data source), and the dashed "now" line (the span always ends at
+`now()`, so the line would sit on the track's own trailing edge, half-clipped, marking a boundary
+the edge already marks).
+
+Five decisions worth keeping:
+
+- **The hero tile exists on compact width only**, driven by a `ReviewMarker` that now carries a
+  `camera` and a tracked-object `label` (both required, no defaults). It is the camera with the
+  most-recently-started active alert, falling back to the first camera — so a hero position always
+  exists, it just isn't always caused by an alert. The hero and the grid live in **one** `ForEach`
+  behind a custom `HeroGridLayout`, so a hero swap is a reorder, not a re-parent: `Camera.id`
+  preserves identity across the flip, and a tile's player/`.task`s never rebuild because of it.
+- **The hero follows the playhead at 1Hz**, and only from `load()`/`refresh()`/that loop — never
+  from `scrub(to:)`, which fires once per scroll offset (up to 60–120Hz during a drag or fling).
+  Recomputing the hero at that rate would republish `@Observable` state and re-lay-out the grid
+  mid-fling; a one-second latency on an alert boundary is imperceptible.
+- **iPad takes a fixed 3-column grid (no hero); macOS keeps `TimelineGridLayout.bestFit`** (0.3.4
+  stands) — a third size-class property, `usesFixedColumnGrid`, carries the split. It is a
+  *platform* discriminator as much as a size-class one (iOS regular width vs. macOS, which reports
+  regular width too but has no room for a 28pt title in its title bar), so it also gates the
+  screen's large toolbar title away from the Mac title bar. It is the file's third `#if os(iOS)`
+  site, beside the two existing size-class properties.
+- **The Timeline tab's inline sheet is grabber-less**, amending decision #5's "grabber on all three
+  sheets": this card is not dismissable by drag, so drawing the grabber would advertise a drag that
+  does nothing — the dead-control rule extends to affordances, not just whole controls. The
+  presented Settings sheet is unaffected and keeps its drag indicator.
+- **Not every token the plan asked for landed in CommonDesign.** `AuroraTextStyle.titleCompact` /
+  `.screenTitleCompact`, `AuroraNumeralStyle.tileClock`, `AuroraBadgeSize.compactWord` and a flat
+  (non-`glassEffect`) `auroraChip` variant were requested but not added; every call site takes the
+  plan's own documented fallback instead (`.headline`, `.screenTitle`, `.rowSummary`, `.compact`,
+  and the flat capsule spelled inline from `.auroraChipFill`/`.auroraChipBorder`) and says so at the
+  point of use, so nothing was blocked and nothing silently drifted from the mock's intent.
+
+## Aurora restyle: Settings is a flush aurora sheet with row summaries (0.6.0)
+
+The Settings sheet drops the 0.5.0 floating-card idiom for a full-width sheet flush to the bottom,
+rounded only on top (r30) with the system grabber and the gradient rim, presented on the
+`CommonDesign` sheet colour — the same colour the screen paints behind its own form, so the
+presented chrome and the content agree; the darker backdrop colour is the mock's page *behind* the
+sheet and has no place in the app. The menu is still a grouped `Form` (macOS keeps `.grouped` and
+the reserved sheet frame) themed with flat catalog tokens, never a second glass layer — which is
+why the theme control uses the recessed-well container rather than the glass one. Three rows gained
+summaries so the menu answers before it is tapped: Server shows `host:port` (or 'Not configured' on
+first run), Camera Order shows the live camera count (omitted, not dashed, until it arrives or when
+the read fails — the pushed screen owns the error), App Icon shows the current icon's artwork and
+name read through the system switcher (no mirrored preference). That count costs a real
+`/api/config` read when the menu appears, and the pushed order screen costs another: the camera list
+deliberately never serves the cached config (0.3.12), and the provider coalesces only reads already
+in flight — accepted, because a stale count on the screen that reorders cameras is worse than a
+request. The Theme picker is the `CommonDesign` segmented control because a system segmented
+`Picker` cannot take the gradient selection; it still saves on change, and the sheet now reloads the
+root on *every* dismissal (Done or swipe) so a chosen theme always applies. Done is disabled with a
+stated reason on first run, when there is nothing yet to dismiss to. Navigation-bar titles are
+Urbanist via a principal toolbar item, so the sheet head matches the rows under it. The tab bar
+stays the untouched system bar: its active colour, the Done/Save/Retry buttons and every link are
+tinted by the now-filled `AccentColor` (pink pair), which is also where the spec's `#C9B8FF` link
+colour was collapsed — one accent, not two; on macOS that accent only shows when the user's system
+accent is Multicolour, which is the platform's rule, not ours. Server's Save moved from the toolbar
+to a bottom safe-area inset as the gradient action button, the one place the full gradient is
+allowed on this screen, and the one placement that survives a keyboard in compact height.
+
+## Aurora restyle: the Cameras wall gets a hero (0.6.0)
+
+The Cameras tab root drops the summary card and the live-count pill for a chip row (activity,
+today's tally, storage, and — only when non-zero — an offline count) plus the existing group-chip
+row, over a custom `CameraWallLayout` that gives the wall a hero tile. The hero is the visible
+camera with the most recently started **alert**, never a mere detection — `CameraGridViewModel`
+exposes it separately from `rightNow` (which does promote a detection when it's the only activity),
+precisely so the 2s activity-refresh loop cannot reorder the wall for ordinary motion; the swap
+animates (`.smooth(duration: 0.35)`) rather than snapping. The hero is a property of the *layout
+style*, not the view model alone: `CameraWallLayout.Style.hasHero` is what tells the view whether to
+iterate the hero-led `wallCameras` or the plain `visibleCameras`, and which tile (if any) draws with
+`.hero` styling — so the compact-height (iPhone landscape) 3-up wall has neither hero styling nor
+hero ordering, and nothing moves there for lack of a hero to earn the move. `heroCamera`,
+`wallCameras`, `rightNow` and `offlineCount` are all narrowed to `visibleCameras`, the group-filtered
+list: the header chips now describe exactly the cameras the wall shows, so a group with no visible
+camera renders neither a stale activity chip nor an offline count for a camera the filter just hid.
+Every tile — hero and non-hero — lives in **one** `ForEach` behind the one custom `Layout`, because
+SwiftUI identity is structural: splitting the hero into a second container would re-parent a tile on
+every swap and rebuild its decoded-image `@State`. `liveCount` is removed; `offlineCount` and
+`isOffline(_:)` already carry every bit of state the live-count pill conveyed.
+
+## Aurora restyle: Timeline detail is a flush sheet on a full-bleed video slot (0.6.0)
+
+The recording player overturns the 0.5.0 "floating card" for this screen: the sheet is flush to its
+edge (bottom on iPhone/iPad portrait, trailing for the landscape rail) via the same `auroraSheet`
+every other panel now uses, and the video slot is full-bleed with no rim — mock L107 draws none here,
+unlike the Live screen's framed card, so this screen's frame stays absent rather than forcing one
+recipe onto both. The landscape rail gains the Live control it previously omitted (a state the user
+could not leave is a dead-control violation regardless of how rare the layout is). Four controls that
+used to swallow a press — the two marker-jump buttons and the two day-step chevrons — are now visibly
+disabled at the ends of their range rather than silently doing nothing. `TimelineTrackStyle` and
+`TimelineHatch` (owned by the Timeline-tab slice, landed first) are consumed as-is: their paint now
+delegates to `CommonDesign`'s `AuroraTrack`, so this screen's day histogram and scrub track share
+motion-intensity colouring and the gradient playhead with the tab's strip for free. The zoom picker
+is `AuroraSegmentedControl` with the full brand gradient (`.diagonal`) on its selected segment, not
+the quieter `.badge` gradient other segmented controls use — this control is the screen's own primary
+action, not a peer of the transport row.
+
+## Aurora restyle: Events severity comes from a local `/api/review` join (0.6.0)
+
+`/api/events` carries no severity, so an alert is no longer guessed from a label heuristic: a
+Events-local read of `/api/review` for the loaded window is joined to the event list by id — an
+event is an **alert** when an alert-severity review item lists it in `data.detections`, otherwise a
+**detection** (`EventSeverity`, a new required field on `Event`, no default — every call site updates
+or the compiler catches it). This is Frigate's own classification, not Aura's approximation, and it
+is what the ALERT tag, the gradient thumbnail ring, and the "Latest Alert" hero card actually mean;
+the hero reads "Latest Event" on a day with no alert rather than lying about severity it doesn't have.
+The subtitle's "Today · N events" count is honestly scoped to the loaded window (no `after=` filter,
+`limit: 100`) rather than a second authoritative read — the Cameras tab already owns that number.
+
+## Aurora restyle: Live gets a framed video card, one arrangement rule for both size classes (0.6.0)
+
+The live stream sits in a 16:9 card with the gradient frame and a soft violet glow, the LIVE pill
+moved inside the card (top-left) rather than floating above it, and the transport controls become a
+floating glass pill below the card instead of an overlay on the video. `LiveVideoArrangement` (`.card`
+/ `.fill`) is the one pure rule behind both regular-height (framed card, pill below) and compact-height
+/ landscape (full-bleed video, controls overlay) layouts — derived once from `verticalSizeClass` and
+unit-tested independently of the view, rather than two `#if` branches drifting apart inside
+`LiveVideoLayout`. The bare-`AVPlayerLayer` / `ZoomableContainer` contract is unchanged: the video
+stays the container's only child, the zoom transform never touches the frame or the controls.

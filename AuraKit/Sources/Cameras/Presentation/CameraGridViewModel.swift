@@ -63,16 +63,10 @@ public final class CameraGridViewModel {
         storageObservation?.cancel()
     }
 
-    /// Live cameras — the loaded ones whose preview still resolved (not seen offline).
-    public var liveCount: Int {
-        guard case .loaded(let cameras) = state else { return 0 }
-        return cameras.filter { !offlineCameras.contains($0.name) }.count
-    }
-
     /// Loaded cameras whose preview still failed to load — our one honest per-camera offline signal.
+    /// Narrowed to `visibleCameras`: the chips describe exactly the cameras the wall shows.
     public var offlineCount: Int {
-        guard case .loaded(let cameras) = state else { return 0 }
-        return cameras.filter { offlineCameras.contains($0.name) }.count
+        visibleCameras.filter { offlineCameras.contains($0.name) }.count
     }
 
     /// The loaded cameras the selected group keeps — the full list when no group (or a stale one) is
@@ -85,12 +79,33 @@ public final class CameraGridViewModel {
         return cameras.filter { group.contains($0.name) }
     }
 
-    /// The single most significant thing happening now (the summary card's RIGHT NOW column): an
-    /// alert outranks a detection, ties break on recency. Nil when all is quiet. Carries the camera
-    /// so the row can navigate straight to it.
+    /// The wall's hero: the visible camera with the most recently started **alert** — never a mere
+    /// detection, so the 2 s activity loop can't churn the layout for ordinary motion — else the
+    /// first visible camera; nil when there is none to show.
+    public var heroCamera: Camera? {
+        let alertedCameras = visibleCameras.compactMap { camera -> (Camera, Date)? in
+            guard let activity = activity[camera.name], activity.severity == .alert else { return nil }
+            return (camera, activity.startedAt)
+        }
+        if let mostRecent = alertedCameras.max(by: { $0.1 < $1.1 }) {
+            return mostRecent.0
+        }
+        return visibleCameras.first
+    }
+
+    /// The wall's ordered source: the hero first, then every other visible camera keeping their
+    /// existing order. The single list `CameraGridView`'s one `ForEach` iterates.
+    public var wallCameras: [Camera] {
+        guard let heroCamera else { return visibleCameras }
+        return [heroCamera] + visibleCameras.filter { $0.id != heroCamera.id }
+    }
+
+    /// The single most significant thing happening now (the chip row's activity chip): an alert
+    /// outranks a detection, ties break on recency. Nil when all is quiet. Carries the camera so the
+    /// chip can navigate straight to it. Narrowed to `visibleCameras`: the chips describe exactly the
+    /// cameras the wall shows.
     public var rightNow: RightNow? {
-        guard case .loaded(let cameras) = state else { return nil }
-        let active = cameras.compactMap { camera in activity[camera.name].map { (camera, $0) } }
+        let active = visibleCameras.compactMap { camera in activity[camera.name].map { (camera, $0) } }
         guard let best = active.max(by: { lhs, rhs in
             (rank(lhs.1.severity), lhs.1.startedAt) < (rank(rhs.1.severity), rhs.1.startedAt)
         }) else {
@@ -111,6 +126,37 @@ public final class CameraGridViewModel {
         case .alert: 1
         case .detection: 0
         }
+    }
+
+    /// "N today" for the chip row's second chip; nil while the day's tally hasn't loaded.
+    public var todayChipText: String? {
+        guard let todayEvents else { return nil }
+        return "\(todayEvents.total) today"
+    }
+
+    /// The two most frequent labels ("9 person · 5 car"), appended to the today chip on regular
+    /// width; nil while the tally hasn't loaded or carries no breakdown.
+    public var todayBreakdownText: String? {
+        guard let todayEvents, !todayEvents.breakdown.isEmpty else { return nil }
+        return todayEvents.breakdown.prefix(2).map { "\($0.count) \($0.label)" }.joined(separator: " · ")
+    }
+
+    /// "N day(s) kept", appended to the storage chip on regular width; nil without a retention figure.
+    public var retentionChipText: String? {
+        guard let days = storage?.retentionDays else { return nil }
+        return "\(days) day\(days == 1 ? "" : "s") kept"
+    }
+
+    /// "N offline" for the chip row's fourth chip; nil while every visible camera is reachable.
+    public var offlineChipText: String? {
+        guard offlineCount > 0 else { return nil }
+        return "\(offlineCount) offline"
+    }
+
+    /// Whether the chip row has anything to show — gates it so a quiet screen whose best-effort reads
+    /// both failed never renders an empty `ScrollView` between two gaps.
+    public var hasSummaryChips: Bool {
+        rightNow != nil || todayChipText != nil || storage != nil || offlineChipText != nil
     }
 
     /// Picks the group to filter by; nil shows every camera.
