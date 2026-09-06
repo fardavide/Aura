@@ -14,11 +14,11 @@ import CommonPlayer
 ///   controls side by side.
 ///
 /// The video is pinch-zoomable everywhere and clips consistently to its **slot** — zoomed footage
-/// never overflows into the panel or under the glass — with an `AuroraZoomBleed` behind the frame
-/// reading as the content extending past its own edge instead (matching the Live screen, the one
-/// player this design already treats as correct). The chrome and the panel live outside the zoom
-/// and never scale. The slot itself is full-bleed everywhere — no rim, no corner radius, no inset
-/// (the mock's only framed video is the Live screen's, not this one).
+/// never overflows into the panel or under the glass. At rest the slot carries the same
+/// gradient-rimmed card frame as the Live screen; `AuroraZoomChrome` fades that border and fades in
+/// an `AuroraZoomBleed` behind it as a pinch progresses, then fades both to nothing as the picture
+/// approaches filling the slot — one curve, shared with Live, so all three player screens read the
+/// same way at any zoom level. The chrome and the panel live outside the zoom and never scale.
 ///
 /// Split out from `RecordingPlayerView` so every arrangement can be screenshot-tested over a
 /// placeholder, with literal state and no player — and with `cameraAreaHighlights` on, the
@@ -41,6 +41,10 @@ public struct RecordingDetailLayout<Video: View>: View {
 
     private static var railWidth: CGFloat { 168 }
     private static var splitPanelMaxWidth: CGFloat { 1_100 }
+    /// Matches `LiveVideoArrangement.card`'s frame exactly, so the resting picture reads the same
+    /// on both screens.
+    private static var videoCornerRadius: CGFloat { 22 }
+    private static var videoRimWidth: CGFloat { 1.5 }
 
     public init(
         state: RecordingDetailState,
@@ -138,13 +142,19 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// bounds, so it never pans or scales with a pinch the way the picture does — consistent
     /// across every arrangement now that every arrangement clips.
     private func slot() -> some View {
-        ZoomableContainer(
+        let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
+        return ZoomableContainer(
             onSingleTap: {},
             clipsContent: true,
             onTransformChange: { zoomTransform = $0 }
         ) { video }
             .background(Color.auroraBase)
-            .background { AuroraZoomBleed(transform: zoomTransform) { video } }
+            .auroraFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, borderOpacity: chrome.borderOpacity)
+            // Same ordering rule as `LiveVideoLayout.videoSurface` — the bleed sits behind the
+            // frame's own clip, not in front of it, or the frame silently cuts the glow down to
+            // its own bounds and it never shows.
+            .background { AuroraZoomBleed(opacity: chrome.glassOpacity, transform: zoomTransform) { video } }
+            .auroraCardGlow(opacity: chrome.borderOpacity)
             .overlay { RecordingHeroOverlay(state: state) }
             .overlay { slotHighlight }
     }
