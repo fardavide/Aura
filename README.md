@@ -43,6 +43,16 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.1 — 2026-09-06
+- **Timeline's sheet sits flush behind the tab bar**, matching every other panel, instead of
+  floating with a gap above it.
+- **Pinch-to-zoom no longer breaks** after swiping back from Timeline detail.
+- **Pinch-to-zoom behaves the same on the Live and Timeline-detail screens** — both clip
+  consistently and glow softly behind the frame as you zoom in.
+- **Fixed a stray line** that could show across the Settings sheet.
+- **The three tabs' titles now look and behave the same** — left-aligned with a subtitle, and the
+  content scrolls behind a soft glass backing as you scroll, on Cameras and Events too.
+
 ### 0.6.0 — 2026-09-06
 - **A new look: Aurora.** A blue→violet→pink gradient runs through every screen — under the
   glass sheets and panels, on the selected segment, on alert badges and the primary action.
