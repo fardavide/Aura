@@ -9,34 +9,37 @@ struct SettingsViewModelTests {
 
     @Test func `given a saved theme when appearing then it is prefilled`() {
         // given
-        let repository = FakeSettingsRepository()
-        repository.savedTheme = .light
-        let sut = makeViewModel(repository)
+        let scenario = Scenario(theme: .light)
 
         // when
-        sut.onAppear()
+        scenario.sut.onAppear()
 
         // then
-        #expect(sut.theme == .light)
+        #expect(scenario.sut.theme == .light)
     }
 
     @Test func `when the theme changes then it is saved immediately`() {
         // given
-        let repository = FakeSettingsRepository()
-        let sut = makeViewModel(repository)
+        let scenario = Scenario()
 
         // when
-        sut.theme = .dark
+        scenario.sut.theme = .dark
 
         // then
-        #expect(repository.savedTheme == .dark)
+        #expect(scenario.settings.savedTheme == .dark)
     }
 }
 
 @MainActor
-private func makeViewModel(_ repository: FakeSettingsRepository = FakeSettingsRepository()) -> SettingsViewModel {
-    SettingsViewModel(
-        loadTheme: LoadTheme(repository: repository),
-        saveTheme: SaveTheme(repository: repository)
-    )
+private struct Scenario {
+    let settings: FakeSettingsRepository
+    let sut: SettingsViewModel
+
+    init(theme: ThemePreference = .system) {
+        settings = FakeSettingsRepository(theme: theme)
+        sut = SettingsViewModel(
+            loadTheme: LoadTheme(repository: settings),
+            saveTheme: SaveTheme(repository: settings)
+        )
+    }
 }
