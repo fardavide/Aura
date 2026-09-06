@@ -47,8 +47,9 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 - **Timeline's sheet sits flush behind the tab bar**, matching every other panel, instead of
   floating with a gap above it.
 - **Pinch-to-zoom no longer breaks** after swiping back from Timeline detail.
-- **Pinch-to-zoom behaves the same on the Live and Timeline-detail screens** — both clip
-  consistently and glow softly behind the frame as you zoom in.
+- **Pinch-to-zoom now looks identical on the Live and Timeline-detail screens** — both start with
+  the same gradient-rimmed frame, glow softly behind it as you zoom in, then let the frame and glow
+  fade away together as the picture fills the screen.
 - **Fixed a stray line** that could show across the Settings sheet.
 - **The three tabs' titles now look and behave the same** — left-aligned with a subtitle, and the
   content scrolls behind a soft glass backing as you scroll, on Cameras and Events too.
