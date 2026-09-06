@@ -9,6 +9,12 @@ public struct EventsListView: View {
     private let makeDetailViewModel: (Event) -> EventDetailViewModel
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    // Pinned outside the ScrollView (below), so it needs its own measured height to reserve as
+    // top padding for the scrolling content, and its own scroll-offset tracking to know when to
+    // show its glass backing — see `AuroraScrollHeader`'s doc comment for why this is hand-rolled
+    // rather than a system toolbar title.
+    @State private var headerHeight: CGFloat = 74
+    @State private var isHeaderGlass = false
 
     public init(
         viewModel: EventsListViewModel,
@@ -22,17 +28,23 @@ public struct EventsListView: View {
 
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    header
-                    EventFilterChips(filters: viewModel.filters, selection: viewModel.filter, onSelect: viewModel.select)
-                        .padding(.vertical, 12)
-                    content
+            ZStack(alignment: .top) {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        Color.clear.frame(height: headerHeight)
+                        EventFilterChips(filters: viewModel.filters, selection: viewModel.filter, onSelect: viewModel.select)
+                            .padding(.vertical, 12)
+                        content
+                    }
                 }
+                .auroraTrackingScrollGlass(isGlass: $isHeaderGlass)
+                .refreshable { await viewModel.load() }
+                .auroraHiddenNavigationBar()
+
+                header
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
             }
-            .refreshable { await viewModel.load() }
             .auroraBackground()
-            .auroraHiddenNavigationBar()
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(
                     viewModel: makeDetailViewModel(event),
@@ -44,14 +56,14 @@ public struct EventsListView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
+        AuroraScrollHeader(isGlass: isHeaderGlass) {
             VStack(alignment: .leading, spacing: 7) {
                 Text("Events").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
                 if let subtitle = viewModel.summaryText(maximumLabels: maximumSubtitleLabels) {
                     Text(subtitle).auroraText(.captionEmphasis).foregroundStyle(.auroraTextSecondary)
                 }
             }
-            Spacer(minLength: 8)
+        } trailing: {
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape")
                     .foregroundStyle(.auroraTextPrimary)
@@ -60,8 +72,6 @@ public struct EventsListView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
     }
 
     private var maximumSubtitleLabels: Int? {

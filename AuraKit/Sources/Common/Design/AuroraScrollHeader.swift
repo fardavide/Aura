@@ -9,15 +9,18 @@ import SwiftUI
 /// on the sibling `ScrollView`.
 public struct AuroraScrollHeader<Leading: View, Trailing: View>: View {
     private let isGlass: Bool
+    private let horizontalPadding: CGFloat
     private let leading: Leading
     private let trailing: Trailing
 
     public init(
         isGlass: Bool,
+        horizontalPadding: CGFloat = 20,
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.isGlass = isGlass
+        self.horizontalPadding = horizontalPadding
         self.leading = leading()
         self.trailing = trailing()
     }
@@ -28,7 +31,7 @@ public struct AuroraScrollHeader<Leading: View, Trailing: View>: View {
             Spacer(minLength: 8)
             trailing
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, horizontalPadding)
         .padding(.top, 6)
         .padding(.bottom, 14)
         .background {
