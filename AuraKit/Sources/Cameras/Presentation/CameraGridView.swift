@@ -14,6 +14,11 @@ public struct CameraGridView<CameraTimeline: View>: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    // Pinned outside the wall's ScrollView, so it needs its own measured height to reserve as top
+    // spacing and its own scroll-offset tracking to know when to show its glass backing — see
+    // `AuroraScrollHeader`'s doc comment for why this is hand-rolled rather than a system toolbar.
+    @State private var headerHeight: CGFloat = 0
+    @State private var isHeaderGlass = false
 
     public init(
         viewModel: CameraGridViewModel,
@@ -53,23 +58,28 @@ public struct CameraGridView<CameraTimeline: View>: View {
 
     private let refreshInterval: Duration = .seconds(2)
 
-    /// The pinned header + chip rows over the scrolling wall — every piece outside the `switch` in
-    /// `content`, so the title and the gear render in every state (`.loading`, `.loaded`, `.empty`
-    /// and `.failed` alike). `.empty` in particular has no actions of its own, so losing the gear
-    /// there would strand the user with no route to Settings.
+    /// The pinned header floats over the scrolling wall (glass fading in once tiles scroll behind
+    /// it); the chip rows stay pinned below it, outside the scroll, same as before. Every piece
+    /// outside the `switch` in `content`, so the title and the gear render in every state
+    /// (`.loading`, `.loaded`, `.empty` and `.failed` alike) — `.empty` in particular has no
+    /// actions of its own, so losing the gear there would strand the user with no route to Settings.
     private var screen: some View {
-        VStack(alignment: .leading, spacing: verticalSizeClass == .compact ? 8 : 12) {
-            header
-            if verticalSizeClass != .compact && viewModel.hasSummaryChips {
-                summaryChips(leadingPadding: contentPadding)
+        ZStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: verticalSizeClass == .compact ? 8 : 12) {
+                Color.clear.frame(height: headerHeight)
+                if verticalSizeClass != .compact && viewModel.hasSummaryChips {
+                    summaryChips(leadingPadding: contentPadding)
+                }
+                groupChipsRow
+                content
             }
-            groupChipsRow
-            content
+            header
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
         }
     }
 
-    @ViewBuilder private var header: some View {
-        HStack(spacing: 8) {
+    private var header: some View {
+        AuroraScrollHeader(isGlass: isHeaderGlass, horizontalPadding: contentPadding) {
             if verticalSizeClass == .compact {
                 // The tab bar already names the tab, and a title row + two chip rows would eat too
                 // much of a ~390pt-tall window — one row does the header's whole job here.
@@ -80,11 +90,10 @@ public struct CameraGridView<CameraTimeline: View>: View {
                 }
             } else {
                 Text("Cameras").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
-                Spacer(minLength: 8)
             }
+        } trailing: {
             gearButton
         }
-        .padding(.horizontal, contentPadding)
     }
 
     private func summaryChips(leadingPadding: CGFloat) -> some View {
@@ -157,6 +166,7 @@ public struct CameraGridView<CameraTimeline: View>: View {
                     .padding(.bottom, 24)
             }
         }
+        .auroraTrackingScrollGlass(isGlass: $isHeaderGlass)
         .refreshable { await viewModel.load() }
     }
 

@@ -23,6 +23,12 @@ public struct TimelineScreenView: View {
     @State private var cardHeight: CGFloat = 180
     @State private var openedRecording: RecordingRoute?
     @Environment(\.scenePhase) private var scenePhase
+    // Pinned outside the grid's ScrollView (regular height only — compact height hides the header
+    // entirely, see `isCompactHeight`'s doc comment), so it needs its own measured height to
+    // reserve as top spacing and its own scroll-offset tracking for its glass backing — see
+    // `AuroraScrollHeader`'s doc comment for why this is hand-rolled rather than a system toolbar.
+    @State private var headerHeight: CGFloat = 0
+    @State private var isHeaderGlass = false
 
     // Read the real size class so the layout re-evaluates on rotation. iOS-only: macOS has no
     // size class, so the side-by-side branch never applies there.
@@ -77,42 +83,24 @@ public struct TimelineScreenView: View {
 
     public var body: some View {
         NavigationStack {
-            content
-                // `.background` (inside `.auroraBackground()`) sizes itself to its content, and the
-                // `.loading` branch is a bare `ProgressView()` — without this the aurora background
-                // would only paint a postage-stamp patch behind it.
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .auroraBackground()
-                .navigationTitle("Timeline")
-                .toolbarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        if usesFixedColumnGrid {
-                            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                // `.screenTitleCompact` (28/ExtraBold) was requested but not added to
-                                // CommonDesign; `.screenTitle` (32/ExtraBold) is the plan's documented
-                                // fallback — 4pt larger than the mock's iPad title.
-                                Text("Timeline").auroraText(.screenTitle)
-                                TimelineDayLabel(clock: viewModel.clock)
-                            }
-                            .foregroundStyle(.auroraTextPrimary)
-                        } else {
-                            // `.titleCompact` (17/ExtraBold) was requested but not added to
-                            // CommonDesign; `.headline` (17/Bold) is the plan's documented fallback.
-                            Text("Timeline").auroraText(.headline).foregroundStyle(.auroraTextPrimary)
-                        }
-                    }
+            ZStack(alignment: .top) {
+                content
+                    // `.background` (inside `.auroraBackground()`) sizes itself to its content, and
+                    // the `.loading` branch is a bare `ProgressView()` — without this the aurora
+                    // background would only paint a postage-stamp patch behind it.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .auroraBackground()
+                if !isCompactHeight {
+                    header
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                 }
-                #if os(iOS)
-                // iPhone landscape is wide but short — reclaim the title bar's height for the grid
-                // and the tall scrubber (the tab bar already shows you're on Timeline).
-                .toolbar(isCompactHeight ? .hidden : .visible, for: .navigationBar)
-                #endif
-                .navigationDestination(item: $openedRecording) { recording in
-                    RecordingPlayerView(
-                        viewModel: makeRecordingPlayerViewModel(recording.camera, recording.instant)
-                    )
-                }
+            }
+            .auroraHiddenNavigationBar()
+            .navigationDestination(item: $openedRecording) { recording in
+                RecordingPlayerView(
+                    viewModel: makeRecordingPlayerViewModel(recording.camera, recording.instant)
+                )
+            }
         }
         .task { await viewModel.loadIfNeeded() }
         .task { await viewModel.autoRefresh() }
@@ -128,6 +116,15 @@ public struct TimelineScreenView: View {
         .task(id: scenePhase) {
             guard scenePhase == .active, viewModel.shouldRefreshNow else { return }
             await viewModel.refresh()
+        }
+    }
+
+    private var header: some View {
+        AuroraScrollHeader(isGlass: isHeaderGlass) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Timeline").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
+                TimelineDayLabel(clock: viewModel.clock)
+            }
         }
     }
 
@@ -224,8 +221,10 @@ public struct TimelineScreenView: View {
                     }
                 }
                 .padding(16)
+                .padding(.top, headerHeight)
                 .padding(.bottom, bottomInset)
             }
+            .auroraTrackingScrollGlass(isGlass: $isHeaderGlass)
         } else if usesFixedColumnGrid {
             // iPad: a fixed 3-column grid — `bestFit` would pick two huge columns for a handful of
             // cameras on an 11" iPad, which the mock does not show.
@@ -234,8 +233,10 @@ public struct TimelineScreenView: View {
                     ForEach(cameras) { camera in cameraTile(camera, style: .regularGrid) }
                 }
                 .padding(24)
+                .padding(.top, headerHeight)
                 .padding(.bottom, bottomInset)
             }
+            .auroraTrackingScrollGlass(isGlass: $isHeaderGlass)
         } else {
             // macOS: size the tiles to the window — a handful of cameras fills it like a video wall
             // rather than huddling at the adaptive minimum in a corner of a big display (0.3.4).
@@ -244,7 +245,7 @@ public struct TimelineScreenView: View {
                 let padding: CGFloat = 16
                 let available = CGSize(
                     width: max(0, geo.size.width - padding * 2),
-                    height: max(0, geo.size.height - bottomInset - padding * 2)
+                    height: max(0, geo.size.height - headerHeight - bottomInset - padding * 2)
                 )
                 let layout = TimelineGridLayout.bestFit(
                     tileCount: cameras.count,
@@ -266,8 +267,10 @@ public struct TimelineScreenView: View {
                     // (more cameras than fit) grows past `minHeight` and scrolls as before.
                     .frame(maxWidth: .infinity, minHeight: available.height)
                     .padding(padding)
+                    .padding(.top, headerHeight)
                     .padding(.bottom, bottomInset)
                 }
+                .auroraTrackingScrollGlass(isGlass: $isHeaderGlass)
             }
         }
     }

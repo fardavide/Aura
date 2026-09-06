@@ -14,6 +14,12 @@ public struct ZoomableContainer<Content: View>: View {
     /// the recording detail's video slot doesn't, so zoomed footage spills under the glass panel
     /// beside it instead of stopping dead at an invisible line.
     private let clipsContent: Bool
+    /// Reports the transform actually on screen — the committed one with any in-flight gesture
+    /// folded in, the same value `displayedTransform` renders — on every change, including live
+    /// updates mid-pinch. The container owns its zoom math and stays self-contained; a caller that
+    /// wants to react to it (`AuroraZoomBleed`, an ambient blur behind the frame) reads it here
+    /// rather than duplicating gesture state.
+    private let onTransformChange: (ZoomTransform) -> Void
 
     @State private var transform = ZoomTransform.standard()
     /// In-flight gesture deltas, applied on top of `transform` for display and folded into it in
@@ -35,10 +41,12 @@ public struct ZoomableContainer<Content: View>: View {
     public init(
         onSingleTap: @escaping () -> Void,
         clipsContent: Bool,
+        onTransformChange: @escaping (ZoomTransform) -> Void = { _ in },
         @ViewBuilder content: () -> Content
     ) {
         self.onSingleTap = onSingleTap
         self.clipsContent = clipsContent
+        self.onTransformChange = onTransformChange
         self.content = content()
     }
 
@@ -73,6 +81,7 @@ public struct ZoomableContainer<Content: View>: View {
             .onChange(of: proxy.size) { _, newSize in
                 transform = transform.panned(by: .zero, viewport: newSize)
             }
+            .onChange(of: displayed, initial: true) { _, new in onTransformChange(new) }
         }
     }
 
