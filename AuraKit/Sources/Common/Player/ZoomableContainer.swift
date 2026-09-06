@@ -16,15 +16,21 @@ public struct ZoomableContainer<Content: View>: View {
     private let clipsContent: Bool
 
     @State private var transform = ZoomTransform.standard()
-    /// Committed transform captured when a gesture starts; the gestures' cumulative
-    /// values apply to this base so magnify and pan can update concurrently without
-    /// drift or un-clamped intermediate states.
-    @State private var gestureBase: ZoomTransform?
-    @State private var activeMagnification: CGFloat = 1
-    @State private var activeAnchor: UnitPoint = .center
-    @State private var activeTranslation: CGSize = .zero
-    @State private var isMagnifying = false
-    @State private var isPanning = false
+    /// In-flight gesture deltas, applied on top of `transform` for display and folded into it in
+    /// each gesture's `onEnded`. `@GestureState` (not plain `@State`) is load-bearing: a system
+    /// gesture that out-competes ours for the touch — the navigation interactive-pop swipe-back,
+    /// most often — *cancels* rather than ends it, so `onEnded` never runs. `@GestureState` still
+    /// resets to `nil` on cancellation; a plain flag/base pair set in `onChanged` and only cleared
+    /// in `onEnded` would stay stuck permanently "mid-gesture", wedging every future pinch and pan
+    /// against a gesture that never actually finished (see `ScrollableTimelineView.magnify` for the
+    /// same failure mode, already fixed there the same way).
+    @GestureState private var magnifyPhase: MagnifyPhase?
+    @GestureState private var panTranslation: CGSize?
+
+    private struct MagnifyPhase {
+        let magnification: CGFloat
+        let anchor: UnitPoint
+    }
 
     public init(
         onSingleTap: @escaping () -> Void,
@@ -46,10 +52,11 @@ public struct ZoomableContainer<Content: View>: View {
 
     private var zoomArea: some View {
         GeometryReader { proxy in
+            let displayed = displayedTransform(in: proxy.size)
             ZStack {
                 content
-                    .scaleEffect(transform.scale)
-                    .offset(transform.offset)
+                    .scaleEffect(displayed.scale)
+                    .offset(displayed.offset)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .contentShape(Rectangle())
@@ -69,39 +76,51 @@ public struct ZoomableContainer<Content: View>: View {
         }
     }
 
+    /// `transform` (the last *committed* gesture) with any gesture still in flight applied on top,
+    /// in the same order a commit would fold it in — see the type's gesture-state doc comment.
+    private func displayedTransform(in viewport: CGSize) -> ZoomTransform {
+        var result = transform
+        if let magnifyPhase {
+            result = result.magnified(by: magnifyPhase.magnification, anchor: magnifyPhase.anchor, viewport: viewport)
+        }
+        if let panTranslation {
+            result = result.panned(by: panTranslation, viewport: viewport)
+        }
+        return result
+    }
+
     private func magnify(in viewport: CGSize) -> some Gesture {
         MagnifyGesture()
-            .onChanged { value in
+            .updating($magnifyPhase) { value, phase, _ in
                 guard viewport.width > 0, viewport.height > 0 else { return }
-                isMagnifying = true
-                activeMagnification = value.magnification
                 // `MagnifyGesture.Value.startAnchor` reports `.center` in practice, which
                 // pins every pinch to the middle of the viewport. Derive the anchor from the
                 // pinch-midpoint location instead — same approach the double-tap uses.
-                activeAnchor = UnitPoint(
+                phase = MagnifyPhase(
+                    magnification: value.magnification,
+                    anchor: UnitPoint(x: value.startLocation.x / viewport.width, y: value.startLocation.y / viewport.height)
+                )
+            }
+            .onEnded { value in
+                guard viewport.width > 0, viewport.height > 0 else { return }
+                let anchor = UnitPoint(
                     x: value.startLocation.x / viewport.width,
                     y: value.startLocation.y / viewport.height
                 )
-                applyActiveGestures(in: viewport)
-            }
-            .onEnded { _ in
-                isMagnifying = false
-                commitIfGesturesEnded()
+                transform = transform.magnified(by: value.magnification, anchor: anchor, viewport: viewport)
             }
     }
 
     private func pan(in viewport: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 10)
-            .onChanged { value in
+            .updating($panTranslation) { value, translation, _ in
                 // At 1x the drag stays inert so it never fights navigation swipe-back.
-                guard (gestureBase ?? transform).isZoomed else { return }
-                isPanning = true
-                activeTranslation = value.translation
-                applyActiveGestures(in: viewport)
+                guard transform.isZoomed else { return }
+                translation = value.translation
             }
-            .onEnded { _ in
-                isPanning = false
-                commitIfGesturesEnded()
+            .onEnded { value in
+                guard transform.isZoomed else { return }
+                transform = transform.panned(by: value.translation, viewport: viewport)
             }
     }
 
@@ -123,21 +142,5 @@ public struct ZoomableContainer<Content: View>: View {
         let singleTap = SpatialTapGesture(count: 1)
             .onEnded { _ in onSingleTap() }
         return doubleTap.exclusively(before: singleTap)
-    }
-
-    private func applyActiveGestures(in viewport: CGSize) {
-        let base = gestureBase ?? transform
-        gestureBase = base
-        transform = base
-            .magnified(by: activeMagnification, anchor: activeAnchor, viewport: viewport)
-            .panned(by: activeTranslation, viewport: viewport)
-    }
-
-    private func commitIfGesturesEnded() {
-        guard !isMagnifying, !isPanning else { return }
-        gestureBase = nil
-        activeMagnification = 1
-        activeAnchor = .center
-        activeTranslation = .zero
     }
 }
