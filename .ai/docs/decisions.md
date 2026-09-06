@@ -1227,7 +1227,7 @@ Icon artwork is generated from SVG rather than hand-drawn per size: full-bleed s
 (the system applies the mask; baking the squircle would double it), with the small macOS sizes drawn
 from a simplified body — the echo rings turn to mush below 32pt — instead of downsampled.
 
-## Timeline tab: Aurora restyle keeps the scrolling strip and adds a hero tile (0.5.7)
+## Timeline tab: Aurora restyle keeps the scrolling strip and adds a hero tile (0.6.0)
 
 The tab is restyled, not redesigned: it keeps its scrolling 7-day strip (fixed centre playhead,
 pinch zoom, pause-on-grab, auto-refresh) rather than the mock's fixed 24h well, so several things
@@ -1265,7 +1265,7 @@ Five decisions worth keeping:
   and the flat capsule spelled inline from `.auroraChipFill`/`.auroraChipBorder`) and says so at the
   point of use, so nothing was blocked and nothing silently drifted from the mock's intent.
 
-## Aurora restyle: Settings is a flush aurora sheet with row summaries (0.5.7)
+## Aurora restyle: Settings is a flush aurora sheet with row summaries (0.6.0)
 
 The Settings sheet drops the 0.5.0 floating-card idiom for a full-width sheet flush to the bottom,
 rounded only on top (r30) with the system grabber and the gradient rim, presented on the
@@ -1293,7 +1293,7 @@ accent is Multicolour, which is the platform's rule, not ours. Server's Save mov
 to a bottom safe-area inset as the gradient action button, the one place the full gradient is
 allowed on this screen, and the one placement that survives a keyboard in compact height.
 
-## Aurora restyle: the Cameras wall gets a hero (0.5.7)
+## Aurora restyle: the Cameras wall gets a hero (0.6.0)
 
 The Cameras tab root drops the summary card and the live-count pill for a chip row (activity,
 today's tally, storage, and — only when non-zero — an offline count) plus the existing group-chip
@@ -1314,7 +1314,7 @@ SwiftUI identity is structural: splitting the hero into a second container would
 every swap and rebuild its decoded-image `@State`. `liveCount` is removed; `offlineCount` and
 `isOffline(_:)` already carry every bit of state the live-count pill conveyed.
 
-## Aurora restyle: Timeline detail is a flush sheet on a full-bleed video slot (0.5.7)
+## Aurora restyle: Timeline detail is a flush sheet on a full-bleed video slot (0.6.0)
 
 The recording player overturns the 0.5.0 "floating card" for this screen: the sheet is flush to its
 edge (bottom on iPhone/iPad portrait, trailing for the landscape rail) via the same `auroraSheet`
@@ -1331,7 +1331,7 @@ is `AuroraSegmentedControl` with the full brand gradient (`.diagonal`) on its se
 the quieter `.badge` gradient other segmented controls use — this control is the screen's own primary
 action, not a peer of the transport row.
 
-## Aurora restyle: Events severity comes from a local `/api/review` join (0.5.7)
+## Aurora restyle: Events severity comes from a local `/api/review` join (0.6.0)
 
 `/api/events` carries no severity, so an alert is no longer guessed from a label heuristic: a
 Events-local read of `/api/review` for the loaded window is joined to the event list by id — an
@@ -1343,7 +1343,7 @@ the hero reads "Latest Event" on a day with no alert rather than lying about sev
 The subtitle's "Today · N events" count is honestly scoped to the loaded window (no `after=` filter,
 `limit: 100`) rather than a second authoritative read — the Cameras tab already owns that number.
 
-## Aurora restyle: Live gets a framed video card, one arrangement rule for both size classes (0.5.7)
+## Aurora restyle: Live gets a framed video card, one arrangement rule for both size classes (0.6.0)
 
 The live stream sits in a 16:9 card with the gradient frame and a soft violet glow, the LIVE pill
 moved inside the card (top-left) rather than floating above it, and the transport controls become a

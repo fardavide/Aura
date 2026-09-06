@@ -43,7 +43,7 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
-### 0.5.7 — 2026-09-06
+### 0.6.0 — 2026-09-06
 - **A new look: Aurora.** A blue→violet→pink gradient runs through every screen — under the
   glass sheets and panels, on the selected segment, on alert badges and the primary action.
   The tab bar is now a neutral floating system bar with a coloured active icon; sheets (Timeline,
