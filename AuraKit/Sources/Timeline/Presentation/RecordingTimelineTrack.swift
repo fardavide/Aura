@@ -94,7 +94,7 @@ struct RecordingTimelineTrack: View {
             )
             context.fill(
                 Path(geometry.narrowed(bar, by: TimelineTrackStyle.motionBarSeparator)),
-                with: .color(TimelineTrackStyle.motionColor)
+                with: .color(TimelineTrackStyle.motionColor(intensity: bucket.intensity))
             )
         }
     }

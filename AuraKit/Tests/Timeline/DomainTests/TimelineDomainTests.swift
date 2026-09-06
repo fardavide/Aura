@@ -134,13 +134,15 @@ struct DayTimelineReplacingTests {
     @Test func `given an in-progress marker when a later window lands then the fresh copy wins`() {
         // given — an in-progress alert cached from the previous read, reaching to the present
         let cached = DayTimeline(
-            markers: [ReviewMarker(start: at(500), end: nil, severity: .alert)], motion: [], gaps: []
+            markers: [ReviewMarker(camera: CameraName("driveway"), start: at(500), end: nil, severity: .alert, label: "Alert")],
+            motion: [], gaps: []
         )
         // the fresh read shows it finished
         let slice = DayTimelineSlice(
             window: TimeRange(start: at(1000), end: at(2000)),
             overlays: DayTimeline(
-                markers: [ReviewMarker(start: at(500), end: at(1200), severity: .alert)], motion: [], gaps: []
+                markers: [ReviewMarker(camera: CameraName("driveway"), start: at(500), end: at(1200), severity: .alert, label: "Alert")],
+                motion: [], gaps: []
             )
         )
 
@@ -148,7 +150,7 @@ struct DayTimelineReplacingTests {
         let merged = cached.replacing(slice)
 
         // then — one marker, the finished one, kept whole even though it starts before the window
-        #expect(merged.markers == [ReviewMarker(start: at(500), end: at(1200), severity: .alert)])
+        #expect(merged.markers == [ReviewMarker(camera: CameraName("driveway"), start: at(500), end: at(1200), severity: .alert, label: "Alert")])
     }
 
     @Test func `given slice content outside its window then it is ignored`() {
@@ -310,7 +312,7 @@ private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: s
 private let window = TimeRange(start: at(0), end: at(100))
 
 private func marker(_ start: TimeInterval, _ end: TimeInterval) -> ReviewMarker {
-    ReviewMarker(start: at(start), end: at(end), severity: .alert)
+    ReviewMarker(camera: CameraName("driveway"), start: at(start), end: at(end), severity: .alert, label: "Alert")
 }
 
 private func bucket(_ time: TimeInterval) -> MotionBucket {

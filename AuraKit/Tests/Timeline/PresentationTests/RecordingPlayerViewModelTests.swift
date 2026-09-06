@@ -947,8 +947,8 @@ private let twoHours = fullHour(from: 3600) + fullHour(from: 7200)
 /// buttons and the active-marker badge have something to find.
 private let activity = DayTimeline(
     markers: [
-        ReviewMarker(start: at(3800), end: at(3860), severity: .detection),
-        ReviewMarker(start: at(5000), end: at(5060), severity: .alert),
+        ReviewMarker(camera: CameraName("driveway"), start: at(3800), end: at(3860), severity: .detection, label: "Motion"),
+        ReviewMarker(camera: CameraName("driveway"), start: at(5000), end: at(5060), severity: .alert, label: "Alert"),
     ],
     motion: [MotionBucket(time: at(3800), intensity: 40)],
     gaps: []

@@ -1,39 +1,50 @@
 import SwiftUI
 
-/// The transport row on the scrubber card: skip, play/pause and the speed ladder.
+import CommonDesign
+
+/// The transport row on the scrubber card: skip, play/pause and the speed control.
 ///
-/// The wide card carries the full set — ten seconds either way and every rung of the ladder laid
-/// out. The slim landscape card has room for play/pause and one speed button, so that button steps
-/// through the ladder instead of showing it.
+/// `.stack` (iPhone) and `.row` (iPad/macOS) carry the full skip/play/skip set; `.row` also lays
+/// out the segmented speed ladder underneath. `.rail` (the slim landscape card) has room for
+/// play/pause and one speed button, so that button steps through the ladder instead of showing it.
+/// Every control here is flat — one `glassEffect` per surface, and this row sits inside the
+/// sheet's own glass.
 struct TimelineTransportControls: View {
-    let axis: Axis
+    let arrangement: TimelineCardArrangement
     let transport: TimelineTransport
 
     var body: some View {
-        switch axis {
-        case .horizontal:
-            HStack(spacing: 12) {
+        switch arrangement {
+        case .stack:
+            HStack(spacing: 8) {
                 skipButton(by: -10, systemImage: "gobackward.10")
                 playPauseButton
                 skipButton(by: 10, systemImage: "goforward.10")
                 Spacer(minLength: 8)
-                speedPicker
+                speedPill
             }
-        case .vertical:
+        case .row:
+            VStack(spacing: 10) {
+                HStack(spacing: 9) {
+                    skipButton(by: -10, systemImage: "gobackward.10")
+                    playPauseButton
+                    skipButton(by: 10, systemImage: "goforward.10")
+                }
+                speedLadder
+            }
+        case .rail:
             HStack(spacing: 10) {
                 playPauseButton
-                Button { transport.select(transport.speed.next) } label: {
-                    Text(transport.speed.title)
-                        .font(.footnote.weight(.bold))
-                        .monospacedDigit()
-                        // A fixed slot so stepping the ladder doesn't resize the chip under the
-                        // finger that is tapping it.
-                        .frame(minWidth: 26)
-                }
-                .buttonStyle(.glass)
-                .accessibilityLabel("Speed")
-                .accessibilityValue(transport.speed.title)
+                speedPill
             }
+        }
+    }
+
+    private var playPauseDiameter: CGFloat {
+        switch arrangement {
+        case .stack: 48
+        case .row: 50
+        case .rail: 44
         }
     }
 
@@ -41,39 +52,61 @@ struct TimelineTransportControls: View {
         Button { transport.togglePlayPause() } label: {
             Image(systemName: transport.isPlaying ? "pause.fill" : "play.fill")
                 .font(.title3)
-                .frame(width: 30, height: 30)
+                .foregroundStyle(.white)
+                .frame(width: playPauseDiameter, height: playPauseDiameter)
+                .background(AuroraGradient.diagonal, in: Circle())
+                .overlay { Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1) }
+                .shadow(color: .auroraGradientPink.opacity(0.55), radius: 13, y: 6)
         }
-        .buttonStyle(.glassProminent)
-        .buttonBorderShape(.circle)
+        .buttonStyle(.plain)
         .accessibilityLabel(transport.isPlaying ? "Pause" : "Play")
     }
 
+    /// Built the same **flat** way as the play button, at a fixed 40pt, so the mock's 40/48/40
+    /// hierarchy survives — `.buttonStyle(.glass)` pads *around* its label and would render larger
+    /// than the 48pt play button, inverting the hierarchy.
     private func skipButton(by seconds: TimeInterval, systemImage: String) -> some View {
         Button { transport.skip(by: seconds) } label: {
             Image(systemName: systemImage)
                 .font(.title3)
-                .frame(width: 26, height: 26)
+                .foregroundStyle(.auroraTextPrimary)
+                .frame(width: 40, height: 40)
+                .background(.auroraChipFill, in: Circle())
+                .overlay { Circle().strokeBorder(.auroraChipBorder, lineWidth: 1) }
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
+        .buttonStyle(.plain)
+        .accessibilityLabel(seconds < 0 ? "Back 10 seconds" : "Forward 10 seconds")
     }
 
-    /// The design's speed ladder — every rung visible, the selected one picked out — rendered by the
-    /// system segmented picker rather than a hand-built row of chips. Tinted because the default
-    /// selection is a pale capsule that all but disappears against the glass card behind it.
-    private var speedPicker: some View {
-        // Both sides spelled as closures: handing the picker the isolated `select` method directly
-        // crashes the 6.3.3 compiler in IRGen while thunking it.
-        Picker("Speed", selection: Binding(get: { transport.speed }, set: { transport.select($0) })) {
-            ForEach(PlaybackSpeed.allCases, id: \.self) { speed in
-                Text(speed.title)
-                    .font(.footnote.weight(.bold))
-                    .monospacedDigit()
-                    .tag(speed)
-            }
+    /// The chip goes inside the label so the whole padded capsule hit-tests. Flat, not
+    /// `.auroraChip` (always glass): this pill sits inside `.auroraSheet` — one glass layer per
+    /// surface — so it is spelled inline from the chip's own catalog tokens instead.
+    private var speedPill: some View {
+        Button { transport.select(transport.speed.next) } label: {
+            Text(transport.speed.title)
+                .auroraNumerals(.rowSummary)
+                .frame(minWidth: 56)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.auroraChipFill, in: Capsule())
+                .overlay { Capsule().strokeBorder(.auroraChipBorder, lineWidth: 1) }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
+        .buttonStyle(.plain)
+        .accessibilityLabel("Speed")
+        .accessibilityValue(transport.speed.title)
+    }
+
+    /// The design's speed ladder — every rung visible, the selected one picked out — rendered by
+    /// `AuroraSegmentedControl` rather than a system segmented `Picker` (which cannot take a
+    /// gradient selection). `container: .well` drops the control's own nested glass in favour of
+    /// the recessed-well paint, since this sits inside the sheet's own glass.
+    private var speedLadder: some View {
+        // Both sides spelled as closures: handing the isolated `select` method to the control
+        // directly crashes the 6.3.3 compiler in IRGen while thunking it.
+        AuroraSegmentedControl(
+            options: PlaybackSpeed.allCases,
+            selection: Binding(get: { transport.speed }, set: { transport.select($0) }),
+            container: .well
+        ) { $0.title }
     }
 }

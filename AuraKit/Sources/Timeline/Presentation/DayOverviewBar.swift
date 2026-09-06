@@ -97,7 +97,7 @@ struct DayOverviewBar: View {
                         height: height
                     )
                 ),
-                with: .color(TimelineTrackStyle.motionColor)
+                with: .color(TimelineTrackStyle.motionColor(intensity: intensity))
             )
         }
 

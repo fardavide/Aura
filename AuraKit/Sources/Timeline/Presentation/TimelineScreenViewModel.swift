@@ -2,6 +2,7 @@ import Foundation
 import Observation
 
 import CamerasDomain
+import CamerasEntities
 import TimelineDomain
 
 @Observable
@@ -24,6 +25,13 @@ public final class TimelineScreenViewModel {
     /// the tiles refresh their preview material in place so newly recorded footage appears at the
     /// live edge.
     public private(set) var span: TimeRange
+    /// The camera the compact grid puts first — the one with the alert active at the scrub instant
+    /// (most recently started, if more than one), falling back to the first camera. `nil` before the
+    /// first load or when there are no cameras.
+    public private(set) var heroCamera: Camera?
+    /// The tracked-object word for every camera with an active alert at the scrub instant, keyed by
+    /// camera — the tile's headline badge. Empty when nothing is alerting.
+    public private(set) var alertLabels: [CameraName: String] = [:]
 
     private let observeCameras: ObserveCameras
     private let getDayTimeline: GetDayTimeline
@@ -86,6 +94,7 @@ public final class TimelineScreenViewModel {
         state = .ready(cameras: latestCameras, timeline: DayTimeline(markers: [], motion: [], gaps: []))
         transport.update(gaps: [], span: span)
         await loadOverlays(in: span)
+        updateHeroSelection()
     }
 
     /// Loads on first appearance only. A re-appearance (e.g. returning to the tab) keeps the
@@ -174,6 +183,7 @@ public final class TimelineScreenViewModel {
         if !clock.isScrubbing, previousEnd.timeIntervalSince(clock.instant) <= Self.playheadFollowTolerance {
             clock.scrub(to: extended.end)
         }
+        updateHeroSelection()
     }
 
     /// Streams overlay windows into the ready state, newest first, and answers how many landed —
@@ -210,6 +220,58 @@ public final class TimelineScreenViewModel {
 
     public func scrub(to time: Date) {
         clock.scrub(to: span.clamp(time))
+    }
+
+    /// The hero first, the rest in their existing order — one `ForEach` behind `HeroGridLayout`, so
+    /// a hero flip is a reorder rather than a re-parent (each tile keeps its `Camera.id` identity).
+    /// Returns `cameras` unchanged when there is no hero.
+    public func heroOrderedCameras(_ cameras: [Camera]) -> [Camera] {
+        guard let heroCamera, let index = cameras.firstIndex(where: { $0.name == heroCamera.name }) else {
+            return cameras
+        }
+        var ordered = cameras
+        let hero = ordered.remove(at: index)
+        ordered.insert(hero, at: 0)
+        return ordered
+    }
+
+    /// Ticks the hero/badge selection at a slow, imperceptible cadence — never per scroll offset
+    /// (see `scrub(to:)`) and never at the clock's own tick rate (`TimelineClockLabel` is isolated
+    /// precisely so this screen never reads `clock.instant` at that rate). The owning `.task`
+    /// cancels this when the view disappears.
+    public func followHero(every interval: Duration = .seconds(1)) async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: interval)
+            updateHeroSelection()
+        }
+    }
+
+    /// Recomputes `heroCamera` and `alertLabels` off the current clock instant and the `.ready`
+    /// timeline. Writes only when the computed value actually differs, so the 1Hz `followHero` loop
+    /// never invalidates `@Observable` (and re-lays-out the grid) when nothing changed. Called from
+    /// `load()`, `performRefresh()` and `followHero()` — deliberately never from `scrub(to:)`, which
+    /// fires once per scroll offset (up to 60–120 Hz during a drag or fling).
+    private func updateHeroSelection() {
+        guard case let .ready(cameras, timeline) = state else { return }
+        let instant = clock.instant
+        // `>=` on the end, not `>`: an in-progress marker (`end == nil`) stands in for `span.end`,
+        // and the clock sits exactly on the live edge whenever the screen isn't scrubbed away from
+        // it — the ordinary state right after every `load()`/`refresh()`. A strict `>` would read an
+        // ongoing alert as inactive at that exact instant and let it flicker in and out of hero
+        // status as `span.end` ticks forward under a live refresh.
+        let activeAlerts = timeline.markers.filter { marker in
+            marker.severity == .alert && marker.start <= instant && (marker.end ?? span.end) >= instant
+        }
+        var newLabels: [CameraName: String] = [:]
+        for alert in activeAlerts {
+            newLabels[alert.camera] = alert.label
+        }
+        let newHero = activeAlerts.max { $0.start < $1.start }
+            .flatMap { alert in cameras.first { $0.name == alert.camera } }
+            ?? cameras.first
+        guard newHero?.name != heroCamera?.name || newLabels != alertLabels else { return }
+        heroCamera = newHero
+        alertLabels = newLabels
     }
 
     /// Restarts the camera observation and returns its first emission. The observation keeps

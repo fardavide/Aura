@@ -22,6 +22,21 @@ struct TimelineDecodingTests {
         #expect(markers.last?.end == nil)
     }
 
+    @Test func `given review json with a camera when mapping then the marker carries the typed camera name`() throws {
+        let markers = try JSONDecoder().decode([ReviewMarkerDto].self, from: Data(reviewJson.utf8)).toMarkers()
+        #expect(markers.map(\.camera) == [CameraName("driveway"), CameraName("garage")])
+    }
+
+    @Test func `given review json with an object when mapping then the marker label is the capitalized object`() throws {
+        let markers = try JSONDecoder().decode([ReviewMarkerDto].self, from: Data(reviewJson.utf8)).toMarkers()
+        #expect(markers.first?.label == "Person")
+    }
+
+    @Test func `given review json without objects when mapping then the marker label falls back to the severity word`() throws {
+        let markers = try JSONDecoder().decode([ReviewMarkerDto].self, from: Data(reviewJson.utf8)).toMarkers()
+        #expect(markers.last?.label == "Motion")
+    }
+
     @Test func `given motion json when mapping then intensity is clamped to 0 through 100`() throws {
         let buckets = try JSONDecoder().decode([MotionActivityDto].self, from: Data(motionJson.utf8)).toBuckets()
         #expect(buckets.map(\.intensity) == [50, 100, 0])
@@ -264,7 +279,7 @@ private let frame = PreviewFrame(camera: CameraName("driveway"), time: at(1700),
 
 private let reviewJson = """
 [
-  { "id": "r1", "camera": "driveway", "start_time": 100.0, "end_time": 160.0, "severity": "alert" },
+  { "id": "r1", "camera": "driveway", "start_time": 100.0, "end_time": 160.0, "severity": "alert", "data": { "objects": ["person"] } },
   { "id": "r2", "camera": "yard", "start_time": 200.0, "end_time": 260.0, "severity": "significant_motion" },
   { "id": "r3", "camera": "garage", "start_time": 300.0, "end_time": null, "severity": "detection" }
 ]

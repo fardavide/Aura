@@ -2,6 +2,7 @@ import SwiftUI
 
 import CamerasDomain
 import CamerasEntities
+import CommonDesign
 import TimelineDomain
 
 public struct TimelineScreenView: View {
@@ -51,6 +52,19 @@ public struct TimelineScreenView: View {
         #endif
     }
 
+    /// True on iOS regular width (iPad) — the fixed 3-column grid and the large toolbar title.
+    /// **macOS keeps `TimelineGridLayout.bestFit`** (0.3.4) and the compact title: it reports
+    /// regular width too, but a ~28–38pt Mac title bar would clip a 28pt ExtraBold title or force
+    /// the bar to grow, and no snapshot baseline covers macOS. A *platform* discriminator as much
+    /// as a size-class one, so it is named for the decision it drives rather than the class it reads.
+    private var usesFixedColumnGrid: Bool {
+        #if os(iOS)
+        horizontalSizeClass == .regular
+        #else
+        false
+        #endif
+    }
+
     public init(
         viewModel: TimelineScreenViewModel,
         makeTileViewModel: @escaping (Camera) -> PreviewTileViewModel,
@@ -64,11 +78,34 @@ public struct TimelineScreenView: View {
     public var body: some View {
         NavigationStack {
             content
+                // `.background` (inside `.auroraBackground()`) sizes itself to its content, and the
+                // `.loading` branch is a bare `ProgressView()` — without this the aurora background
+                // would only paint a postage-stamp patch behind it.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .auroraBackground()
                 .navigationTitle("Timeline")
+                .toolbarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        if usesFixedColumnGrid {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                // `.screenTitleCompact` (28/ExtraBold) was requested but not added to
+                                // CommonDesign; `.screenTitle` (32/ExtraBold) is the plan's documented
+                                // fallback — 4pt larger than the mock's iPad title.
+                                Text("Timeline").auroraText(.screenTitle)
+                                TimelineDayLabel(clock: viewModel.clock)
+                            }
+                            .foregroundStyle(.auroraTextPrimary)
+                        } else {
+                            // `.titleCompact` (17/ExtraBold) was requested but not added to
+                            // CommonDesign; `.headline` (17/Bold) is the plan's documented fallback.
+                            Text("Timeline").auroraText(.headline).foregroundStyle(.auroraTextPrimary)
+                        }
+                    }
+                }
                 #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                // iPhone landscape is wide but short — reclaim the title bar's height for the grid and
-                // the tall scrubber (the tab bar already shows you're on Timeline).
+                // iPhone landscape is wide but short — reclaim the title bar's height for the grid
+                // and the tall scrubber (the tab bar already shows you're on Timeline).
                 .toolbar(isCompactHeight ? .hidden : .visible, for: .navigationBar)
                 #endif
                 .navigationDestination(item: $openedRecording) { recording in
@@ -82,6 +119,9 @@ public struct TimelineScreenView: View {
         // The playhead's own tick. It runs for the screen's life and does nothing while paused, so
         // play/pause never has to start or stop a task.
         .task { await viewModel.transport.run() }
+        // Keeps the hero tile and the tile badges current while the screen is visible — without it
+        // they would only update on `load()`/`performRefresh()` and freeze for the whole of playback.
+        .task { await viewModel.followHero() }
         // Returning from the background catches up right away instead of waiting for the next
         // tick — the app may have been suspended for hours, leaving the whole screen at the old
         // live edge. Same gate as the periodic tick: never disturbs a scrub or history browsing.
@@ -123,7 +163,11 @@ public struct TimelineScreenView: View {
         ZStack(alignment: .bottom) {
             grid(cameras: cameras, bottomInset: cardHeight)
             // Float the glass card over the grid so tiles scroll behind it (the glass refracts them).
-            ScrollableTimelineView(axis: .horizontal, span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport) { time in
+            // macOS reports regular width too, so it takes `.row` alongside iPad.
+            ScrollableTimelineView(
+                arrangement: isCompactWidth ? .stack : .row,
+                span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport
+            ) { time in
                 viewModel.scrub(to: time)
             }
             .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { cardHeight = $0 }
@@ -139,42 +183,62 @@ public struct TimelineScreenView: View {
             let columnWidth = max(0, geo.size.width - cardWidth - gap)
             HStack(spacing: gap) {
                 // A single-column scroll, not a grid: each tile fills the column's 16:9 height, so one
-                // camera dominates the landscape height and the next peeks below it.
+                // camera dominates the landscape height and the next peeks below it. No hero: the
+                // single column already gives one camera the height.
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(cameras) { camera in
-                            cameraTile(camera)
+                            cameraTile(camera, style: .regularGrid)
                                 .frame(width: columnWidth, height: columnWidth * 9 / 16)
                         }
                     }
                 }
                 .frame(width: columnWidth)
 
-                // The slim scrubber card takes a fixed strip of width and the full height.
-                ScrollableTimelineView(axis: .vertical, span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport) { time in
+                // The slim scrubber card takes a fixed strip of width and the full height, flush to
+                // the trailing edge.
+                ScrollableTimelineView(
+                    arrangement: .rail,
+                    span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport
+                ) { time in
                     viewModel.scrub(to: time)
                 }
                 .frame(width: cardWidth, height: geo.size.height)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, 12)
         .padding(.top, 8)
     }
 
     @ViewBuilder
     private func grid(cameras: [Camera], bottomInset: CGFloat) -> some View {
-        // iPhone portrait keeps the familiar full-width scrolling column. Regular widths (iPad,
-        // macOS) size the tiles to the window instead — a handful of cameras fills it like a
-        // video wall rather than huddling at the adaptive minimum in a corner of a big display.
         if isCompactWidth {
+            // Hero + the rest in **one** container over **one** `ForEach`, so a hero flip is a
+            // reorder — `Camera.id` keeps each tile's identity, and `ScrubbingPlayerView`/the
+            // tile's `.task`s never re-run on the swap (see `HeroGridLayout`).
+            let ordered = viewModel.heroOrderedCameras(cameras)
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
-                    ForEach(cameras) { camera in cameraTile(camera) }
+                HeroGridLayout(spacing: 12) {
+                    ForEach(ordered) { camera in
+                        cameraTile(camera, style: camera.name == viewModel.heroCamera?.name ? .hero : .compactGrid)
+                    }
                 }
-                .padding()
+                .padding(16)
+                .padding(.bottom, bottomInset)
+            }
+        } else if usesFixedColumnGrid {
+            // iPad: a fixed 3-column grid — `bestFit` would pick two huge columns for a handful of
+            // cameras on an 11" iPad, which the mock does not show.
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3), spacing: 14) {
+                    ForEach(cameras) { camera in cameraTile(camera, style: .regularGrid) }
+                }
+                .padding(24)
                 .padding(.bottom, bottomInset)
             }
         } else {
+            // macOS: size the tiles to the window — a handful of cameras fills it like a video wall
+            // rather than huddling at the adaptive minimum in a corner of a big display (0.3.4).
             GeometryReader { geo in
                 let spacing: CGFloat = 12
                 let padding: CGFloat = 16
@@ -196,7 +260,7 @@ public struct TimelineScreenView: View {
                         ),
                         spacing: spacing
                     ) {
-                        ForEach(cameras) { camera in cameraTile(camera) }
+                        ForEach(cameras) { camera in cameraTile(camera, style: .regularGrid) }
                     }
                     // Center the wall in the space above the scrubber card; the fallback
                     // (more cameras than fit) grows past `minHeight` and scrolls as before.
@@ -208,12 +272,14 @@ public struct TimelineScreenView: View {
         }
     }
 
-    private func cameraTile(_ camera: Camera) -> some View {
+    private func cameraTile(_ camera: Camera, style: PreviewTileStyle) -> some View {
         PreviewTileView(
             viewModel: tiles.tile(for: camera, make: makeTileViewModel),
             clock: viewModel.clock,
             transport: viewModel.transport,
-            range: viewModel.span
+            range: viewModel.span,
+            style: style,
+            alertLabel: viewModel.alertLabels[camera.name]
         )
         .onTapGesture {
             // Stop the grid before pushing one camera's player: the tiles stay in the hierarchy

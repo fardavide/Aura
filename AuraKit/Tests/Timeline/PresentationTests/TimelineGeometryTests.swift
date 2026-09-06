@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 
+import CamerasEntities
 import TimelineDomain
 @testable import TimelinePresentation
 
@@ -106,9 +107,9 @@ struct DayOverviewTests {
         // given
         let timeline = DayTimeline(
             markers: [
-                ReviewMarker(start: at(3_600), end: at(3_660), severity: .alert),
-                ReviewMarker(start: at(7_200), end: at(7_260), severity: .detection),
-                ReviewMarker(start: at(90_000), end: nil, severity: .alert),
+                ReviewMarker(camera: CameraName("driveway"), start: at(3_600), end: at(3_660), severity: .alert, label: "Alert"),
+                ReviewMarker(camera: CameraName("driveway"), start: at(7_200), end: at(7_260), severity: .detection, label: "Motion"),
+                ReviewMarker(camera: CameraName("driveway"), start: at(90_000), end: nil, severity: .alert, label: "Alert"),
             ],
             motion: [],
             gaps: []
@@ -119,8 +120,8 @@ struct DayOverviewTests {
 
         // then — detections included, so the bar speaks the same severity vocabulary as the tracks
         #expect(overview.markers == [
-            ReviewMarker(start: at(3_600), end: at(3_660), severity: .alert),
-            ReviewMarker(start: at(7_200), end: at(7_260), severity: .detection),
+            ReviewMarker(camera: CameraName("driveway"), start: at(3_600), end: at(3_660), severity: .alert, label: "Alert"),
+            ReviewMarker(camera: CameraName("driveway"), start: at(7_200), end: at(7_260), severity: .detection, label: "Motion"),
         ])
     }
 
@@ -212,9 +213,9 @@ struct TimelineRulerTicksTests {
 struct MarkerNavigatorTests {
 
     private let markers = [
-        ReviewMarker(start: at(100), end: at(160), severity: .detection),
-        ReviewMarker(start: at(300), end: at(360), severity: .alert),
-        ReviewMarker(start: at(500), end: nil, severity: .alert),
+        ReviewMarker(camera: CameraName("driveway"), start: at(100), end: at(160), severity: .detection, label: "Motion"),
+        ReviewMarker(camera: CameraName("driveway"), start: at(300), end: at(360), severity: .alert, label: "Alert"),
+        ReviewMarker(camera: CameraName("driveway"), start: at(500), end: nil, severity: .alert, label: "Alert"),
     ]
 
     @Test func `given an instant between markers when stepping forward then the next one is found`() {
@@ -254,6 +255,45 @@ struct MarkerNavigatorTests {
 
     @Test func `given an in-progress marker then it stays active past its start`() {
         #expect(MarkerNavigator.marker(at: at(100_000), in: markers)?.start == at(500))
+    }
+}
+
+struct HeroGridLayoutTests {
+
+    @Test func `given four tiles when laying out the hero grid then the first spans the width and the rest pair up`() {
+        // given
+        let width: CGFloat = 328
+        let heroHeight: CGFloat = width * 9 / 16
+        let columnWidth: CGFloat = (width - 12) / 2
+        let columnHeight: CGFloat = columnWidth * 9 / 16
+
+        // when
+        let frames = HeroGridLayout.frames(count: 4, width: width, spacing: 12)
+
+        // then — the hero spans the full width at 16:9
+        #expect(frames.count == 4)
+        #expect(frames[0] == CGRect(x: 0, y: 0, width: width, height: heroHeight))
+
+        // then — the rest split it two to a row, each at 16:9
+        #expect(frames[1] == CGRect(x: 0, y: heroHeight + 12, width: columnWidth, height: columnHeight))
+        #expect(frames[2] == CGRect(x: columnWidth + 12, y: heroHeight + 12, width: columnWidth, height: columnHeight))
+        #expect(frames[3] == CGRect(x: 0, y: heroHeight + 12 + columnHeight + 12, width: columnWidth, height: columnHeight))
+    }
+
+    @Test func `given one tile when laying out the hero grid then it spans the width and nothing follows it`() {
+        // given
+        let width: CGFloat = 328
+        let heroHeight: CGFloat = width * 9 / 16
+
+        // when
+        let frames = HeroGridLayout.frames(count: 1, width: width, spacing: 12)
+
+        // then
+        #expect(frames == [CGRect(x: 0, y: 0, width: width, height: heroHeight)])
+    }
+
+    @Test func `given no tiles when laying out the hero grid then there are no frames`() {
+        #expect(HeroGridLayout.frames(count: 0, width: 328, spacing: 12).isEmpty)
     }
 }
 
