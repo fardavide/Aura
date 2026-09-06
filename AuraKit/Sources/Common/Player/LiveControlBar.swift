@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// The transport controls for the live view — play/pause, mute, and Picture-in-Picture — plus a
-/// LIVE badge. Rendered as an overlay *outside* the zoom transform, so it stays fixed while the
-/// video scales and pans beneath it. A pure function of `LiveControlState` + callbacks; any button
-/// press calls `onInteract` so the host can reset its auto-hide timer.
+import CommonDesign
+
+/// The transport controls for the live view — play/pause, mute, and Picture-in-Picture — as a
+/// floating glass pill. Rendered *outside* the zoom transform, so it stays fixed while the video
+/// scales and pans beneath it. A pure function of `LiveControlState` + callbacks; any button press
+/// calls `onInteract` so the host can reset its auto-hide timer. The LIVE badge lives in
+/// `LiveVideoLayout`, the view that knows where the card is, not here.
 public struct LiveControlBar: View {
     private let state: LiveControlState
+    private let surface: AuroraGlassSurface
     private let onPlayPause: () -> Void
     private let onMute: () -> Void
     private let onTogglePictureInPicture: () -> Void
@@ -13,12 +17,14 @@ public struct LiveControlBar: View {
 
     public init(
         state: LiveControlState,
+        surface: AuroraGlassSurface,
         onPlayPause: @escaping () -> Void,
         onMute: @escaping () -> Void,
         onTogglePictureInPicture: @escaping () -> Void,
         onInteract: @escaping () -> Void
     ) {
         self.state = state
+        self.surface = surface
         self.onPlayPause = onPlayPause
         self.onMute = onMute
         self.onTogglePictureInPicture = onTogglePictureInPicture
@@ -26,30 +32,7 @@ public struct LiveControlBar: View {
     }
 
     public var body: some View {
-        VStack {
-            HStack {
-                liveBadge
-                Spacer()
-            }
-            Spacer()
-            controlCluster
-        }
-        .padding(20)
-        .foregroundStyle(.white)
-    }
-
-    private var liveBadge: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(.red)
-                .frame(width: 8, height: 8)
-            Text("LIVE")
-                .font(.caption.weight(.semibold))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .glassEffect(.regular, in: Capsule())
-        .allowsHitTesting(false)
+        controlCluster
     }
 
     private var controlCluster: some View {
@@ -69,12 +52,16 @@ public struct LiveControlBar: View {
                     onTogglePictureInPicture()
                 }
                 .disabled(!state.isPictureInPicturePossible && !state.isPictureInPictureActive)
+                .opacity(state.isPictureInPicturePossible || state.isPictureInPictureActive ? 1 : 0.4)
+                .accessibilityHint("Available once the stream is playing")
             }
         }
         .font(.title2)
-        .padding(.horizontal, 22)
-        .padding(.vertical, 14)
-        .glassEffect(.regular, in: Capsule())
+        .foregroundStyle(surface == .video ? .white : Color.auroraTextPrimary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .auroraChip(over: surface)
+        .shadow(color: .black.opacity(surface == .video ? 0.5 : 0.22), radius: 17, y: 7)
     }
 
     private func controlButton(systemImage: String, action: @escaping () -> Void) -> some View {

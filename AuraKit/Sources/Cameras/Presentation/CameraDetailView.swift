@@ -1,6 +1,7 @@
 import SwiftUI
 
 import CamerasDomain
+import CommonDesign
 import CommonPlayer
 
 public struct CameraDetailView: View {
@@ -23,6 +24,7 @@ public struct CameraDetailView: View {
                 NavigationLink(value: CameraTimelineRoute(camera: camera)) {
                     Label("Timeline", systemImage: "calendar.day.timeline.left")
                 }
+                .labelStyle(.iconOnly)
             }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -35,11 +37,17 @@ public struct CameraDetailView: View {
         case .playing(let source):
             LiveVideoView(url: source.url, headers: source.headers)
         case .unavailable:
-            ContentUnavailableView(
-                "No live stream",
-                systemImage: "video.slash",
-                description: Text("This camera has no go2rtc stream configured.")
-            )
+            ContentUnavailableView {
+                Label {
+                    Text("No live stream").auroraText(.headline)
+                } icon: {
+                    Image(systemName: "video.slash")
+                }
+            } description: {
+                Text("This camera has no go2rtc stream configured.").auroraText(.body)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .auroraBackground()
         }
     }
 }
