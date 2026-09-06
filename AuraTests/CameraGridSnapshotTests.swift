@@ -37,7 +37,18 @@ struct CameraGridSnapshotTests {
         assertScreenSnapshot(view, named: "activity")
     }
 
-    @Test func `given groups and a selected group when loaded then the chips and summary match the reference`() async {
+    @Test func `given only a detection when loaded then the first camera is the hero`() async {
+        // given — a detection must never promote a hero (only an alert may)
+        let view = await cameraGridScreen(
+            cameras: .success(snapshotCameras()), reachable: true, activity: snapshotDetectionOnly(),
+            today: snapshotToday(), storage: snapshotStorage()
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "detection")
+    }
+
+    @Test func `given groups and a selected group when loaded then the chips match the reference`() async {
         // given
         let view = await cameraGridScreen(
             cameras: .success(snapshotCameras()), reachable: true, activity: snapshotActivity(),
@@ -47,6 +58,20 @@ struct CameraGridSnapshotTests {
 
         // then
         assertScreenSnapshot(view, named: "summary")
+    }
+
+    @Test func `given a group with no visible cameras when selected then the empty state matches the reference`() async {
+        // given — "Attic" names a camera outside the loaded set, so the wall is empty while
+        // `state == .loaded`; the chips must not describe a camera the filter just hid.
+        let view = await cameraGridScreen(
+            cameras: .success(snapshotCameras()), reachable: true, activity: snapshotActivity(),
+            groups: [CameraGroup(name: "Attic", cameraNames: [CameraName("attic")], order: 2)] + snapshotGroups(),
+            today: snapshotToday(), storage: snapshotStorage(),
+            selectedGroup: "Attic"
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "empty-group")
     }
 
     @Test func `given unreachable cameras when offline then it matches the reference`() async {
@@ -80,9 +105,9 @@ struct CameraGridSnapshotTests {
 // MARK: - View builder
 
 /// The camera grid screen, driven to a terminal state before rendering. The view model owns preview
-/// loading, so `await load()` settles the tiles, the offline treatment, and the live/offline header
-/// count before capture. `reachable` picks whether the preview loader answers with bytes (online
-/// tiles) or `nil` (offline tiles).
+/// loading, so `await load()` settles the tiles, the offline treatment, and the offline chip before
+/// capture. `reachable` picks whether the preview loader answers with bytes (online tiles) or `nil`
+/// (offline tiles).
 @MainActor
 private func cameraGridScreen(
     cameras: Result<[Camera], CamerasError>,
@@ -128,6 +153,12 @@ private func snapshotToday() -> [String] {
 /// A representative recordings-disk status: ~1.4 TB free of ~2 TB, kept 14 days.
 private func snapshotStorage() -> RecordingStorage {
     RecordingStorage(freeBytes: 1_400_000_000_000, totalBytes: 2_000_000_000_000, retentionDays: 14)
+}
+
+/// A single in-progress **detection** (no alert) on `driveway` — proves a detection never promotes
+/// a hero (`heroCamera` only reacts to an alert) and that the tile/chip badge renders amber.
+private func snapshotDetectionOnly() -> [CameraActivity] {
+    [CameraActivity(camera: CameraName("driveway"), label: "Car", severity: .detection, startedAt: snapshotNow)]
 }
 
 /// Two groups over `snapshotCameras()` — Outdoor (driveway, front door) and Indoor (backyard, garage).
