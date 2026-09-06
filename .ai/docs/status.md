@@ -245,6 +245,31 @@ not snapshot-tested — they center on video players that can't render in a snap
   behind the layout so a hero swap never rebuilds a tile's decoded still. The header chips are now
   narrowed to the selected group's cameras, so a group with nothing visible shows neither a stale
   activity chip nor a wrong offline count.
+- **Timeline tab + Timeline detail: Aurora restyle (0.5.7).** Both screens keep their settled
+  behaviours (the tab's scrolling 7-day strip with pinch zoom; the detail's Hour/Day/Week scrub
+  track) and take the new paint: `TimelineTrackStyle`/`TimelineHatch` now delegate their colours to
+  `CommonDesign`'s `AuroraTrack` (intensity-coloured motion bars, gradient playhead, dark well,
+  hatched gaps/future), so both screens share one track vocabulary. The tab gains a hero tile (the
+  camera with the current alert, else the first) living in one `ForEach` via `HeroGridLayout` so a
+  hero swap reorders instead of rebuilding a tile; iPad takes a fixed 3-column grid, macOS keeps
+  `TimelineGridLayout.bestFit`. Both sheets are flush-bottom (the tab's has no grabber — it isn't
+  dismissable by drag); the detail sheet's zoom picker is `AuroraSegmentedControl` with the full
+  brand gradient on its selected segment. `ReviewMarker` gained `camera`/`label` fields.
+- **Events tab: Aurora restyle + real alert severity (0.5.7).** Severity is no longer guessed — an
+  Events-local `/api/review` read is joined against `/api/events` by id (an event is an alert when
+  an alert-severity review item lists it in `data.detections`), giving the ALERT tag, the gradient
+  thumbnail ring, and a "Latest Alert" hero card real meaning (falls back to "Latest Event" with no
+  alert today). Label filter chips, hour groups with a hairline + count, and glass rows replace the
+  previous flat list; a new detail-screen header replaces the old title bar.
+- **Live camera screen: Aurora restyle (0.5.7).** The video sits in a 16:9 gradient-framed card
+  with a soft violet glow behind it, the LIVE pill moved inside the card's top-left corner, and the
+  transport controls are a floating glass pill below the card — `LiveVideoArrangement` (`.card` /
+  `.fill`) makes the compact-height (landscape) full-bleed layout and the regular-height framed-card
+  layout two cases of one pure rule, unit-tested independently of the view.
+- **All six Aurora slices land together as one restyle** (`CommonDesign` token target, Timeline tab,
+  Timeline detail, app shell/Settings, Cameras, Events, Live) — 642 AuraKit tests, every snapshot
+  suite re-recorded on the iPhone 17 Pro simulator (iPhone + iPad × portrait/landscape × light/dark).
+  Verified iOS Simulator and macOS builds both green.
 
 ## Next
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a

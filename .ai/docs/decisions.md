@@ -1313,3 +1313,43 @@ Every tile — hero and non-hero — lives in **one** `ForEach` behind the one c
 SwiftUI identity is structural: splitting the hero into a second container would re-parent a tile on
 every swap and rebuild its decoded-image `@State`. `liveCount` is removed; `offlineCount` and
 `isOffline(_:)` already carry every bit of state the live-count pill conveyed.
+
+## Aurora restyle: Timeline detail is a flush sheet on a full-bleed video slot (0.5.7)
+
+The recording player overturns the 0.5.0 "floating card" for this screen: the sheet is flush to its
+edge (bottom on iPhone/iPad portrait, trailing for the landscape rail) via the same `auroraSheet`
+every other panel now uses, and the video slot is full-bleed with no rim — mock L107 draws none here,
+unlike the Live screen's framed card, so this screen's frame stays absent rather than forcing one
+recipe onto both. The landscape rail gains the Live control it previously omitted (a state the user
+could not leave is a dead-control violation regardless of how rare the layout is). Four controls that
+used to swallow a press — the two marker-jump buttons and the two day-step chevrons — are now visibly
+disabled at the ends of their range rather than silently doing nothing. `TimelineTrackStyle` and
+`TimelineHatch` (owned by the Timeline-tab slice, landed first) are consumed as-is: their paint now
+delegates to `CommonDesign`'s `AuroraTrack`, so this screen's day histogram and scrub track share
+motion-intensity colouring and the gradient playhead with the tab's strip for free. The zoom picker
+is `AuroraSegmentedControl` with the full brand gradient (`.diagonal`) on its selected segment, not
+the quieter `.badge` gradient other segmented controls use — this control is the screen's own primary
+action, not a peer of the transport row.
+
+## Aurora restyle: Events severity comes from a local `/api/review` join (0.5.7)
+
+`/api/events` carries no severity, so an alert is no longer guessed from a label heuristic: a
+Events-local read of `/api/review` for the loaded window is joined to the event list by id — an
+event is an **alert** when an alert-severity review item lists it in `data.detections`, otherwise a
+**detection** (`EventSeverity`, a new required field on `Event`, no default — every call site updates
+or the compiler catches it). This is Frigate's own classification, not Aura's approximation, and it
+is what the ALERT tag, the gradient thumbnail ring, and the "Latest Alert" hero card actually mean;
+the hero reads "Latest Event" on a day with no alert rather than lying about severity it doesn't have.
+The subtitle's "Today · N events" count is honestly scoped to the loaded window (no `after=` filter,
+`limit: 100`) rather than a second authoritative read — the Cameras tab already owns that number.
+
+## Aurora restyle: Live gets a framed video card, one arrangement rule for both size classes (0.5.7)
+
+The live stream sits in a 16:9 card with the gradient frame and a soft violet glow, the LIVE pill
+moved inside the card (top-left) rather than floating above it, and the transport controls become a
+floating glass pill below the card instead of an overlay on the video. `LiveVideoArrangement` (`.card`
+/ `.fill`) is the one pure rule behind both regular-height (framed card, pill below) and compact-height
+/ landscape (full-bleed video, controls overlay) layouts — derived once from `verticalSizeClass` and
+unit-tested independently of the view, rather than two `#if` branches drifting apart inside
+`LiveVideoLayout`. The bare-`AVPlayerLayer` / `ZoomableContainer` contract is unchanged: the video
+stays the container's only child, the zoom transform never touches the frame or the controls.
