@@ -235,6 +235,16 @@ not snapshot-tested — they center on video players that can't render in a snap
   "no cameras" empty state. The tab bar itself is untouched system chrome — its active colour comes
   entirely from the now-filled `AccentColor` asset (pink pair), which is also the app's one link
   colour.
+- **Cameras tab: Aurora restyle (0.5.7).** The summary card and the live-count pill are gone,
+  replaced by a chip row (activity, today's tally, storage, and an offline count when non-zero)
+  above the existing group-chip row. The wall is a custom `CameraWallLayout`: on iPhone portrait the
+  hero sits full-width above a 2-column grid, on iPad/macOS it spans 2fr on the left beside a 1fr
+  side column, and iPhone landscape keeps its plain 3-up grid with no hero at all. The hero is
+  whichever visible camera has the most recently started **alert** (never a mere detection), so the
+  2s activity refresh can't reshuffle the wall; the swap animates. Every tile lives in one `ForEach`
+  behind the layout so a hero swap never rebuilds a tile's decoded still. The header chips are now
+  narrowed to the selected group's cameras, so a group with nothing visible shows neither a stale
+  activity chip nor a wrong offline count.
 
 ## Next
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a

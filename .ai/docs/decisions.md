@@ -1292,3 +1292,24 @@ colour was collapsed — one accent, not two; on macOS that accent only shows wh
 accent is Multicolour, which is the platform's rule, not ours. Server's Save moved from the toolbar
 to a bottom safe-area inset as the gradient action button, the one place the full gradient is
 allowed on this screen, and the one placement that survives a keyboard in compact height.
+
+## Aurora restyle: the Cameras wall gets a hero (0.5.7)
+
+The Cameras tab root drops the summary card and the live-count pill for a chip row (activity,
+today's tally, storage, and — only when non-zero — an offline count) plus the existing group-chip
+row, over a custom `CameraWallLayout` that gives the wall a hero tile. The hero is the visible
+camera with the most recently started **alert**, never a mere detection — `CameraGridViewModel`
+exposes it separately from `rightNow` (which does promote a detection when it's the only activity),
+precisely so the 2s activity-refresh loop cannot reorder the wall for ordinary motion; the swap
+animates (`.smooth(duration: 0.35)`) rather than snapping. The hero is a property of the *layout
+style*, not the view model alone: `CameraWallLayout.Style.hasHero` is what tells the view whether to
+iterate the hero-led `wallCameras` or the plain `visibleCameras`, and which tile (if any) draws with
+`.hero` styling — so the compact-height (iPhone landscape) 3-up wall has neither hero styling nor
+hero ordering, and nothing moves there for lack of a hero to earn the move. `heroCamera`,
+`wallCameras`, `rightNow` and `offlineCount` are all narrowed to `visibleCameras`, the group-filtered
+list: the header chips now describe exactly the cameras the wall shows, so a group with no visible
+camera renders neither a stale activity chip nor an offline count for a camera the filter just hid.
+Every tile — hero and non-hero — lives in **one** `ForEach` behind the one custom `Layout`, because
+SwiftUI identity is structural: splitting the hero into a second container would re-parent a tile on
+every swap and rebuild its decoded-image `@State`. `liveCount` is removed; `offlineCount` and
+`isOffline(_:)` already carry every bit of state the live-count pill conveyed.

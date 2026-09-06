@@ -1,6 +1,7 @@
 import SwiftUI
 
 import CamerasDomain
+import CommonDesign
 import CommonPlayer
 
 /// A live camera tile: the preview still under a calm set of overlays — a LIVE marker, the camera
@@ -13,20 +14,20 @@ struct CameraTileView: View {
     let activity: CameraActivity?
     let isOffline: Bool
     let imageData: Data?
+    let style: Style
 
     @State private var image: Image?
 
     var body: some View {
         ZStack {
-            Color.black
+            Color.auroraNoFootage
             if !isOffline, let image {
-                image.resizable().aspectRatio(contentMode: .fill)
+                image.resizable().scaledToFill()
             }
         }
-        .aspectRatio(16.0 / 9.0, contentMode: .fit)
-        .frame(maxWidth: .infinity)
+        .clipped()
         .overlay { overlay }
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .modifier(TileFrame(style: style))
         .task(id: imageData) {
             image = imageData.flatMap(platformImage(from:))
         }
@@ -34,97 +35,130 @@ struct CameraTileView: View {
 
     @ViewBuilder private var overlay: some View {
         if isOffline {
-            OfflineTileOverlay(name: displayName)
+            OfflineTileOverlay(name: displayName, style: style)
         } else {
-            LiveTileOverlay(name: displayName, activity: activity)
+            LiveTileOverlay(name: displayName, activity: activity, style: style)
         }
     }
 
     private var displayName: String { camera.friendlyName ?? camera.name.value }
+
+    /// Whether the wall lays this tile out as the hero (full-bleed, gradient rim, larger type) or a
+    /// regular tile (1pt glass frame, compact type). Set by `CameraWallLayout.Style.hasHero` and
+    /// which camera, if any, is `CameraGridViewModel.heroCamera` — not a property of the tile itself.
+    enum Style: Equatable {
+        case hero
+        case tile
+    }
+}
+
+/// The hero gets the gradient video-frame rim at r24; a regular tile gets a 1pt glass stroke at r18
+/// (mock: 1px `rgba(255,255,255,0.14)` frame r19 outer / r18 inner). No `AuroraGlow` on the hero
+/// here — `.auroraFrame` clips its content and the tile root is opaque, so a glow confined to the
+/// hero's own bounds would paint zero visible pixels; the screen's one glow sits behind the whole
+/// wall instead (`CameraGridView`).
+private struct TileFrame: ViewModifier {
+    let style: CameraTileView.Style
+
+    func body(content: Content) -> some View {
+        switch style {
+        case .hero:
+            content.auroraFrame(cornerRadius: 24)
+        case .tile:
+            content
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.auroraChipBorder, lineWidth: 1)
+                }
+        }
+    }
 }
 
 private struct LiveTileOverlay: View {
     let name: String
     let activity: CameraActivity?
+    let style: CameraTileView.Style
 
     var body: some View {
-        LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .bottom, endPoint: .center)
-            .overlay(alignment: .topLeading) { LiveBadge().padding(10) }
-            .overlay(alignment: .bottomLeading) { TileName(name: name).padding(10) }
-            .overlay(alignment: .bottomTrailing) {
-                if let activity { ActivityBadge(activity: activity).padding(10) }
+        LinearGradient(colors: [.black.opacity(0.78), .clear], startPoint: .bottom, endPoint: .center)
+            .overlay(alignment: .topLeading) { AuroraLivePill(style: .glass).padding(padding) }
+            .overlay(alignment: .bottomLeading) {
+                TileName(name: name, style: style).foregroundStyle(.white).padding(padding)
             }
+            .overlay(alignment: .bottomTrailing) {
+                if let activity { ActivityBadge(activity: activity, style: style).padding(padding) }
+            }
+    }
+
+    private var padding: CGFloat {
+        switch style {
+        case .hero: 12
+        case .tile: 10
+        }
     }
 }
 
 private struct OfflineTileOverlay: View {
     let name: String
+    let style: CameraTileView.Style
 
     var body: some View {
-        Color.white.opacity(0.04)
-            .overlay {
-                VStack(spacing: 5) {
-                    Image(systemName: "video.slash.fill").font(.system(size: 20))
-                    Text("Offline").font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundStyle(.white.opacity(0.5))
-            }
-            .overlay(alignment: .bottomLeading) { TileName(name: name).opacity(0.7).padding(10) }
-    }
-}
-
-private struct LiveBadge: View {
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(.red).frame(width: 6, height: 6)
-            Text("LIVE").font(.system(size: 10, weight: .heavy)).tracking(0.8)
+        VStack(spacing: 5) {
+            Image(systemName: "video.slash.fill").font(.aurora(.headline))
+            Text("Offline").auroraText(.caption)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .foregroundStyle(.auroraTextTertiary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottomLeading) {
+            TileName(name: name, style: style)
+                .foregroundStyle(.auroraTextSecondary)
+                .opacity(0.7)
+                .padding(padding)
+        }
+    }
+
+    private var padding: CGFloat {
+        switch style {
+        case .hero: 12
+        case .tile: 10
+        }
     }
 }
 
+/// No foreground colour of its own — over the live scrim the caller inks it `.white`; over the
+/// offline (no-scrim, near-white-in-light) backing the caller inks it `.auroraTextSecondary`
+/// instead, so it never renders white-on-white.
 private struct TileName: View {
     let name: String
+    let style: CameraTileView.Style
 
     var body: some View {
         Text(name)
-            .font(.system(size: 14, weight: .bold))
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
+            .auroraText(style == .hero ? .heroTitle : .tileTitle)
+            .lineLimit(1)
     }
 }
 
-/// The red (alert) / amber (detection) pill that marks what Frigate is tracking on a tile.
+/// The gradient (alert) / amber (detection) pill that marks what Frigate is tracking on a tile.
 private struct ActivityBadge: View {
     let activity: CameraActivity
+    let style: CameraTileView.Style
 
     var body: some View {
         HStack(spacing: 4) {
             if activity.severity == .alert {
-                Image(systemName: "person.fill").font(.system(size: 10, weight: .bold))
+                Image(systemName: "person.fill")
             }
-            Text(activity.label).font(.system(size: 11, weight: .semibold))
+            Text(activity.label)
         }
-        .foregroundStyle(foreground)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(background, in: RoundedRectangle(cornerRadius: 8))
+        .auroraBadge(tone, size: style == .hero ? .regular : .compact)
     }
 
-    private var background: Color {
+    private var tone: AuroraBadgeTone {
         switch activity.severity {
-        case .alert: .red
-        case .detection: .orange
-        }
-    }
-
-    private var foreground: Color {
-        switch activity.severity {
-        case .alert: .white
-        case .detection: .black
+        case .alert: .alert
+        case .detection: .detection
         }
     }
 }
