@@ -18,6 +18,11 @@ public struct LiveVideoLayout<Video: View>: View {
     private let onSingleTap: () -> Void
     private let video: Video
 
+    /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomBleed` for the ambient
+    /// glow behind the frame. `@State`, not a local in `videoSurface`, so it survives that view's
+    /// own re-evaluation without resetting mid-gesture.
+    @State private var zoomTransform = ZoomTransform.standard()
+
     public init(
         arrangement: LiveVideoArrangement,
         controls: LiveControlBar,
@@ -56,9 +61,17 @@ public struct LiveVideoLayout<Video: View>: View {
     }
 
     private func videoSurface(_ metrics: LiveVideoMetrics) -> some View {
-        ZoomableContainer(onSingleTap: onSingleTap, clipsContent: true) { video }
+        ZoomableContainer(
+            onSingleTap: onSingleTap,
+            clipsContent: true,
+            onTransformChange: { zoomTransform = $0 }
+        ) { video }
             .background(.black)
             .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+            // Behind the sized, clipped card — the ambient glow a zoomed frame casts past its own
+            // edge (mirrors the same shared `AVPlayer` into a second, blurred `AVPlayerLayer`;
+            // `LivePlayerModel.attach` only tracks the first layer it sees, so PiP is unaffected).
+            .background { AuroraZoomBleed(transform: zoomTransform) { video } }
             .auroraFrame(cornerRadius: metrics.videoCornerRadius, lineWidth: metrics.videoRimWidth)
             .auroraCardGlow(opacity: metrics.cardGlowOpacity)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

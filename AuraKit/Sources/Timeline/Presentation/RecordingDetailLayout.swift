@@ -13,11 +13,12 @@ import CommonPlayer
 /// - **iPad and Mac** — a 16:9 hero with the panel spread wide beneath it, the time axis and the
 ///   controls side by side.
 ///
-/// The video is pinch-zoomable everywhere. On the phones its **slot** is unclipped, so zoomed
-/// footage overflows it and slides under the glass instead of stopping at an invisible line; the
-/// iPad hero clips to its frame, since nothing overlaps it. The chrome and the panel live outside
-/// the zoom and never scale. The slot itself is full-bleed everywhere — no rim, no corner radius,
-/// no inset (the mock's only framed video is the Live screen's, not this one).
+/// The video is pinch-zoomable everywhere and clips consistently to its **slot** — zoomed footage
+/// never overflows into the panel or under the glass — with an `AuroraZoomBleed` behind the frame
+/// reading as the content extending past its own edge instead (matching the Live screen, the one
+/// player this design already treats as correct). The chrome and the panel live outside the zoom
+/// and never scale. The slot itself is full-bleed everywhere — no rim, no corner radius, no inset
+/// (the mock's only framed video is the Live screen's, not this one).
 ///
 /// Split out from `RecordingPlayerView` so every arrangement can be screenshot-tested over a
 /// placeholder, with literal state and no player — and with `cameraAreaHighlights` on, the
@@ -33,6 +34,10 @@ public struct RecordingDetailLayout<Video: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @Environment(\.cameraAreaHighlights) private var cameraAreaHighlights
+
+    /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomBleed` — see
+    /// `LiveVideoLayout`'s identical property for why this is `@State`, not a local in `slot()`.
+    @State private var zoomTransform = ZoomTransform.standard()
 
     private static var railWidth: CGFloat { 168 }
     private static var splitPanelMaxWidth: CGFloat { 1_100 }
@@ -69,7 +74,7 @@ public struct RecordingDetailLayout<Video: View>: View {
 
     private func stacked(insets: EdgeInsets) -> some View {
         VStack(spacing: 0) {
-            slot(clipped: false)
+            slot()
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .padding(.top, 8)
             Spacer(minLength: 12)
@@ -85,7 +90,7 @@ public struct RecordingDetailLayout<Video: View>: View {
 
     private func rail(insets: EdgeInsets) -> some View {
         HStack(spacing: 10) {
-            slot(clipped: false)
+            slot()
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .padding(.leading, 10)
                 .padding(.vertical, 10)
@@ -106,8 +111,7 @@ public struct RecordingDetailLayout<Video: View>: View {
 
     private func split(insets: EdgeInsets) -> some View {
         VStack(spacing: 0) {
-            slot(clipped: true)
-                .background(Color.auroraBase)
+            slot()
                 .aspectRatio(16 / 9, contentMode: .fit)
                 // Absorbs the free height instead of a trailing `Spacer` — with a content-height
                 // sheet under a fixed-height slot, an 11" iPad portrait would otherwise open a
@@ -130,16 +134,19 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// the screen the panel never covers. The chrome overlays the slot *outside* the zoom, so the
     /// badges stay put and legible while the picture scales under them.
     ///
-    /// The letterbox colour sits in two different places depending on `clipped`: unclipped
-    /// (stacked/rail), it rides *inside* the zoom with the video, since the container has no fixed
-    /// boundary to paint behind; clipped (split), the caller paints it *outside*, fixed behind the
-    /// container's own bounds, so it doesn't pan or scale with a pinch the way the picture does.
-    private func slot(clipped: Bool) -> some View {
-        ZoomableContainer(onSingleTap: {}, clipsContent: clipped) {
-            if clipped { video } else { video.background(Color.auroraBase) }
-        }
-        .overlay { RecordingHeroOverlay(state: state) }
-        .overlay { slotHighlight }
+    /// The letterbox colour is painted *outside* the zoom, fixed behind the container's own
+    /// bounds, so it never pans or scales with a pinch the way the picture does — consistent
+    /// across every arrangement now that every arrangement clips.
+    private func slot() -> some View {
+        ZoomableContainer(
+            onSingleTap: {},
+            clipsContent: true,
+            onTransformChange: { zoomTransform = $0 }
+        ) { video }
+            .background(Color.auroraBase)
+            .background { AuroraZoomBleed(transform: zoomTransform) { video } }
+            .overlay { RecordingHeroOverlay(state: state) }
+            .overlay { slotHighlight }
     }
 
     private func panel(_ arrangement: RecordingTimelinePanel.Arrangement) -> some View {
