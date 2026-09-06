@@ -61,19 +61,24 @@ public struct LiveVideoLayout<Video: View>: View {
     }
 
     private func videoSurface(_ metrics: LiveVideoMetrics) -> some View {
-        ZoomableContainer(
+        let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
+        return ZoomableContainer(
             onSingleTap: onSingleTap,
             clipsContent: true,
             onTransformChange: { zoomTransform = $0 }
         ) { video }
             .background(.black)
             .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
-            // Behind the sized, clipped card — the ambient glow a zoomed frame casts past its own
+            .auroraFrame(cornerRadius: metrics.videoCornerRadius, lineWidth: metrics.videoRimWidth, borderOpacity: chrome.borderOpacity)
+            // Behind the sized, framed card — the ambient glow a zoomed frame casts past its own
             // edge (mirrors the same shared `AVPlayer` into a second, blurred `AVPlayerLayer`;
             // `LivePlayerModel.attach` only tracks the first layer it sees, so PiP is unaffected).
-            .background { AuroraZoomBleed(transform: zoomTransform) { video } }
-            .auroraFrame(cornerRadius: metrics.videoCornerRadius, lineWidth: metrics.videoRimWidth)
-            .auroraCardGlow(opacity: metrics.cardGlowOpacity)
+            // Placed *after* `.auroraFrame`, not before: that modifier clips its content to the
+            // card's rounded rect, and a bleed added before it gets clipped away to nothing along
+            // with the card — verified this was exactly why the glow only ever showed on Timeline
+            // detail (which draws no frame/clip at all) and never on this screen.
+            .background { AuroraZoomBleed(opacity: chrome.glassOpacity, transform: zoomTransform) { video } }
+            .auroraCardGlow(opacity: metrics.cardGlowOpacity * chrome.borderOpacity)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(edges: arrangement.videoIgnoredEdges)
     }

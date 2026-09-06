@@ -1353,3 +1353,37 @@ floating glass pill below the card instead of an overlay on the video. `LiveVide
 unit-tested independently of the view, rather than two `#if` branches drifting apart inside
 `LiveVideoLayout`. The bare-`AVPlayerLayer` / `ZoomableContainer` contract is unchanged: the video
 stays the container's only child, the zoom transform never touches the frame or the controls.
+
+## One zoom-chrome curve (`AuroraZoomChrome`) drives every player's border + glass fade (0.6.1)
+
+Live and Timeline detail each zoom their video independently, but the chrome around the picture now
+follows one shared rule instead of two screens drifting apart: at rest the gradient border is fully
+opaque and the ambient glass bleed is off; as a pinch begins the glass fades in while the border stays
+put; past a fixed midpoint the border and the glass fade **together** down to zero, reading as the
+picture filling the screen with no card left to frame it. `AuroraZoomChrome` is a pure `Sendable`
+struct (`init(scale:fillScale:)`, `fillScale` defaulting to 3) computing `borderOpacity`/`glassOpacity`
+from the live `ZoomTransform.scale` via two `smoothstep` ramps — unit-tested directly
+(`AuroraZoomChromeTests`) rather than only through a screenshot, since the pinch-zoomed state isn't
+reachable in the offscreen snapshot harness (no gesture recognizer to drive).
+
+`fillScale` is a single tuned constant, not a per-arrangement computation of the exact zoom level at
+which a given card's edges reach its own canvas — Live's card, and Timeline detail's stacked/rail/split
+slots, are all different sizes against different canvases; threading exact fill geometry through every
+one of them buys a distinction nobody would perceive pixel-for-pixel over one well-chosen threshold.
+
+Two things had to change for the curve to actually render everywhere it's used:
+- `auroraFrame(cornerRadius:lineWidth:borderOpacity:)` gained the `borderOpacity` parameter (default
+  1, so still-image call sites are unaffected) — it fades only the rim; the clip and padding stay put
+  so the picture never jumps size as the border dissolves.
+- `AuroraZoomBleed` takes `opacity` as an explicit external parameter (previously computed internally
+  from the transform) so one `AuroraZoomChrome` value drives both the frame and the bleed in lockstep.
+  It **must** be added as `.background` *after* `.auroraFrame` in the view chain, never before —
+  `auroraFrame` clips everything composed before it to its own rounded rect, so a bleed added earlier
+  gets silently clipped down to the card's own bounds and never shows past its edge. This was exactly
+  why the ambient bleed only ever appeared on Timeline detail (which drew no frame/clip at all) and
+  never on Live (whose `.auroraFrame` call sat after the bleed's `.background`) before this fix.
+
+Timeline detail's video slot gains a border for the first time here, reversing the 0.6.0 decision above
+("Timeline detail is a flush sheet on a full-bleed video slot") — full consistency with Live's framed
+card won out over that screen's original full-bleed-only treatment. It reuses Live's card constants
+exactly (22pt corner radius, 1.5pt rim) so the two screens' resting video reads identically.
