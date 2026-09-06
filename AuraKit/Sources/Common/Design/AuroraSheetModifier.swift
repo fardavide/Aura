@@ -21,6 +21,15 @@ public enum AuroraSheetEdge: Sendable {
         case .trailing: .trailing
         }
     }
+
+    /// Where the glass background stays pinned as it grows past the content's own bounds to
+    /// reach `flushEdge` — the edge *opposite* `flushEdge` (see the modifier's doc comment).
+    var backgroundAlignment: Alignment {
+        switch self {
+        case .bottom: .top
+        case .trailing: .leading
+        }
+    }
 }
 
 extension View {
@@ -52,6 +61,17 @@ private struct AuroraSheetModifier: ViewModifier {
     let edge: AuroraSheetEdge
     let showsGrabber: Bool
 
+    // `ignoresSafeArea` does not reposition a view sized by its own content (or by an explicit
+    // frame, as `.rail` has) — verified empirically: a fixed-height view with `.ignoresSafeArea()`
+    // applied directly stays exactly where safe-area-respecting layout already put it, floating
+    // above a TabView's floating tab bar with a visible gap instead of sitting flush behind it
+    // (the tab bar's reserved space is a `safeAreaInset`, not the window's own top/bottom insets,
+    // and only a *background* layer's independent geometry can be told to disregard it). Only
+    // `View.background(alignment:content:)` with `ignoresSafeArea` **inside** the closure reaches
+    // the true edge, because that background is laid out independently of the foreground's size —
+    // so the glass/border/glow go in the background, pinned at the edge opposite `flushEdge`
+    // (`backgroundAlignment`) and free to grow past the foreground into the ignored safe area,
+    // while the actual content stays put, safely inset from the bar.
     func body(content: Content) -> some View {
         let shape = edge.shape
         return VStack(spacing: 0) {
@@ -60,9 +80,13 @@ private struct AuroraSheetModifier: ViewModifier {
             }
             content
         }
-        .glassEffect(.regular.tint(.auroraSheetTint), in: shape)
-        .overlay { shape.strokeBorder(AuroraGradient.rim, lineWidth: 1) }
-        .background { AuroraGlow().padding(-30) }
-        .ignoresSafeArea(.container, edges: edge.flushEdge)
+        .background(alignment: edge.backgroundAlignment) {
+            shape
+                .fill(.clear)
+                .glassEffect(.regular.tint(.auroraSheetTint), in: shape)
+                .overlay { shape.strokeBorder(AuroraGradient.rim, lineWidth: 1) }
+                .background { AuroraGlow().padding(-30) }
+                .ignoresSafeArea(.container, edges: edge.flushEdge)
+        }
     }
 }
