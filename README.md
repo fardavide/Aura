@@ -43,6 +43,14 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.7 — 2026-09-07
+- **Fixed Timeline detail's zoomed video rendering in the wrong place** — the interactive layer
+  was quietly ignoring its own top-anchored position and centring itself in the much taller growth
+  area instead, so it visibly diverged from the correctly-placed blurred backdrop beneath it during
+  a pinch.
+- **Timeline detail's zoomed picture now extends behind the top bar**, matching Live — it used to
+  stop growing at the bar's bottom edge no matter how far zoomed.
+
 ### 0.6.6 — 2026-09-07
 - **Pinch-to-zoom now anchors exactly where you pinch, on Live and Timeline detail** — it used to
   measure every pinch against the whole screen rather than the smaller video card sitting inside it,

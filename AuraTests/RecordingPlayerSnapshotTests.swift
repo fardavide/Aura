@@ -105,7 +105,7 @@ struct RecordingPlayerSnapshotTests {
     @Test func `given an unreachable server then the failure card fits the video slot`() {
         // given — the app-wide failure idiom, squeezed from the full remaining column into the
         // 16:9 slot now that the picture is pinned to that aspect ratio
-        let view = RecordingDetailLayout(state: detailState(), actions: .inert, filmstrip: emptyFilmstrip()) {
+        let view = recordingDetailScreen(state: detailState()) {
             ContentUnavailableView(
                 "Can't reach the server",
                 systemImage: "wifi.slash",
@@ -123,8 +123,44 @@ struct RecordingPlayerSnapshotTests {
 
 @MainActor
 private func recordingDetail(state: RecordingDetailState) -> some View {
-    RecordingDetailLayout(state: state, actions: .inert, filmstrip: emptyFilmstrip()) {
+    recordingDetailScreen(state: state) {
         Color.black
+    }
+}
+
+/// Wrapped in a real `NavigationStack` with an inline title, mirroring `RecordingPlayerView`
+/// exactly (including hiding the nav bar in the compact/landscape `.rail` arrangement) —
+/// `.stacked`/`.split`'s growth canvas reads `GeometryReader`'s `safeAreaInsets.top` to find the
+/// true nav bar height (see `RecordingDetailLayout.growingAboveThePanel`), so a bare
+/// `RecordingDetailLayout` here would bake the wrong (nav-bar-less) geometry into the baseline —
+/// same reason `CameraDetailSnapshotTests.liveControls` wraps `LiveVideoLayout` the same way. The
+/// `.rail` arrangement doesn't read `safeAreaInsets.top` at all, but a visible nav bar still
+/// shrinks the canvas `RecordingDetailLayout`'s own `GeometryReader` measures, so hiding it in
+/// compact height (as production does) keeps `.rail`'s baselines exactly as they were.
+@MainActor
+private func recordingDetailScreen<Video: View>(
+    state: RecordingDetailState, @ViewBuilder video: () -> Video
+) -> some View {
+    RecordingDetailScreen(state: state, video: video())
+}
+
+private struct RecordingDetailScreen<Video: View>: View {
+    let state: RecordingDetailState
+    let video: Video
+
+    #if os(iOS)
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #endif
+
+    var body: some View {
+        NavigationStack {
+            RecordingDetailLayout(state: state, actions: .inert, filmstrip: emptyFilmstrip()) { video }
+                .navigationTitle(state.cameraName)
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .navigationBar)
+                #endif
+        }
     }
 }
 
