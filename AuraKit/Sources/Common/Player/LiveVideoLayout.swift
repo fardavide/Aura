@@ -67,21 +67,38 @@ public struct LiveVideoLayout<Video: View>: View {
     /// clips only at that outer boundary, while `video` inside it is sized to the card's rest
     /// dimensions — at scale 1 that reads as a card; scaled up by a pinch, the same picture grows
     /// past where the (fading, motionless) rim sits, eventually filling the whole canvas.
+    ///
+    /// The blur is only ever visible in the picture that's grown *past* the card's rest-state rect
+    /// — not the whole picture. A non-interactive mirror of the same content, scaled and panned
+    /// identically to the real one, sits behind it blurred and full-canvas; the real, sharp,
+    /// gesture-driving `ZoomableContainer` sits in front, masked down to just the card's own rect,
+    /// so the sharp copy is all that shows there and the blurred mirror only shows through where
+    /// the picture has grown beyond it.
     private func videoSurface(_ metrics: LiveVideoMetrics) -> some View {
         let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
-        return ZoomableContainer(
-            onSingleTap: onSingleTap,
-            clipsContent: true,
-            onTransformChange: { zoomTransform = $0 }
-        ) {
+        return ZStack {
             video
                 .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
                 .background(.black)
-                .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
+                .scaleEffect(zoomTransform.scale)
+                .offset(zoomTransform.offset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .blur(radius: chrome.imageBlurRadius)
+            ZoomableContainer(
+                onSingleTap: onSingleTap,
+                clipsContent: true,
+                onTransformChange: { zoomTransform = $0 }
+            ) {
+                video
+                    .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
+            }
+            .mask {
+                Rectangle().frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+            }
         }
-        // Applied to the already-scaled, already-clipped result — a constant screen-space amount
-        // of frost, not a blur that grows together with the picture as it scales up.
-        .blur(radius: chrome.imageBlurRadius)
         .overlay {
             AuroraZoomFrame(cornerRadius: metrics.videoCornerRadius, lineWidth: metrics.videoRimWidth, opacity: chrome.borderOpacity)
                 .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)

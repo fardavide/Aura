@@ -1460,3 +1460,63 @@ The general lesson: a cherry-pick that "looks captured" by a squash needs to be 
 the *resulting file content*, not just by recognizing a similar commit message nearby — and a fix
 that only manifests inside real system chrome (a real `TabView`, a real `NavigationStack`) needs
 that chrome checked again after any branch surgery, not just a green isolated-host suite.
+
+## The blur only masks the picture that's grown past its frame, not the whole picture (0.6.4)
+
+0.6.2's `.blur(radius: chrome.imageBlurRadius)` was applied to the *whole* zoom container, so at
+mid-zoom the entire picture read as blurred — including the center, which was never meant to lose
+sharpness at all. Reported directly: "while mid zoom, the whole image is blurred… it must be
+blurred only outside of the box!"
+
+Fixed with the standard SwiftUI two-layer technique for a partial/graduated blur (there's no public
+API for a masked-radius blur): a non-interactive mirror of the same content, scaled and panned
+identically to the real one via the same `zoomTransform` value, sits behind everything, blurred and
+expanded to fill the whole canvas; the real, sharp, gesture-driving `ZoomableContainer` sits in
+front, `.mask()`ed down to just the card's own rest-state rect, so the sharp copy is all that shows
+there and the blurred mirror only shows through where the picture has grown beyond it. Verified via
+a throwaway diagnostic at a fixed mid-zoom scale before touching production code (a static diagnostic
+can't drive `ZoomableContainer`'s private gesture state, so it replicates the composition by hand
+with a hardcoded scale, same technique used earlier in this session for the unbound-growth check).
+
+`.mask()` does not affect hit-testing (confirmed: `ZoomableContainer`'s gestures attach via
+`.simultaneousGesture` on a view with an explicit `.contentShape(Rectangle())`, which fixes the
+hit-testable region independent of any visual mask a caller composes around it afterward) — so the
+whole-canvas gesture area from 0.6.2 is unaffected by adding the mask on top.
+
+## Timeline detail's picture grows past its own card too, matching Live (0.6.4)
+
+0.6.2 deliberately kept Timeline detail's growth boundary equal to its rest-state card — "zoomed
+footage must never spill into the timeline panel." Reported directly that this reads as a bug, not
+a feature: "in timeline details, the surface is cropped, should be like in camera details. Allowing
+the image to go full screen, till behind the control panel." The panel is meant to *float over* a
+full-screen picture once zoomed, the same relationship Live's controls already have to its video —
+not to bound how large the picture can ever get.
+
+Fixed by restructuring `.stacked` and `.split` (not `.rail` — see below) from a `VStack` that shares
+space between the video and the panel to a `ZStack` where the panel overlays a video that's free to
+grow to the full canvas: the new `growableSlot(boxSize:alignment:)` mirrors
+`LiveVideoLayout.videoSurface`'s pattern exactly (`ZoomableContainer` given no explicit frame of its
+own, so it expands to whatever canvas its caller offers; `video` inside it sized to the rest-state
+card; `AuroraZoomFrame` as a fixed, non-resizing overlay) but adds an `alignment` parameter to
+`ZoomableContainer` (default `.center`, matching Live unchanged) so Timeline detail's top-anchored
+card can sit at `.top` within a much taller canvas instead of Live's centered one — `ZStack`'s own
+alignment governs where natural-sized content sits before `scaleEffect`/`.offset` are applied,
+independent of the scale transform's own math, so this is a safe, additive change.
+
+**`.rail` (landscape phone) is deliberately left unchanged.** `ZoomTransform`'s own doc comment
+states its pan/zoom clamp math "assumes content fills the viewport" — already an approximation
+Live's shipped design leans on (its card is only ~30% of the canvas height at rest, an accepted
+gap), but tolerable there because the card and canvas share the same *horizontal* center. `.rail`'s
+box sits leading-anchored, offset from the canvas's horizontal center — a materially different,
+untested case for that same approximation, and gesture *feel* (as opposed to static layout) can't be
+verified without a real device. Extending growth to `.rail` is a follow-up once that's checked by
+hand, not bundled into this pass.
+
+A subtle box-size bug caught by the screenshot suite before it shipped: `split`'s box width was
+computed as `min(canvas.width, splitPanelMaxWidth) - 40`, but the original layout's modifier order
+reserves the 20pt horizontal padding on each side *before* the `splitPanelMaxWidth` cap applies —
+the correct formula is `min(canvas.width - 40, splitPanelMaxWidth)`. These differ whenever
+`canvas.width - 40` already undercuts the cap, producing a narrower box than before and clipping
+`RecordingHeroOverlay`'s trailing-aligned "Alert" badge off the edge — caught by the iPad `.split`
+baselines failing at rest (unchanged zoom state), fixed, then confirmed against a re-recorded
+baseline that the rest-state render is pixel-equivalent to before.
