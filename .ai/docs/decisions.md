@@ -1435,3 +1435,196 @@ the start (not just the small card), its pinch/pan gesture recognizers — attac
 — are recognized across the whole canvas too, not just within the card's small visible bounds. This
 incidentally addresses a separate complaint ("it is difficult to zoom, as you can act only on the
 box") without any gesture-specific change.
+
+## The "Timeline sheet flush behind the tab bar" fix (0.6.1) never actually shipped (0.6.3)
+
+Reported again from a TestFlight build as if new: the Timeline-detail scrub-track sheet floats as a
+fully-rounded card with gaps on every side instead of sitting flush behind the tab bar, square
+bottom corners, exactly the bug the 0.6.1 changelog claims was fixed. `git log --all` found the real
+fix commit (`d8e1a2f`, "Timeline tab: actually fix the sheet gap") sitting on a stale local ref,
+**not an ancestor of `origin/main`** — its `AuroraSheetModifier` rewrite (glass/border/glow moved
+into a `.background(alignment:)` closure with `ignoresSafeArea` *inside* it, per the "only a
+background layer's independent geometry reaches the true edge" finding recorded when it was first
+built) was lost during this session's repeated squash-merge branch recreation
+([[squash-merge-branch-hygiene]]): a cherry-pick pass treated its content as already captured by a
+sibling commit's squash and dropped it, and nothing in the review or test suite caught the gap
+because `AuroraSheetModifier`'s own re-recorded baselines (isolated host, `.background`-based
+flushness reads correctly there too) still passed — only a *real* `TabView`'s floating tab bar
+exposes the difference, and the app was never actually run against one before the affected PR merged.
+
+Fixed by re-applying the exact diff from `d8e1a2f` on a fresh branch off `origin/main` (the source
+change only — its binary snapshot re-recordings were stale against baselines re-recorded several
+times since, for unrelated reasons) and re-recording the 6 Timeline `ready-*` states fresh.
+
+The general lesson: a cherry-pick that "looks captured" by a squash needs to be verified by diffing
+the *resulting file content*, not just by recognizing a similar commit message nearby — and a fix
+that only manifests inside real system chrome (a real `TabView`, a real `NavigationStack`) needs
+that chrome checked again after any branch surgery, not just a green isolated-host suite.
+
+## The blur only masks the picture that's grown past its frame, not the whole picture (0.6.4)
+
+0.6.2's `.blur(radius: chrome.imageBlurRadius)` was applied to the *whole* zoom container, so at
+mid-zoom the entire picture read as blurred — including the center, which was never meant to lose
+sharpness at all. Reported directly: "while mid zoom, the whole image is blurred… it must be
+blurred only outside of the box!"
+
+Fixed with the standard SwiftUI two-layer technique for a partial/graduated blur (there's no public
+API for a masked-radius blur): a non-interactive mirror of the same content, scaled and panned
+identically to the real one via the same `zoomTransform` value, sits behind everything, blurred and
+expanded to fill the whole canvas; the real, sharp, gesture-driving `ZoomableContainer` sits in
+front, `.mask()`ed down to just the card's own rest-state rect, so the sharp copy is all that shows
+there and the blurred mirror only shows through where the picture has grown beyond it. Verified via
+a throwaway diagnostic at a fixed mid-zoom scale before touching production code (a static diagnostic
+can't drive `ZoomableContainer`'s private gesture state, so it replicates the composition by hand
+with a hardcoded scale, same technique used earlier in this session for the unbound-growth check).
+
+`.mask()` does not affect hit-testing (confirmed: `ZoomableContainer`'s gestures attach via
+`.simultaneousGesture` on a view with an explicit `.contentShape(Rectangle())`, which fixes the
+hit-testable region independent of any visual mask a caller composes around it afterward) — so the
+whole-canvas gesture area from 0.6.2 is unaffected by adding the mask on top.
+
+## Timeline detail's picture grows past its own card too, matching Live (0.6.4)
+
+0.6.2 deliberately kept Timeline detail's growth boundary equal to its rest-state card — "zoomed
+footage must never spill into the timeline panel." Reported directly that this reads as a bug, not
+a feature: "in timeline details, the surface is cropped, should be like in camera details. Allowing
+the image to go full screen, till behind the control panel." The panel is meant to *float over* a
+full-screen picture once zoomed, the same relationship Live's controls already have to its video —
+not to bound how large the picture can ever get.
+
+Fixed by restructuring `.stacked` and `.split` (not `.rail` — see below) from a `VStack` that shares
+space between the video and the panel to a `ZStack` where the panel overlays a video that's free to
+grow to the full canvas: the new `growableSlot(boxSize:alignment:)` mirrors
+`LiveVideoLayout.videoSurface`'s pattern exactly (`ZoomableContainer` given no explicit frame of its
+own, so it expands to whatever canvas its caller offers; `video` inside it sized to the rest-state
+card; `AuroraZoomFrame` as a fixed, non-resizing overlay) but adds an `alignment` parameter to
+`ZoomableContainer` (default `.center`, matching Live unchanged) so Timeline detail's top-anchored
+card can sit at `.top` within a much taller canvas instead of Live's centered one — `ZStack`'s own
+alignment governs where natural-sized content sits before `scaleEffect`/`.offset` are applied,
+independent of the scale transform's own math, so this is a safe, additive change.
+
+**`.rail` (landscape phone) is deliberately left unchanged.** `ZoomTransform`'s own doc comment
+states its pan/zoom clamp math "assumes content fills the viewport" — already an approximation
+Live's shipped design leans on (its card is only ~30% of the canvas height at rest, an accepted
+gap), but tolerable there because the card and canvas share the same *horizontal* center. `.rail`'s
+box sits leading-anchored, offset from the canvas's horizontal center — a materially different,
+untested case for that same approximation, and gesture *feel* (as opposed to static layout) can't be
+verified without a real device. Extending growth to `.rail` is a follow-up once that's checked by
+hand, not bundled into this pass.
+
+A subtle box-size bug caught by the screenshot suite before it shipped: `split`'s box width was
+computed as `min(canvas.width, splitPanelMaxWidth) - 40`, but the original layout's modifier order
+reserves the 20pt horizontal padding on each side *before* the `splitPanelMaxWidth` cap applies —
+the correct formula is `min(canvas.width - 40, splitPanelMaxWidth)`. These differ whenever
+`canvas.width - 40` already undercuts the cap, producing a narrower box than before and clipping
+`RecordingHeroOverlay`'s trailing-aligned "Alert" badge off the edge — caught by the iPad `.split`
+baselines failing at rest (unchanged zoom state), fixed, then confirmed against a re-recorded
+baseline that the rest-state render is pixel-equivalent to before.
+
+## The mask and the blurred backdrop both need their own rounded corners (0.6.4, same pass)
+
+Two follow-on bugs in the sharp/blurred split above, both reported directly from a rendered
+diagnostic (not a device — cheap enough to catch before it ever reached one):
+
+1. The mask (`Rectangle()`, sized to the box) is what determines the visible corner shape at the
+   box's fixed edge, independent of what the *content* underneath is clipped to — past scale 1 the
+   sharp content's own rounded corners are scaled up and pushed outward by the pinch, past where
+   the fixed-size mask cuts, so a *plain* rectangle mask always reads as a square corner there
+   regardless of the content's own rounding. Fixed by rounding the mask itself
+   (`RoundedRectangle(cornerRadius: ... * chrome.borderOpacity)`, matching the sharp layer's clip
+   exactly) in both `LiveVideoLayout.videoSurface` and `RecordingDetailLayout.growableSlot`.
+2. The blurred backdrop had no rounding applied to its own shape at all — a plain rectangle, then
+   blurred — so its corners read as soft square corners even once the mask fix above made the sharp
+   layer's corners correct, visibly mismatching the border's curvature right where the two meet.
+   Fixed by giving the backdrop the *same* `clipShape(RoundedRectangle(cornerRadius: ... *
+   chrome.borderOpacity))` as the sharp layer, before it's scaled and blurred.
+
+Both were verified via a throwaway diagnostic using an exaggerated corner radius relative to a
+small canvas (60pt radius on a 160pt box, rather than the real 22pt on ~300pt) specifically so the
+corner region is visible without needing a precise crop — a lesson from repeatedly fighting `sips`'
+`--cropOffset` semantics earlier the same session; exaggerating the geometry itself sidesteps the
+tooling problem entirely.
+
+## Timeline detail's video centers between the nav bar and the panel, not flush to the top (0.6.4)
+
+Reported directly, after the growth-behind-the-panel work above: at rest the video should sit
+*centred* in the gap between the nav bar and the panel — matching Live's own centred card — not
+flush against the top with only an 8/20pt gap. The flush positioning was also the root cause of a
+separately-reported blur asymmetry (the blurred backdrop had no margin to bleed into above a
+top-anchored, full-width box, so the halo looked cut-off on 3 of 4 sides) — centering the box fixes
+both by construction, since a centred box has margin on every side by definition.
+
+Centering needs the panel's actual rendered height, which is content-driven and not known in
+advance, while the picture's *growth* boundary when zoomed must still extend all the way to
+`canvas`, past the panel — two different reference frames for the same `growableSlot` call. Three
+approaches were tried, in order, each one caught by actually looking at the rendered result (not
+just reasoning about the API) before landing on the last:
+
+1. `PanelHeightPreferenceKey` + `backgroundPreferenceValue`, so the video could be built as a
+   same-pass function of the measured value and placed as the panel's own `.background`. Surfaced a
+   worse, unrelated bug first: with the panel as the *only* child of a bare `ZStack`, the `ZStack`
+   proposes its own (canvas-sized) size to it directly, and `RecordingTimelinePanel`'s content has
+   enough internal flexibility to visibly grow into that oversized proposal — the panel swallowed
+   the entire canvas and the video disappeared behind it completely. The original (pre-growth)
+   layout never hit this because a `VStack` measures each non-flexible child at its own intrinsic
+   size first, handing only the *leftover* space to a `Spacer` — so avoiding it needs the panel back
+   in a `VStack` + leading `Spacer`, which doesn't compose with `backgroundPreferenceValue`'s
+   same-pass structure.
+2. Reverted to a `VStack` + `Spacer` for the panel (fixing the above), keeping
+   `PanelHeightPreferenceKey` but reading it via `@State` + `.onPreferenceChange` instead. This
+   *looked* plausible (video visible again, positioned lower than flush-top) and was nearly shipped
+   — until a debug label rendering the live `panelHeight`/`topInset` values directly in the
+   screenshot showed `panelHeight` permanently stuck at its `0` default. `.onPreferenceChange` never
+   fired in this view tree at all — not "a frame late" as assumed, genuinely never — so the video was
+   silently centering against the *full* canvas as if the panel didn't exist, which happened to
+   still produce a small, plausible-looking (but wrong, and asymmetric) gap above the panel rather
+   than an obviously broken result. Reported directly: "the video is drawn behind the timeline, which
+   is ok only when we zoom, but the initial box should be above."
+3. Landed on `.onGeometryChange(for:of:action:)` — the same pattern `CameraGridView` already uses
+   for its own `headerHeight`, attached directly to the panel rather than routed through a
+   `GeometryReader`-in-`.background` + `PreferenceKey` several containers deep. Confirmed correct via
+   the same debug-label technique before removing it. This still settles a render after the panel
+   first appears (the same "settles a pass later" tradeoff `body`'s own doc comment flags for
+   safe-area insets) — accepted here because it's a purely cosmetic rest position, not something the
+   user watches move, and the screen is already mid-push-transition when it first appears, which
+   masks it.
+
+The general lesson, again: a value that's supposed to update reactively needs to be *verified*
+updating — via a debug label, a print, or some other direct evidence — not inferred from the code
+compiling and the result looking plausible. A stuck-at-default value can still produce output that
+looks like a real (if imperfect) fix.
+
+## `.rail`'s blurred backdrop also needed its own rounding — the "always covered" claim was wrong
+
+Reported directly from a rendered screen, right after the centering fix above: on the landscape-phone
+`.rail` arrangement, the video's corners were square — a black rectangle visibly overflowing the
+rounded border. `slot()`'s own doc comment claimed this couldn't happen ("since both are exactly the
+same size here... the opaque sharp layer always fully covers the backdrop"), reasoning only about
+*size*, not *shape*: the sharp layer is clipped to a *rounded* rect, so at the 4 corners specifically
+it does **not** cover the full square bounds — those corner regions are exactly where an unrounded
+backdrop shows through. Same class of bug as the two `growableSlot` corner fixes above, just missed
+there because `slot()` was believed unaffected by the "mask/backdrop need their own rounding" fix
+(true for the mask, which doesn't apply here since there's no separate growth canvas to mask against
+— but false for the backdrop's own shape, which still matters even when it's meant to be fully
+hidden). Fixed the same way: `.clipShape(RoundedRectangle(cornerRadius: ... * chrome.borderOpacity))`
+on the backdrop, matching the sharp layer.
+
+## `.stacked`/`.split`'s box size must be capped by *height* too, not just width
+
+Reported directly, from an iPad-landscape screenshot: the video's bottom portion was hidden behind
+the panel, "the user will never be able to see the bottom part of the stream" — a real, structural
+overlap, not the earlier (now-fixed) centering bug. Root cause: `boxSize` was capped only by width
+(`min(canvas.width - 40, splitPanelMaxWidth)` for `.split`, plain `canvas.width` for `.stacked`) —
+on a wide-but-short canvas (exactly what iPad landscape is, and what any canvas becomes once a tall
+panel eats into `availableHeight`), a 16:9 box sized purely from an uncapped width can be
+*intrinsically* taller than the space actually free above the panel. No centering formula fixes
+that: if `boxSize.height > availableHeight`, the box overlaps the panel even at `topInset` clamped
+to 0 — there is nowhere non-overlapping left to put it.
+
+Fixed by capping the width by `availableHeight * 16 / 9` too, alongside the existing caps — the same
+technique `LiveVideoArrangement.metrics(canvas:)` already uses (`min(canvas.width - 32, canvas.height
+* 16 / 9)`), just not one this file had carried over when `growingAboveThePanel` introduced a panel
+that can consume a variable, content-driven amount of height. This guarantees `boxSize.height ≤
+availableHeight` by construction, so the box can never overlap the panel at rest regardless of canvas
+proportions — the box shrinks instead, which is the right trade-off (a smaller resting card, not a
+resting card that hides part of itself).

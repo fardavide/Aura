@@ -14,6 +14,10 @@ public struct ZoomableContainer<Content: View>: View {
     /// the recording detail's video slot doesn't, so zoomed footage spills under the glass panel
     /// beside it instead of stopping dead at an invisible line.
     private let clipsContent: Bool
+    /// Where unscaled content sits within a container larger than its own rest-state size — the
+    /// growing-past-the-frame screens all offer a bigger canvas than the small card they draw at
+    /// rest. Defaults to `.center` (Live's card); Timeline detail's top-anchored slot passes `.top`.
+    private let alignment: Alignment
     /// Reports the transform actually on screen — the committed one with any in-flight gesture
     /// folded in, the same value `displayedTransform` renders — on every change, including live
     /// updates mid-pinch. The container owns its zoom math and stays self-contained; a caller that
@@ -41,11 +45,13 @@ public struct ZoomableContainer<Content: View>: View {
     public init(
         onSingleTap: @escaping () -> Void,
         clipsContent: Bool,
+        alignment: Alignment = .center,
         onTransformChange: @escaping (ZoomTransform) -> Void = { _ in },
         @ViewBuilder content: () -> Content
     ) {
         self.onSingleTap = onSingleTap
         self.clipsContent = clipsContent
+        self.alignment = alignment
         self.onTransformChange = onTransformChange
         self.content = content()
     }
@@ -61,7 +67,7 @@ public struct ZoomableContainer<Content: View>: View {
     private var zoomArea: some View {
         GeometryReader { proxy in
             let displayed = displayedTransform(in: proxy.size)
-            ZStack {
+            ZStack(alignment: alignment) {
                 content
                     .scaleEffect(displayed.scale)
                     .offset(displayed.offset)
