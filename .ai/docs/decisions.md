@@ -1628,3 +1628,26 @@ that can consume a variable, content-driven amount of height. This guarantees `b
 availableHeight` by construction, so the box can never overlap the panel at rest regardless of canvas
 proportions — the box shrinks instead, which is the right trade-off (a smaller resting card, not a
 resting card that hides part of itself).
+
+## Padding `growableSlot`'s own output silently shrank the growth canvas — use `restOffset` instead
+
+Reported directly, describing two distinct-sounding symptoms that turned out to share one cause:
+"the top video has a horizontal bar with another part of the video" and "the initial zoom seems
+unnatural, like the image is bounded to do not exceed the top bound." The second description named
+the actual bug precisely: `growingAboveThePanel` centered the rest-state card above the panel by
+calling `growableSlot(boxSize:alignment: .top).padding(.top, topInset)` — padding the *whole
+function's return value*. Padding a view reports a *smaller* size to that view's own parent (the
+padding amount is subtracted), and that reported size is exactly what `ZoomableContainer`'s internal
+`GeometryReader` reads as `proxy.size` — the canvas both the gesture math and the growth clip measure
+against. So the growable canvas was silently `topInset` points shorter than the true canvas the whole
+time: zooming could never actually reach the true top edge, no matter the scale, because the
+container's own idea of "the top edge" was `topInset` points too low.
+
+Fixed by giving `ZoomableContainer` a new `restOffset: CGSize` parameter — a fixed, gesture-independent
+visual shift applied via `.offset()` to the *content*, not via padding to the *container*. `.offset()`
+never changes a view's own reported size, so `proxy.size` — and everything measured from it, growth
+boundary included — stays the true, full canvas throughout. `growableSlot` grew a matching `topInset`
+parameter, applied identically (`.offset(y: topInset)`) to every rest-state-positioned piece it draws
+by hand outside `ZoomableContainer` itself: the blurred backdrop, the mask, the border rim, the hero
+overlay, the diagnostic highlight — all of them need the same shift for the same reason a wrapping
+`.padding()` doesn't work for any of them either.

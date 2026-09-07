@@ -43,6 +43,12 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.5 — 2026-09-07
+- **Timeline detail's zoom no longer feels artificially capped** — pinching in used to be unable to
+  reach the true top of the screen, and could show a stray band of misplaced content near the top,
+  because centering the resting card above the panel was accidentally shrinking how far the picture
+  could actually grow.
+
 ### 0.6.4 — 2026-09-07
 - **Pinch-to-zoom only blurs what's actually growing past the frame now** — it used to blur the
   whole picture, including the part that was already sharp — and the blur's own corners now match

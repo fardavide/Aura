@@ -18,6 +18,14 @@ public struct ZoomableContainer<Content: View>: View {
     /// growing-past-the-frame screens all offer a bigger canvas than the small card they draw at
     /// rest. Defaults to `.center` (Live's card); Timeline detail's top-anchored slot passes `.top`.
     private let alignment: Alignment
+    /// A fixed, gesture-independent visual shift applied *after* the zoom transform — for a caller
+    /// whose rest-state card sits away from `alignment`'s own edge (Timeline detail centers its
+    /// card in the gap above a variable-height panel, not flush to the container's own top). Unlike
+    /// padding the whole container, this doesn't shrink `proxy.size` — the canvas the gesture math
+    /// and the growth boundary both measure — it only shifts what's painted; hit-testing and the
+    /// zoom clamp still cover the container's full, true bounds. Defaults to `.zero` (Live's card,
+    /// and any caller with nothing to correct for).
+    private let restOffset: CGSize
     /// Reports the transform actually on screen — the committed one with any in-flight gesture
     /// folded in, the same value `displayedTransform` renders — on every change, including live
     /// updates mid-pinch. The container owns its zoom math and stays self-contained; a caller that
@@ -46,12 +54,14 @@ public struct ZoomableContainer<Content: View>: View {
         onSingleTap: @escaping () -> Void,
         clipsContent: Bool,
         alignment: Alignment = .center,
+        restOffset: CGSize = .zero,
         onTransformChange: @escaping (ZoomTransform) -> Void = { _ in },
         @ViewBuilder content: () -> Content
     ) {
         self.onSingleTap = onSingleTap
         self.clipsContent = clipsContent
         self.alignment = alignment
+        self.restOffset = restOffset
         self.onTransformChange = onTransformChange
         self.content = content()
     }
@@ -72,6 +82,7 @@ public struct ZoomableContainer<Content: View>: View {
                     .scaleEffect(displayed.scale)
                     .offset(displayed.offset)
             }
+            .offset(restOffset)
             .frame(width: proxy.size.width, height: proxy.size.height)
             .contentShape(Rectangle())
             .simultaneousGesture(magnify(in: proxy.size))

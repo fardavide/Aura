@@ -192,8 +192,7 @@ public struct RecordingDetailLayout<Video: View>: View {
         // *leftover* space to the `Spacer` — the same reason the original, pre-growth `VStack`
         // layout never had this problem.
         return ZStack {
-            growableSlot(boxSize: boxSize, alignment: .top)
-                .padding(.top, topInset)
+            growableSlot(boxSize: boxSize, alignment: .top, topInset: topInset)
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 panel(panelArrangement)
@@ -256,10 +255,19 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// is the rest-state card's own size; the caller must offer a canvas *larger* than it (via
     /// `.frame(maxWidth: .infinity, maxHeight: .infinity)` somewhere above this in the view tree)
     /// for there to be anything to grow into, and `alignment` says where the card sits within
-    /// that larger canvas (`.top`, for both callers — `growingAboveThePanel` achieves visual
-    /// centering above the panel by padding the *top* of this `.top`-aligned card by a computed
-    /// amount, not by changing this alignment; see `LiveVideoLayout.videoSurface` for the
-    /// `.center` version of the same underlying pattern).
+    /// that larger canvas (`.top`, for both callers — `growingAboveThePanel` centers the card
+    /// above the panel via `topInset`, a *visual* shift, not by changing this alignment; see
+    /// `LiveVideoLayout.videoSurface` for the `.center` version of the same underlying pattern).
+    ///
+    /// `topInset` must be applied as a rendering-only shift on each piece individually (`.offset`
+    /// on the two video layers, matching `ZoomableContainer`'s own `restOffset`; `.offset` on the
+    /// mask and the fixed overlays), never as `.padding` on this whole function's *return value* —
+    /// that was the previous, wrong approach, and it silently broke growth: padding this view
+    /// shrinks what it reports as its own size to its parent, which is exactly the size
+    /// `ZoomableContainer`'s internal `GeometryReader` reads as the canvas to grow into and clip
+    /// against — so the growable area was quietly `topInset` points shorter than the true canvas,
+    /// unable to reach the actual top edge no matter how far zoomed. Reported directly: "the image
+    /// is bounded to do not exceed the top bound."
     ///
     /// The blur only ever shows in the picture that's grown *past* the card's rest-state rect, not
     /// the whole picture: a non-interactive mirror of the same content, scaled and panned
@@ -267,7 +275,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// `ZoomableContainer` sits in front, masked down to just the card's own rect at `alignment`,
     /// so the sharp copy is all that shows there and the blurred mirror only shows through where
     /// the picture has grown beyond it.
-    private func growableSlot(boxSize: CGSize, alignment: Alignment) -> some View {
+    private func growableSlot(boxSize: CGSize, alignment: Alignment, topInset: CGFloat = 0) -> some View {
         let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
         return ZStack(alignment: alignment) {
             video
@@ -278,6 +286,7 @@ public struct RecordingDetailLayout<Video: View>: View {
                 .clipShape(RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous))
                 .scaleEffect(zoomTransform.scale)
                 .offset(zoomTransform.offset)
+                .offset(y: topInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
                 .clipped()
                 .blur(radius: chrome.imageBlurRadius)
@@ -285,6 +294,7 @@ public struct RecordingDetailLayout<Video: View>: View {
                 onSingleTap: {},
                 clipsContent: true,
                 alignment: alignment,
+                restOffset: CGSize(width: 0, height: topInset),
                 onTransformChange: { zoomTransform = $0 }
             ) {
                 video
@@ -298,20 +308,24 @@ public struct RecordingDetailLayout<Video: View>: View {
                 // the box's fixed edge once the scaled content's own rounding moves past it.
                 RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous)
                     .frame(width: boxSize.width, height: boxSize.height)
+                    .offset(y: topInset)
             }
         }
         .overlay(alignment: alignment) {
             AuroraZoomFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, opacity: chrome.borderOpacity)
                 .frame(width: boxSize.width, height: boxSize.height)
+                .offset(y: topInset)
         }
         .auroraCardGlow(opacity: chrome.borderOpacity)
         .overlay(alignment: alignment) {
             RecordingHeroOverlay(state: state)
                 .frame(width: boxSize.width, height: boxSize.height)
+                .offset(y: topInset)
         }
         .overlay(alignment: alignment) {
             slotHighlight
                 .frame(width: boxSize.width, height: boxSize.height)
+                .offset(y: topInset)
         }
     }
 
