@@ -270,6 +270,18 @@ not snapshot-tested — they center on video players that can't render in a snap
   Timeline detail, app shell/Settings, Cameras, Events, Live) — 642 AuraKit tests, every snapshot
   suite re-recorded on the iPhone 17 Pro simulator (iPhone + iPad × portrait/landscape × light/dark).
   Verified iOS Simulator and macOS builds both green.
+- **Zoom chrome + grow-past-the-frame pinch-zoom, Live and Timeline detail (0.6.1–0.6.6).** One
+  shared curve (`AuroraZoomChrome`) fades the border out and blurs the picture as a pinch begins,
+  clearing back to sharp near fill scale — same on both screens. The zoomed picture grows unbound
+  past its own rest-state card (Live's `.card`, Timeline detail's `.stacked`/`.split` via
+  `growingAboveThePanel`) rather than staying boxed inside it, all the way to the true screen edges
+  behind the nav bar and the floating controls/panel (`.rail` still clips at its own box, deliberately
+  deferred). `ZoomableContainer` gained `alignment`/`restOffset`/`contentSize` parameters to support
+  this: a rest-state card smaller than, and positioned within, a bigger growable canvas. See
+  `decisions.md`'s 0.6.2–0.6.6 entries for the several real bugs this surfaced (mask/backdrop corner
+  rounding, panel-height measurement, a `.padding()` silently shrinking the growth canvas, and —
+  found only after two rounds of on-device testing — every pinch's anchor/pan/clamp math being
+  computed against the whole container instead of the actual (smaller) content it was measuring).
 
 ## Next
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a

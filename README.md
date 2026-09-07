@@ -43,6 +43,15 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.6 — 2026-09-07
+- **Pinch-to-zoom now anchors exactly where you pinch, on Live and Timeline detail** — it used to
+  measure every pinch against the whole screen rather than the smaller video card sitting inside it,
+  so a pinch on Live's card always zoomed in from the middle regardless of where you actually
+  touched, and Timeline detail's zoom would drift and only seem to grow downward.
+- **Live's zoomed picture now extends behind the top and bottom bars**, all the way to the true
+  screen edges — it used to stop growing at the gap between them, the same "grow past the card"
+  treatment Timeline detail already has.
+
 ### 0.6.5 — 2026-09-07
 - **Timeline detail's zoom no longer feels artificially capped** — pinching in used to be unable to
   reach the true top of the screen, and could show a stray band of misplaced content near the top,

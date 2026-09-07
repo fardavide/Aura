@@ -294,6 +294,7 @@ public struct RecordingDetailLayout<Video: View>: View {
                 onSingleTap: {},
                 clipsContent: true,
                 alignment: alignment,
+                contentSize: boxSize,
                 restOffset: CGSize(width: 0, height: topInset),
                 onTransformChange: { zoomTransform = $0 }
             ) {
