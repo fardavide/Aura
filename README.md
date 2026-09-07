@@ -51,7 +51,11 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
   it used to stop growing at its own small card no matter how far you zoomed (phone-upright and
   iPad/Mac layouts; the landscape-phone rail layout is unchanged for now).
 - **Timeline detail's video is centred between the top bar and the panel at rest**, matching Live's
-  own centred card, instead of sitting flush against the top with barely a gap.
+  own centred card, instead of sitting flush against the top with barely a gap — and on wide
+  layouts (iPad/Mac landscape) it now shrinks to fit that gap instead of overlapping the panel and
+  hiding part of the picture behind it.
+- **Fixed square corners on the landscape-phone camera timeline** — the video's blurred backdrop
+  showed a plain square edge peeking past the rounded border.
 
 ### 0.6.3 — 2026-09-07
 - **Timeline's sheet actually sits flush behind the tab bar now** — the 0.6.1 fix for this

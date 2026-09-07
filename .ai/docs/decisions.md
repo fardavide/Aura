@@ -1593,3 +1593,38 @@ The general lesson, again: a value that's supposed to update reactively needs to
 updating — via a debug label, a print, or some other direct evidence — not inferred from the code
 compiling and the result looking plausible. A stuck-at-default value can still produce output that
 looks like a real (if imperfect) fix.
+
+## `.rail`'s blurred backdrop also needed its own rounding — the "always covered" claim was wrong
+
+Reported directly from a rendered screen, right after the centering fix above: on the landscape-phone
+`.rail` arrangement, the video's corners were square — a black rectangle visibly overflowing the
+rounded border. `slot()`'s own doc comment claimed this couldn't happen ("since both are exactly the
+same size here... the opaque sharp layer always fully covers the backdrop"), reasoning only about
+*size*, not *shape*: the sharp layer is clipped to a *rounded* rect, so at the 4 corners specifically
+it does **not** cover the full square bounds — those corner regions are exactly where an unrounded
+backdrop shows through. Same class of bug as the two `growableSlot` corner fixes above, just missed
+there because `slot()` was believed unaffected by the "mask/backdrop need their own rounding" fix
+(true for the mask, which doesn't apply here since there's no separate growth canvas to mask against
+— but false for the backdrop's own shape, which still matters even when it's meant to be fully
+hidden). Fixed the same way: `.clipShape(RoundedRectangle(cornerRadius: ... * chrome.borderOpacity))`
+on the backdrop, matching the sharp layer.
+
+## `.stacked`/`.split`'s box size must be capped by *height* too, not just width
+
+Reported directly, from an iPad-landscape screenshot: the video's bottom portion was hidden behind
+the panel, "the user will never be able to see the bottom part of the stream" — a real, structural
+overlap, not the earlier (now-fixed) centering bug. Root cause: `boxSize` was capped only by width
+(`min(canvas.width - 40, splitPanelMaxWidth)` for `.split`, plain `canvas.width` for `.stacked`) —
+on a wide-but-short canvas (exactly what iPad landscape is, and what any canvas becomes once a tall
+panel eats into `availableHeight`), a 16:9 box sized purely from an uncapped width can be
+*intrinsically* taller than the space actually free above the panel. No centering formula fixes
+that: if `boxSize.height > availableHeight`, the box overlaps the panel even at `topInset` clamped
+to 0 — there is nowhere non-overlapping left to put it.
+
+Fixed by capping the width by `availableHeight * 16 / 9` too, alongside the existing caps — the same
+technique `LiveVideoArrangement.metrics(canvas:)` already uses (`min(canvas.width - 32, canvas.height
+* 16 / 9)`), just not one this file had carried over when `growingAboveThePanel` introduced a panel
+that can consume a variable, content-driven amount of height. This guarantees `boxSize.height ≤
+availableHeight` by construction, so the box can never overlap the panel at rest regardless of canvas
+proportions — the box shrinks instead, which is the right trade-off (a smaller resting card, not a
+resting card that hides part of itself).

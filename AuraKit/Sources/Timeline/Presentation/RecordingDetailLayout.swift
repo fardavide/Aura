@@ -86,9 +86,16 @@ public struct RecordingDetailLayout<Video: View>: View {
 
     /// `boxSize` is the 16:9 card `.aspectRatio(16/9, .fit)` would have produced against the full
     /// `canvas` width, computed by hand because `growableSlot` needs it explicitly (see that
-    /// function's doc comment for why).
+    /// function's doc comment for why) — capped by `availableHeight` too (same technique as
+    /// `LiveVideoArrangement.metrics(canvas:)`'s own `min(canvas.width - 32, canvas.height * 16/9)`),
+    /// not just width, so the box can never be intrinsically taller than the space actually left
+    /// above the panel — a wide-but-short canvas otherwise produces a box that overlaps the panel
+    /// no matter how the *centering* math is done, since there's nowhere non-overlapping to center
+    /// it into.
     private func stacked(insets: EdgeInsets, canvas: CGSize) -> some View {
-        let boxSize = CGSize(width: canvas.width, height: canvas.width * 9 / 16)
+        let availableHeight = max(0, canvas.height - panelHeight)
+        let boxWidth = min(canvas.width, availableHeight * 16 / 9)
+        let boxSize = CGSize(width: boxWidth, height: boxWidth * 9 / 16)
         return growingAboveThePanel(boxSize: boxSize, canvas: canvas, panelInsetBottom: insets.bottom, panelArrangement: .stacked)
             .auroraBackground()
             .ignoresSafeArea(.container, edges: .bottom)
@@ -124,7 +131,11 @@ public struct RecordingDetailLayout<Video: View>: View {
     private func split(insets: EdgeInsets, canvas: CGSize) -> some View {
         // The horizontal padding is reserved from the canvas *before* the max-width cap applies —
         // `min(canvas.width, cap) - 40` is wrong when `canvas.width - 40` already undercuts `cap`.
-        let boxWidth = min(canvas.width - 40, Self.splitPanelMaxWidth)
+        // Also capped by `availableHeight` — see `stacked`'s identical reasoning; a wide, short
+        // iPad-landscape canvas is exactly the case where a width-only cap produces a box taller
+        // than the space actually free above the panel.
+        let availableHeight = max(0, canvas.height - panelHeight)
+        let boxWidth = min(canvas.width - 40, Self.splitPanelMaxWidth, availableHeight * 16 / 9)
         let boxSize = CGSize(width: boxWidth, height: boxWidth * 9 / 16)
         return growingAboveThePanel(boxSize: boxSize, canvas: canvas, panelInsetBottom: insets.bottom, panelArrangement: .split)
             .auroraBackground()
@@ -203,14 +214,22 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// container's own bounds, so it never pans or scales with a pinch the way the picture does.
     ///
     /// The sharp, gesture-driving `ZoomableContainer` sits directly on top of an identically
-    /// scaled, blurred backdrop; since both are exactly the same size here (box == canvas, no
-    /// growth), the opaque sharp layer always fully covers the backdrop and no blur ever shows —
-    /// correct, since there's no "outside the box" region on this arrangement for it to read as.
+    /// scaled, blurred backdrop; both are exactly the same size here (box == canvas, no growth),
+    /// and *both* are clipped to the same rounded rect, so the opaque sharp layer fully covers the
+    /// backdrop everywhere and no blur ever shows — correct, since there's no "outside the box"
+    /// region on this arrangement for it to read as. The backdrop's own rounding still matters even
+    /// though it's fully covered at rest: without it, its square corners peek out from behind the
+    /// sharp layer's rounded ones right at the 4 corners, where the two shapes actually differ.
     private func slot() -> some View {
         let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
         return ZStack {
             video
                 .background(Color.auroraBase)
+                // Rounded to match the sharp layer's own clip: the sharp layer is clipped to a
+                // rounded rect, not a plain rectangle, so it doesn't actually cover this backdrop's
+                // 4 corners even though the two are otherwise the same size — an unrounded backdrop
+                // peeks out from behind the rounded sharp layer right there.
+                .clipShape(RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous))
                 .scaleEffect(zoomTransform.scale)
                 .offset(zoomTransform.offset)
                 .blur(radius: chrome.imageBlurRadius)
