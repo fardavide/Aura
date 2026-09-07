@@ -18,8 +18,8 @@ public struct LiveVideoLayout<Video: View>: View {
     private let onSingleTap: () -> Void
     private let video: Video
 
-    /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomBleed` for the ambient
-    /// glow behind the frame. `@State`, not a local in `videoSurface`, so it survives that view's
+    /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomChrome` for the border
+    /// fade and picture blur. `@State`, not a local in `videoSurface`, so it survives that view's
     /// own re-evaluation without resetting mid-gesture.
     @State private var zoomTransform = ZoomTransform.standard()
 
@@ -60,26 +60,34 @@ public struct LiveVideoLayout<Video: View>: View {
         .auroraBackground()
     }
 
+    /// The card's border is a fixed-size, non-clipping overlay (`AuroraZoomFrame`) — it never
+    /// resizes — so the picture underneath is free to grow past it: `ZoomableContainer` gets no
+    /// explicit frame of its own here, so it expands to this whole surface's canvas (via the
+    /// enclosing `ZStack`'s `.frame(maxWidth: .infinity, maxHeight: .infinity)` in `body`) and
+    /// clips only at that outer boundary, while `video` inside it is sized to the card's rest
+    /// dimensions — at scale 1 that reads as a card; scaled up by a pinch, the same picture grows
+    /// past where the (fading, motionless) rim sits, eventually filling the whole canvas.
     private func videoSurface(_ metrics: LiveVideoMetrics) -> some View {
         let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
         return ZoomableContainer(
             onSingleTap: onSingleTap,
             clipsContent: true,
             onTransformChange: { zoomTransform = $0 }
-        ) { video }
-            .background(.black)
-            .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
-            .auroraFrame(cornerRadius: metrics.videoCornerRadius, lineWidth: metrics.videoRimWidth, borderOpacity: chrome.borderOpacity)
-            // Behind the sized, framed card — the ambient glow a zoomed frame casts past its own
-            // edge (mirrors the same shared `AVPlayer` into a second, blurred `AVPlayerLayer`;
-            // `LivePlayerModel.attach` only tracks the first layer it sees, so PiP is unaffected).
-            // Placed *after* `.auroraFrame`, not before: that modifier clips its content to the
-            // card's rounded rect, and a bleed added before it gets clipped away to nothing along
-            // with the card — verified this was exactly why the glow only ever showed on Timeline
-            // detail (which draws no frame/clip at all) and never on this screen.
-            .background { AuroraZoomBleed(opacity: chrome.glassOpacity, transform: zoomTransform) { video } }
-            .auroraCardGlow(opacity: metrics.cardGlowOpacity * chrome.borderOpacity)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea(edges: arrangement.videoIgnoredEdges)
+        ) {
+            video
+                .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+                .background(.black)
+                .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
+        }
+        // Applied to the already-scaled, already-clipped result — a constant screen-space amount
+        // of frost, not a blur that grows together with the picture as it scales up.
+        .blur(radius: chrome.imageBlurRadius)
+        .overlay {
+            AuroraZoomFrame(cornerRadius: metrics.videoCornerRadius, lineWidth: metrics.videoRimWidth, opacity: chrome.borderOpacity)
+                .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+        }
+        .auroraCardGlow(opacity: metrics.cardGlowOpacity * chrome.borderOpacity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(edges: arrangement.videoIgnoredEdges)
     }
 }

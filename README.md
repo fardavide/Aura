@@ -43,6 +43,12 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.2 — 2026-09-07
+- **Pinch-to-zoom now genuinely fills the screen** on the Live and Timeline-detail players — the
+  picture used to stay boxed inside its frame no matter how far you zoomed; now it grows past the
+  frame as you pinch (briefly blurring, then sharpening back up), while the frame itself just fades
+  away in place, ending with the picture completely filling the screen, edge to edge.
+
 ### 0.6.1 — 2026-09-06
 - **Timeline's sheet sits flush behind the tab bar**, matching every other panel, instead of
   floating with a gap above it.

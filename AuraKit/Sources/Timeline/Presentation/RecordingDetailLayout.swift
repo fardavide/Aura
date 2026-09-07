@@ -15,10 +15,10 @@ import CommonPlayer
 ///
 /// The video is pinch-zoomable everywhere and clips consistently to its **slot** — zoomed footage
 /// never overflows into the panel or under the glass. At rest the slot carries the same
-/// gradient-rimmed card frame as the Live screen; `AuroraZoomChrome` fades that border and fades in
-/// an `AuroraZoomBleed` behind it as a pinch progresses, then fades both to nothing as the picture
-/// approaches filling the slot — one curve, shared with Live, so all three player screens read the
-/// same way at any zoom level. The chrome and the panel live outside the zoom and never scale.
+/// gradient-rimmed card frame as the Live screen; `AuroraZoomChrome` fades that border out and
+/// blurs the picture as a pinch begins, then clears the blur back to sharp as it approaches filling
+/// the slot — one curve, shared with Live, so all three player screens read the same way at any
+/// zoom level. The chrome and the panel live outside the zoom and never scale.
 ///
 /// Split out from `RecordingPlayerView` so every arrangement can be screenshot-tested over a
 /// placeholder, with literal state and no player — and with `cameraAreaHighlights` on, the
@@ -35,7 +35,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     #endif
     @Environment(\.cameraAreaHighlights) private var cameraAreaHighlights
 
-    /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomBleed` — see
+    /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomChrome` — see
     /// `LiveVideoLayout`'s identical property for why this is `@State`, not a local in `slot()`.
     @State private var zoomTransform = ZoomTransform.standard()
 
@@ -140,23 +140,31 @@ public struct RecordingDetailLayout<Video: View>: View {
     ///
     /// The letterbox colour is painted *outside* the zoom, fixed behind the container's own
     /// bounds, so it never pans or scales with a pinch the way the picture does — consistent
-    /// across every arrangement now that every arrangement clips.
+    /// across every arrangement now that every arrangement clips. Unlike Live, the slot's own
+    /// bounds (from the caller's `.aspectRatio(16/9, contentMode: .fit)`) already double as both
+    /// the rest-state card *and* the outer growth boundary — zoomed footage must never spill into
+    /// the panel — so there's no separate, larger canvas for the picture to grow past here; the
+    /// border (`AuroraZoomFrame`) still only fades in place, never resizing, matching Live.
     private func slot() -> some View {
         let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
         return ZoomableContainer(
             onSingleTap: {},
             clipsContent: true,
             onTransformChange: { zoomTransform = $0 }
-        ) { video }
-            .background(Color.auroraBase)
-            .auroraFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, borderOpacity: chrome.borderOpacity)
-            // Same ordering rule as `LiveVideoLayout.videoSurface` — the bleed sits behind the
-            // frame's own clip, not in front of it, or the frame silently cuts the glow down to
-            // its own bounds and it never shows.
-            .background { AuroraZoomBleed(opacity: chrome.glassOpacity, transform: zoomTransform) { video } }
-            .auroraCardGlow(opacity: chrome.borderOpacity)
-            .overlay { RecordingHeroOverlay(state: state) }
-            .overlay { slotHighlight }
+        ) {
+            video
+                .background(Color.auroraBase)
+                .clipShape(RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous))
+        }
+        // Applied to the already-scaled, already-clipped result — a constant screen-space amount
+        // of frost, not a blur that grows together with the picture as it scales up.
+        .blur(radius: chrome.imageBlurRadius)
+        .overlay {
+            AuroraZoomFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, opacity: chrome.borderOpacity)
+        }
+        .auroraCardGlow(opacity: chrome.borderOpacity)
+        .overlay { RecordingHeroOverlay(state: state) }
+        .overlay { slotHighlight }
     }
 
     private func panel(_ arrangement: RecordingTimelinePanel.Arrangement) -> some View {
