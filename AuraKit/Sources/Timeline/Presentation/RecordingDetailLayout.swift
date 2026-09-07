@@ -96,10 +96,17 @@ public struct RecordingDetailLayout<Video: View>: View {
         let availableHeight = max(0, canvas.height - panelHeight)
         let boxWidth = min(canvas.width, availableHeight * 16 / 9)
         let boxSize = CGSize(width: boxWidth, height: boxWidth * 9 / 16)
-        return growingAboveThePanel(boxSize: boxSize, canvas: canvas, panelInsetBottom: insets.bottom, panelArrangement: .stacked)
-            .auroraBackground()
-            .ignoresSafeArea(.container, edges: .bottom)
-            .overlay { surfaceHighlight }
+        return growingAboveThePanel(
+            boxSize: boxSize, canvas: canvas, insetTop: insets.top, panelInsetBottom: insets.bottom, panelArrangement: .stacked
+        )
+        .auroraBackground()
+        // `.top` too, not just `.bottom` — `growableSlot` inside `growingAboveThePanel` already
+        // paints behind the nav bar on its own (its own explicit `growthCanvas` frame plus its own
+        // `.ignoresSafeArea(edges: .top)`); without it here too, the background and `surfaceHighlight`
+        // (meant to outline everything zoomed footage may legitimately cover) would stop short of
+        // it, understating the true growth extent.
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
+        .overlay { surfaceHighlight }
     }
 
     /// Unchanged from before: the picture's own aspect-fit bounds stay both the rest-state card
@@ -137,18 +144,24 @@ public struct RecordingDetailLayout<Video: View>: View {
         let availableHeight = max(0, canvas.height - panelHeight)
         let boxWidth = min(canvas.width - 40, Self.splitPanelMaxWidth, availableHeight * 16 / 9)
         let boxSize = CGSize(width: boxWidth, height: boxWidth * 9 / 16)
-        return growingAboveThePanel(boxSize: boxSize, canvas: canvas, panelInsetBottom: insets.bottom, panelArrangement: .split)
-            .auroraBackground()
-            .ignoresSafeArea(.container, edges: .bottom)
-            .overlay { surfaceHighlight }
+        return growingAboveThePanel(
+            boxSize: boxSize, canvas: canvas, insetTop: insets.top, panelInsetBottom: insets.bottom, panelArrangement: .split
+        )
+        .auroraBackground()
+        // `.top` too — see `stacked`'s identical reasoning.
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
+        .overlay { surfaceHighlight }
     }
 
     /// `.stacked` and `.split`'s shared composition: the video sits centred in the gap between the
     /// top of `canvas` (the nav bar's bottom edge — see `body`'s doc comment) and the panel, at
-    /// rest, but is free to grow past *both* boundaries when zoomed, all the way to filling
-    /// `canvas` — the panel floats on top of it rather than sharing space with it, so the two need
-    /// different reference frames: growth uses the *full* `canvas` (via `growableSlot` getting no
-    /// explicit frame of its own, same as `LiveVideoLayout`), while the rest-state position needs
+    /// rest, but is free to grow past *both* boundaries when zoomed, all the way past the true
+    /// screen edges — behind the nav bar and behind the panel — matching `LiveVideoLayout`. The two
+    /// states need different reference frames: growth uses `growthCanvas` (`canvas` plus the nav
+    /// bar's own height, via an explicit frame on `growableSlot` plus `.ignoresSafeArea(edges: .top)`
+    /// — the picture is otherwise capped at the nav bar's bottom edge no matter how far zoomed, same
+    /// gap `LiveVideoLayout.cardVideoSurface`'s own `growthCanvas` fixed), while the rest-state
+    /// position needs
     /// the panel's actual rendered height, which is content-driven and not known in advance.
     ///
     /// That height is read via `.onGeometryChange` into `panelHeight` (`@State`, not a local —
@@ -178,11 +191,21 @@ public struct RecordingDetailLayout<Video: View>: View {
     private func growingAboveThePanel(
         boxSize: CGSize,
         canvas: CGSize,
+        insetTop: CGFloat,
         panelInsetBottom: CGFloat,
         panelArrangement: RecordingTimelinePanel.Arrangement
     ) -> some View {
         let availableHeight = max(0, canvas.height - panelHeight)
         let topInset = max(0, (availableHeight - boxSize.height) / 2)
+        // `growableSlot` gets an *explicit* frame taller than `canvas` by `insetTop` — the nav bar's
+        // own height, which `canvas` (like `LiveVideoLayout`'s `restCanvas`) already excludes — plus
+        // `.ignoresSafeArea(edges: .top)`, so it measures and clips against the true screen top
+        // instead of stopping at the nav bar's bottom edge. Same mechanism as
+        // `LiveVideoLayout.cardVideoSurface`'s `growthCanvas`, adapted for `.top` alignment: content
+        // there renders flush to *this bigger frame's* own top, so the rest-state box needs the
+        // extra `insetTop` folded into its downward shift too, or it would sit `insetTop` too high —
+        // poking out from behind the nav bar even at rest.
+        let growthCanvas = CGSize(width: canvas.width, height: canvas.height + insetTop)
         // The panel sits in its own `VStack` with a leading `Spacer`, not directly in the outer
         // `ZStack` — a bare `ZStack` proposes its own (canvas-sized) size to *every* child
         // uniformly, and `RecordingTimelinePanel`'s content has enough internal flexibility to
@@ -192,7 +215,9 @@ public struct RecordingDetailLayout<Video: View>: View {
         // *leftover* space to the `Spacer` — the same reason the original, pre-growth `VStack`
         // layout never had this problem.
         return ZStack {
-            growableSlot(boxSize: boxSize, alignment: .top, topInset: topInset)
+            growableSlot(boxSize: boxSize, alignment: .top, topInset: topInset + insetTop)
+                .frame(width: growthCanvas.width, height: growthCanvas.height)
+                .ignoresSafeArea(edges: .top)
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 panel(panelArrangement)

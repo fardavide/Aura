@@ -100,7 +100,18 @@ public struct ZoomableContainer<Content: View>: View {
                     .offset(displayed.offset)
             }
             .offset(restOffset)
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            // `alignment:` here must match the ZStack's own — the ZStack's *natural* size is just
+            // `content`'s (`.offset` doesn't change reported layout size), so whenever content is
+            // smaller than `proxy.size` (every growth screen with a `contentSize` smaller than its
+            // canvas), this `.frame` is what actually places content within the bigger canvas, not
+            // the inner `ZStack(alignment:)` — which has nothing to align content *against* once
+            // its own bounds already equal content's. Left at the default `.center`, this silently
+            // overrode `.top` (Timeline detail's growable slot) while `.center` (Live's card)
+            // happened to already match, masking the bug there entirely. Reported directly: the
+            // interactive layer rendering far below the blurred backdrop beneath it, which correctly
+            // threads `alignment` through its own `.frame(maxWidth: .infinity, maxHeight: .infinity,
+            // alignment:)`.
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: alignment)
             .contentShape(Rectangle())
             .simultaneousGesture(magnify(in: proxy.size))
             .simultaneousGesture(pan(in: proxy.size))

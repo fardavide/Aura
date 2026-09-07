@@ -1741,3 +1741,58 @@ render now happens inside an explicit `growthCanvas`-sized frame instead of the 
 The test helper that builds these screenshots also needed a real `NavigationStack` wrapper for the
 same reason the diagnostic did: without one, `safeAreaInsets.top` in the test wouldn't match what a
 `CameraDetailView` pushed onto a real navigation stack actually sees.
+
+## `ZoomableContainer`'s outer `.frame` silently overrode a non-center alignment (0.6.7)
+
+Reported directly, after 0.6.6 (the `contentSize`/anchor fix above) had merged: "Timeline has same
+problems: doesn't draw behind the top bar; it has an overlapping image (stream) popping from the
+bottom... the blurred one is very well aligned with pinch anchor though." The second half named the
+actual bug precisely: the blurred backdrop (positioned by hand in `growableSlot`, correctly threading
+`alignment` through its own `.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)`)
+was right; the interactive `ZoomableContainer` layer, sitting right on top of it, was not.
+
+Root cause, inside `ZoomableContainer.zoomArea`: `ZStack(alignment: alignment) { content... }
+.offset(restOffset).frame(width: proxy.size.width, height: proxy.size.height)` — that trailing
+`.frame` had no `alignment:` argument of its own, so it defaulted to `.center`. This matters because
+`.offset()` never changes a view's *reported* layout size (documented elsewhere in this file for
+exactly this reason), so the inner `ZStack`'s own natural size collapses to `content`'s size —
+`boxSize`, not `proxy.size` — whenever content is smaller than the container. With nothing left
+inside the ZStack bigger than `boxSize` for `alignment: .top` to position *against*, the outer
+`.frame`'s own (default, `.center`) alignment is what actually places content within the bigger
+canvas — silently overriding the `.top` the caller asked for. For Live (`alignment: .center`,
+unchanged since 0.6.0) the default happened to already match the intent, so the bug was invisible
+there; Timeline detail's `.top`-aligned `growableSlot` was the first caller where it didn't.
+
+Fixed with one added argument: `.frame(width: proxy.size.width, height: proxy.size.height,
+alignment: alignment)`. Verified by re-recording `RecordingPlayerSnapshotTests`' rest-state
+baselines and actually looking at them this time (the prior 0.6.6 round trusted the math and a
+byte-identical-elsewhere diff instead) — the video card now sits correctly positioned in the gap
+above the panel rather than centred deep in the growth canvas.
+
+## Timeline detail's growth never reached behind the nav bar, unlike Live (0.6.7)
+
+The other half of the same report: "doesn't draw behind the top bar." Unlike Live's `.card` (fixed
+in 0.6.6 with an explicit `growthCanvas` = `restCanvas` plus `safeAreaInsets.top`, wrapped in
+`.ignoresSafeArea()`), Timeline detail's `growingAboveThePanel` had only ever grown to fill `canvas`
+itself — the *already safe-area-excluding* size `body`'s top-level `GeometryReader` reports — so the
+picture could scale but never actually paint behind the nav bar, no matter how far zoomed.
+
+Fixed the same way: `growableSlot` inside `growingAboveThePanel` now gets an explicit
+`growthCanvas = CGSize(width: canvas.width, height: canvas.height + insetTop)` frame plus
+`.ignoresSafeArea(edges: .top)`, and `topInset` (the rest-state card's downward shift, previously
+measured from `canvas`'s own top) gains `insetTop` on top of it — the card now renders flush to
+`growthCanvas`'s own (higher) top, so without that addition it would sit `insetTop` points too high,
+poking out from behind the nav bar even at rest. `stacked`/`split` also widened their outer
+`.ignoresSafeArea(.container, edges:)` from `.bottom` alone to `[.top, .bottom]` — otherwise the
+`surfaceHighlight` diagnostic overlay and the aurora background (both applied outside
+`growingAboveThePanel`, only around it) would stop at the old boundary, understating the picture's
+now-true growth extent even though the picture itself was already painting past it.
+
+The `RecordingPlayerSnapshotTests` view builder needed the same `NavigationStack` + `.navigationTitle`
+wrapper `CameraDetailSnapshotTests` got in 0.6.6, for the identical reason (a bare `RecordingDetailLayout`
+never sees a real nav bar's `safeAreaInsets.top`) — plus replicating `RecordingPlayerView`'s own
+`.toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .navigationBar)`, since `.rail`
+doesn't read `insetTop` but its canvas still shrinks if a nav bar is visibly reserving space above it
+that production hides in that arrangement. Re-recording surfaced the fix directly: the `SURFACE`
+diagnostic outline (previously stopping short below the nav title) now runs behind it, visually
+matching Live's own already-fixed behaviour.
