@@ -56,6 +56,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
   hiding part of the picture behind it.
 - **Fixed square corners on the landscape-phone camera timeline** — the video's blurred backdrop
   showed a plain square edge peeking past the rounded border.
+- **Timeline detail's zoom no longer feels artificially capped** — pinching in used to be unable to
+  reach the true top of the screen, and could show a stray band of misplaced content near the top,
+  because centering the resting card above the panel was accidentally shrinking how far the picture
+  could actually grow.
 
 ### 0.6.3 — 2026-09-07
 - **Timeline's sheet actually sits flush behind the tab bar now** — the 0.6.1 fix for this
