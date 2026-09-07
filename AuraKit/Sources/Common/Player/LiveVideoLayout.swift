@@ -3,14 +3,20 @@ import SwiftUI
 import CommonDesign
 
 /// The live view's on-screen composition, one view tree whose two `LiveVideoArrangement`s differ
-/// only in values (never a second `body` branch — see the type's own doc comment for why): a
-/// framed 16:9 card centred on the aurora background with the controls floating below it
-/// (`.card`), or the video filling the screen **behind** the safe area with the transport controls
-/// overlaid **inside** it (`.fill`). In `.card` the controls sit in a bottom safe-area inset, so
-/// the canvas the card is measured against already excludes them; in `.fill` the video ignores
-/// that inset and runs full-bleed under it, as it always has. Split out from `LiveVideoView` so
-/// this layout can be snapshot-tested with a placeholder video and a fixed control state, without
+/// only in values (never a second `body` branch for layout purposes — see the type's own doc
+/// comment for why): a framed 16:9 card centred on the aurora background with the controls
+/// floating below it (`.card`), or the video filling the screen **behind** the safe area with the
+/// transport controls overlaid **inside** it (`.fill`). Split out from `LiveVideoView` so this
+/// layout can be snapshot-tested with a placeholder video and a fixed control state, without
 /// constructing a real player.
+///
+/// `.card`'s zoomed picture grows all the way to the true screen edges — behind the nav bar and
+/// behind the floating controls — the same "grow past the rest-state card, unbound" pattern
+/// `RecordingDetailLayout.growableSlot`/`growingAboveThePanel` use, adapted for a canvas whose top
+/// exclusion (the nav bar) isn't a view this layout owns and can measure directly, only a safe-area
+/// inset. `.fill` (compact height) is already unconditionally full-bleed and untouched by any of
+/// this — `videoSurface` branches by arrangement specifically so `.fill`'s working, already-shipped
+/// code path stays exactly as it was.
 public struct LiveVideoLayout<Video: View>: View {
     private let arrangement: LiveVideoArrangement
     private let controls: LiveControlBar
@@ -22,6 +28,11 @@ public struct LiveVideoLayout<Video: View>: View {
     /// fade and picture blur. `@State`, not a local in `videoSurface`, so it survives that view's
     /// own re-evaluation without resetting mid-gesture.
     @State private var zoomTransform = ZoomTransform.standard()
+    /// `.card`'s controls no longer reserve `safeAreaInset` space (so the zoomed picture can grow
+    /// behind them) — this is their measured height instead, read the same way Timeline detail
+    /// measures its own panel (`.onGeometryChange`, not `PreferenceKey` — see that type's own doc
+    /// comment for the debug-label-verified reason). Unused by `.fill`.
+    @State private var controlsHeight: CGFloat = 0
 
     public init(
         arrangement: LiveVideoArrangement,
@@ -39,9 +50,14 @@ public struct LiveVideoLayout<Video: View>: View {
 
     public var body: some View {
         GeometryReader { geo in
-            let metrics = arrangement.metrics(canvas: geo.size)
+            // `restCanvas` excludes the controls' measured height too, on top of what `geo.size`
+            // already excludes automatically (the nav bar above, the home indicator below) — the
+            // same canvas `.card`'s card was always centred against, now computed explicitly
+            // because controls no longer reserve it via `safeAreaInset`.
+            let restCanvas = CGSize(width: geo.size.width, height: max(0, geo.size.height - controlsHeight))
+            let metrics = arrangement.metrics(canvas: restCanvas)
             ZStack(alignment: .topLeading) {
-                videoSurface(metrics)
+                videoSurface(metrics, geo: geo, restCanvas: restCanvas)
                 AuroraLivePill(style: .glass)
                     .padding(.leading, metrics.livePillInset.x)
                     .padding(.top, metrics.livePillInset.y)
@@ -50,38 +66,34 @@ public struct LiveVideoLayout<Video: View>: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .overlay(alignment: .bottom) {
             controls
                 .padding(.bottom, arrangement.controlsBottomInset)
                 .opacity(areControlsVisible ? 1 : 0)
                 .allowsHitTesting(areControlsVisible)
                 .animation(.easeInOut(duration: 0.2), value: areControlsVisible)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsHeight = $0 }
         }
         .auroraBackground()
     }
 
-    /// The card's border is a fixed-size, non-clipping overlay (`AuroraZoomFrame`) — it never
-    /// resizes — so the picture underneath is free to grow past it: `ZoomableContainer` gets no
-    /// explicit frame of its own here, so it expands to this whole surface's canvas (via the
-    /// enclosing `ZStack`'s `.frame(maxWidth: .infinity, maxHeight: .infinity)` in `body`) and
-    /// clips only at that outer boundary, while `video` inside it is sized to the card's rest
-    /// dimensions — at scale 1 that reads as a card; scaled up by a pinch, the same picture grows
-    /// past where the (fading, motionless) rim sits, eventually filling the whole canvas.
-    ///
-    /// The blur is only ever visible in the picture that's grown *past* the card's rest-state rect
-    /// — not the whole picture. A non-interactive mirror of the same content, scaled and panned
-    /// identically to the real one, sits behind it blurred and full-canvas; the real, sharp,
-    /// gesture-driving `ZoomableContainer` sits in front, masked down to just the card's own rect,
-    /// so the sharp copy is all that shows there and the blurred mirror only shows through where
-    /// the picture has grown beyond it.
-    private func videoSurface(_ metrics: LiveVideoMetrics) -> some View {
+    @ViewBuilder
+    private func videoSurface(_ metrics: LiveVideoMetrics, geo: GeometryProxy, restCanvas: CGSize) -> some View {
+        switch arrangement {
+        case .fill: fillVideoSurface(metrics)
+        case .card: cardVideoSurface(metrics, geo: geo, restCanvas: restCanvas)
+        }
+    }
+
+    /// Unchanged from before this pass: already unconditionally full-bleed
+    /// (`arrangement.videoIgnoredEdges` is `.all`), so there's no rest-state-vs-growth distinction
+    /// to make here at all.
+    private func fillVideoSurface(_ metrics: LiveVideoMetrics) -> some View {
         let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
         return ZStack {
             video
                 .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
                 .background(.black)
-                // Rounded to match the sharp layer's own clip and its mask — otherwise the
-                // blurred backdrop's square corners peek past the border's rounded ones.
                 .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
                 .scaleEffect(zoomTransform.scale)
                 .offset(zoomTransform.offset)
@@ -99,11 +111,6 @@ public struct LiveVideoLayout<Video: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
             }
             .mask {
-                // Rounded to match the sharp layer's own clip — a *plain* rectangle mask would cut
-                // a hard square corner at the box's fixed edge regardless of what's rendered
-                // underneath: past scale 1 the sharp content's own rounded corners are scaled up
-                // and pushed outward by the pinch, past where this fixed-size mask cuts, so the
-                // corner arc actually visible at the boundary is whichever shape *this* mask is.
                 RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous)
                     .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
             }
@@ -115,5 +122,70 @@ public struct LiveVideoLayout<Video: View>: View {
         .auroraCardGlow(opacity: metrics.cardGlowOpacity * chrome.borderOpacity)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(edges: arrangement.videoIgnoredEdges)
+    }
+
+    /// The card's border is a fixed-size, non-clipping overlay (`AuroraZoomFrame`) — it never
+    /// resizes — so the picture underneath is free to grow past it, all the way to the true screen
+    /// edges: `ZoomableContainer` is given an *explicit* `growthCanvas`-sized frame (not the
+    /// ambient, safe-area-bounded one `.frame(maxWidth: .infinity, maxHeight: .infinity)` alone
+    /// would propose) plus `.ignoresSafeArea()`, so it clips and measures against the true full
+    /// screen — behind the nav bar, behind the floating controls, same idea as
+    /// `RecordingDetailLayout.growingAboveThePanel`, just derived from `GeometryReader`'s own
+    /// `safeAreaInsets` instead of a view this layout can measure directly, since the nav bar
+    /// belongs to `NavigationStack`, not to this layout.
+    ///
+    /// `restOffset` keeps the rest-state card exactly where `metrics` (computed against the
+    /// *smaller*, safe `restCanvas`) already puts it — centred between the nav bar and the
+    /// controls, unchanged from before this pass — even though every layer here is now measured
+    /// against the *bigger* `growthCanvas`. Applied via `ZoomableContainer`'s `restOffset`
+    /// parameter for the interactive layer, and via a matching `.offset()` on every other
+    /// rest-state-positioned piece drawn by hand: the blurred backdrop, the mask, the border rim —
+    /// see `RecordingDetailLayout.growableSlot`'s identical `topInset` handling for why this must
+    /// be `.offset()`, never `.padding()` on the whole surface (padding would shrink what
+    /// `ZoomableContainer` measures as its own canvas, capping growth right back where it started).
+    private func cardVideoSurface(_ metrics: LiveVideoMetrics, geo: GeometryProxy, restCanvas: CGSize) -> some View {
+        let chrome = AuroraZoomChrome(scale: zoomTransform.scale)
+        let growthCanvas = CGSize(
+            width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
+            height: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+        )
+        let restOffset = CGSize(width: 0, height: (geo.safeAreaInsets.top - controlsHeight) / 2)
+        return ZStack {
+            video
+                .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+                .background(.black)
+                .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
+                .scaleEffect(zoomTransform.scale)
+                .offset(zoomTransform.offset)
+                .offset(restOffset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .blur(radius: chrome.imageBlurRadius)
+            ZoomableContainer(
+                onSingleTap: onSingleTap,
+                clipsContent: true,
+                contentSize: metrics.videoSize,
+                restOffset: restOffset,
+                onTransformChange: { zoomTransform = $0 }
+            ) {
+                video
+                    .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
+            }
+            .mask {
+                RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous)
+                    .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+                    .offset(restOffset)
+            }
+        }
+        .overlay {
+            AuroraZoomFrame(cornerRadius: metrics.videoCornerRadius, lineWidth: metrics.videoRimWidth, opacity: chrome.borderOpacity)
+                .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+                .offset(restOffset)
+        }
+        .auroraCardGlow(opacity: metrics.cardGlowOpacity * chrome.borderOpacity)
+        .frame(width: growthCanvas.width, height: growthCanvas.height)
+        .ignoresSafeArea()
     }
 }

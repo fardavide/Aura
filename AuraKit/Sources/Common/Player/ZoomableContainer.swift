@@ -18,6 +18,21 @@ public struct ZoomableContainer<Content: View>: View {
     /// growing-past-the-frame screens all offer a bigger canvas than the small card they draw at
     /// rest. Defaults to `.center` (Live's card); Timeline detail's top-anchored slot passes `.top`.
     private let alignment: Alignment
+    /// The rest-state size of `content` at scale 1 — `nil` means content fills the container
+    /// exactly (Live's `.fill`, Timeline detail's `.rail`, today's behavior). `ZoomTransform`'s
+    /// whole model treats its own `viewport:` parameter as the content's rest size (see that type's
+    /// doc comment), so a caller whose content is *smaller* than the container — every
+    /// growing-past-the-frame screen — must supply this, or every anchor/pan/clamp computes
+    /// relative to the container's much bigger size instead: a pinch anywhere on a small, off-centre
+    /// box then reads as a `UnitPoint` near the *box's own position* within the big canvas — close
+    /// to 0 for a `.top`-aligned box (the zoom appears to only grow downward, since a pinch anywhere
+    /// on the box computes an anchor far above the box's own centre), always near 0.5 for a
+    /// `.center`-aligned one (the zoom always anchors near-centre, however precisely you pinch,
+    /// since the whole box occupies only a small central sliver of the big canvas) — never where
+    /// within the box the user actually pinched. Reported directly, against both screens at once:
+    /// Timeline detail's zoom "only growing downward", Live's card "zooming from center only,
+    /// needing a pan after".
+    private let contentSize: CGSize?
     /// A fixed, gesture-independent visual shift applied *after* the zoom transform — for a caller
     /// whose rest-state card sits away from `alignment`'s own edge (Timeline detail centers its
     /// card in the gap above a variable-height panel, not flush to the container's own top). Unlike
@@ -54,6 +69,7 @@ public struct ZoomableContainer<Content: View>: View {
         onSingleTap: @escaping () -> Void,
         clipsContent: Bool,
         alignment: Alignment = .center,
+        contentSize: CGSize? = nil,
         restOffset: CGSize = .zero,
         onTransformChange: @escaping (ZoomTransform) -> Void = { _ in },
         @ViewBuilder content: () -> Content
@@ -61,6 +77,7 @@ public struct ZoomableContainer<Content: View>: View {
         self.onSingleTap = onSingleTap
         self.clipsContent = clipsContent
         self.alignment = alignment
+        self.contentSize = contentSize
         self.restOffset = restOffset
         self.onTransformChange = onTransformChange
         self.content = content()
@@ -95,8 +112,8 @@ public struct ZoomableContainer<Content: View>: View {
                     }
                 }
             }
-            .onChange(of: proxy.size) { _, newSize in
-                transform = transform.panned(by: .zero, viewport: newSize)
+            .onChange(of: proxy.size) { _, newArena in
+                transform = transform.panned(by: .zero, viewport: contentSize ?? newArena)
             }
             .onChange(of: displayed, initial: true) { _, new in onTransformChange(new) }
         }
@@ -104,7 +121,8 @@ public struct ZoomableContainer<Content: View>: View {
 
     /// `transform` (the last *committed* gesture) with any gesture still in flight applied on top,
     /// in the same order a commit would fold it in — see the type's gesture-state doc comment.
-    private func displayedTransform(in viewport: CGSize) -> ZoomTransform {
+    private func displayedTransform(in arena: CGSize) -> ZoomTransform {
+        let viewport = contentSize ?? arena
         var result = transform
         if let magnifyPhase {
             result = result.magnified(by: magnifyPhase.magnification, anchor: magnifyPhase.anchor, viewport: viewport)
@@ -115,29 +133,42 @@ public struct ZoomableContainer<Content: View>: View {
         return result
     }
 
-    private func magnify(in viewport: CGSize) -> some Gesture {
+    /// Where `content`, at its rest size, sits within `arena` (the container's full, measured
+    /// size) — every gesture anchor is computed relative to this, not to `arena` directly, so a
+    /// pinch lands on the point of the *content* the user is actually touching. `.zero`-origin,
+    /// `arena`-sized when `contentSize` is `nil`: content fills the container, so it *is* the arena
+    /// (today's `.fill`/`.rail` behavior, unchanged). Only `.center` and `.top` are supported,
+    /// matching every caller today — both centre horizontally, so only the vertical origin depends
+    /// on which.
+    func contentRect(in arena: CGSize) -> CGRect {
+        guard let contentSize else { return CGRect(origin: .zero, size: arena) }
+        let x = (arena.width - contentSize.width) / 2 + restOffset.width
+        let y = (alignment == .top ? 0 : (arena.height - contentSize.height) / 2) + restOffset.height
+        return CGRect(origin: CGPoint(x: x, y: y), size: contentSize)
+    }
+
+    private func anchor(at location: CGPoint, in arena: CGSize) -> UnitPoint? {
+        let rect = contentRect(in: arena)
+        guard rect.width > 0, rect.height > 0 else { return nil }
+        return UnitPoint(x: (location.x - rect.minX) / rect.width, y: (location.y - rect.minY) / rect.height)
+    }
+
+    private func magnify(in arena: CGSize) -> some Gesture {
         MagnifyGesture()
             .updating($magnifyPhase) { value, phase, _ in
-                guard viewport.width > 0, viewport.height > 0 else { return }
                 // `MagnifyGesture.Value.startAnchor` reports `.center` in practice, which
-                // pins every pinch to the middle of the viewport. Derive the anchor from the
+                // pins every pinch to the middle of the content. Derive the anchor from the
                 // pinch-midpoint location instead — same approach the double-tap uses.
-                phase = MagnifyPhase(
-                    magnification: value.magnification,
-                    anchor: UnitPoint(x: value.startLocation.x / viewport.width, y: value.startLocation.y / viewport.height)
-                )
+                guard let anchor = anchor(at: value.startLocation, in: arena) else { return }
+                phase = MagnifyPhase(magnification: value.magnification, anchor: anchor)
             }
             .onEnded { value in
-                guard viewport.width > 0, viewport.height > 0 else { return }
-                let anchor = UnitPoint(
-                    x: value.startLocation.x / viewport.width,
-                    y: value.startLocation.y / viewport.height
-                )
-                transform = transform.magnified(by: value.magnification, anchor: anchor, viewport: viewport)
+                guard let anchor = anchor(at: value.startLocation, in: arena) else { return }
+                transform = transform.magnified(by: value.magnification, anchor: anchor, viewport: contentSize ?? arena)
             }
     }
 
-    private func pan(in viewport: CGSize) -> some Gesture {
+    private func pan(in arena: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .updating($panTranslation) { value, translation, _ in
                 // At 1x the drag stays inert so it never fights navigation swipe-back.
@@ -146,23 +177,19 @@ public struct ZoomableContainer<Content: View>: View {
             }
             .onEnded { value in
                 guard transform.isZoomed else { return }
-                transform = transform.panned(by: value.translation, viewport: viewport)
+                transform = transform.panned(by: value.translation, viewport: contentSize ?? arena)
             }
     }
 
     /// Double-tap toggles zoom at the tap point; a lone single tap forwards to `onSingleTap`.
     /// `exclusively(before:)` gives the double-tap priority, so SwiftUI holds the single tap until
     /// it's sure a second tap isn't coming — the single fires only when the double fails.
-    private func taps(in viewport: CGSize) -> some Gesture {
+    private func taps(in arena: CGSize) -> some Gesture {
         let doubleTap = SpatialTapGesture(count: 2)
             .onEnded { value in
-                guard viewport.width > 0, viewport.height > 0 else { return }
-                let anchor = UnitPoint(
-                    x: value.location.x / viewport.width,
-                    y: value.location.y / viewport.height
-                )
+                guard let anchor = anchor(at: value.location, in: arena) else { return }
                 withAnimation(.snappy) {
-                    transform = transform.togglingZoom(at: anchor, viewport: viewport)
+                    transform = transform.togglingZoom(at: anchor, viewport: contentSize ?? arena)
                 }
             }
         let singleTap = SpatialTapGesture(count: 1)

@@ -1651,3 +1651,93 @@ parameter, applied identically (`.offset(y: topInset)`) to every rest-state-posi
 by hand outside `ZoomableContainer` itself: the blurred backdrop, the mask, the border rim, the hero
 overlay, the diagnostic highlight — all of them need the same shift for the same reason a wrapping
 `.padding()` doesn't work for any of them either.
+
+## `ZoomableContainer`'s gesture math measured against the container, not the (smaller) content (0.6.6)
+
+Reported directly, after 0.6.5 (the `topInset`/`restOffset` fix above) had merged and shipped:
+"none of the two issues is fixed." Timeline detail's zoom still showed the exact same symptoms —
+including a new detail that named the actual mechanism: "the image only zooming downward." In the
+same report, a second, previously unnoticed bug on a different screen: Live's card "zooms from
+center only, and then need to pan. The pinch to zoom should zoom exactly where you are pinching."
+
+Both trace to one root cause. `ZoomTransform`'s own doc comment is explicit about its contract:
+"Digital zoom + pan for **viewport-filling content**" — every anchor, pan, and clamp calculation
+assumes the content passed to `.magnified(anchor:viewport:)`/`.panned(viewport:)` fills `viewport`
+exactly at scale 1. `ZoomableContainer` always passed its own `GeometryReader`'s `proxy.size` as that
+`viewport` — correct for `.rail`'s `slot()` and Live's `.fill` (content genuinely does fill the
+container there), but wrong for every "grow past a smaller rest-state box" screen: `growableSlot`'s
+content is `boxSize`, positioned via `alignment`/`restOffset` inside a `proxy.size` that's
+deliberately *bigger* (that's the whole point of "grow past the box"), and Live's `.card` has the
+same shape even without any growth involved — `metrics.videoSize` has always been smaller than the
+safe-area canvas `ZoomableContainer` measures, centred within it since 0.6.0.
+
+Two distinct-looking symptoms, one shared cause, differing only by `alignment`:
+- `growableSlot` (`alignment: .top`): a pinch anywhere on the small, top-positioned box computes a
+  `UnitPoint` far above 0.5 (the box sits near the top of a much taller canvas) — the anchor math
+  reads that as "pinching near the very top," so scaling visibly drags the picture down and away
+  from the anchor, regardless of where within the box you actually touched. Reads as "only zooms
+  downward."
+- Live's `.card` (`alignment: .center`): the box is centred, so any pinch within it computes a
+  `UnitPoint` close to 0.5 no matter where in the box you touch (the box occupies only a small
+  central sliver of the much taller canvas) — the anchor collapses toward centre regardless of pinch
+  location. Reads as "zooms from center only, need to pan afterward."
+
+Fixed by giving `ZoomableContainer` a `contentSize: CGSize?` parameter (`nil` — the default — preserves
+today's exact behaviour for `.rail`/`.fill`, where content genuinely fills the container). When
+provided, a new `contentRect(in:)` computes where content actually sits within the measured canvas
+(from `contentSize`, `alignment`, and `restOffset` — the same three inputs that already position it
+for rendering), and every gesture location is mapped into a `UnitPoint` relative to *that* rect before
+being handed to `ZoomTransform`, whose own `viewport:` parameter also switches from `proxy.size` to
+`contentSize`. `ZoomTransform` itself needed no change — its "viewport-filling content" contract was
+correct all along; only what `ZoomableContainer` was passing as `viewport` was wrong. `growableSlot`
+now passes `contentSize: boxSize`; Live's `.card` now passes `contentSize: metrics.videoSize` (already
+optional, so no unwrapping needed — `.fill`'s `nil` metrics case never reaches this code path).
+
+`contentRect(in:)` is the one piece of this fix that's a pure function of its inputs — kept internal
+(not `private`) specifically so `ZoomableContainerGeometryTests` can drive it directly, the same way
+`ZoomTransformTests` drives `ZoomTransform`'s own pure math; the surrounding gesture closures
+(`MagnifyGesture`/`DragGesture`/`SpatialTapGesture` handlers) aren't unit-testable in this project
+either before or after this change — `Gesture.Value` types can't be constructed outside a live gesture
+recognizer, and none of `magnify`/`pan`/`taps` had direct test coverage previously. Verified instead by
+confirming the fix is *rendering-inert*: `contentRect`/`contentSize` only feed the gesture-math
+functions, never the view's actual `.scaleEffect`/`.offset` chain, so every existing screenshot
+baseline (rest state, scale 1, no gesture in flight) stayed byte-identical — a real, independent check
+that this change couldn't have silently altered layout while fixing gestures.
+
+## Live's zoomed picture grows to the true screen edges, behind both bars (0.6.6)
+
+Reported directly: "Camera looks amazing! But why the bounds are below top bar and above bottom bar?
+It should extends edge to edge and go below top bar and bottom bar." Unlike Timeline detail (whose
+`growingAboveThePanel` already grows past its panel to fill the whole screen), Live's `.card` had
+never been given a bigger canvas to grow into — `videoSurface` offered `ZoomableContainer` only the
+safe-area-respecting rest canvas, the same one `metrics` sizes the resting card against, so the
+picture could scale but never actually reach past the nav bar or the floating controls.
+
+Fixed with the same `restCanvas`/growth-canvas split `growingAboveThePanel` already established,
+adapted for a canvas whose top exclusion (the nav bar) isn't a view `LiveVideoLayout` owns and can
+measure directly — only a safe-area inset. `LiveVideoLayout.body` now measures `controlsHeight` via
+`.onGeometryChange` (`controls` switched from `.safeAreaInset(edge: .bottom)`, which reserved layout
+space, to `.overlay(alignment: .bottom)`, which doesn't) and computes `restCanvas = geo.size` minus
+that height — the same canvas `.card`'s resting card has always been sized and centred against, now
+computed explicitly since controls no longer reserve it automatically. `cardVideoSurface` (split out
+from the old, single `videoSurface` — `.fill` keeps its own unchanged path in `fillVideoSurface`,
+since it was already unconditionally full-bleed and had nothing to fix) gives `ZoomableContainer` an
+*explicit* `growthCanvas`-sized frame plus `.ignoresSafeArea()` — `geo.size` plus every
+`safeAreaInsets` edge added back — so it measures and clips against the true full screen. A
+`restOffset` of `(geo.safeAreaInsets.top - controlsHeight) / 2` keeps the resting card exactly where
+`metrics` (sized against the smaller `restCanvas`) already puts it, applied the same way
+`growableSlot`'s `topInset` is: `.offset()` on the blurred backdrop, mask, and border rim, and through
+`ZoomableContainer`'s own `restOffset` parameter for the interactive layer — never `.padding()`, for
+the same reason documented above.
+
+Verified with a throwaway diagnostic (deleted before commit, per this project's usual
+diagnostic-before-implement pattern for geometry that's hard to reason about statically) wrapping a
+test screen in a real `NavigationStack` with a `.navigationTitle`, so `safeAreaInsets.top` reflected
+an actual nav bar height rather than a guess — confirmed the resting card centred correctly between
+the title and a simulated controls bar, and the growth boundary reaching the true physical screen
+edges behind both. `CameraDetailSnapshotTests`' `.card` baselines needed re-recording (the rest-state
+render now happens inside an explicit `growthCanvas`-sized frame instead of the old ambient one) —
+`.fill`'s baseline stayed byte-identical, confirming that arrangement's own code path was untouched.
+The test helper that builds these screenshots also needed a real `NavigationStack` wrapper for the
+same reason the diagnostic did: without one, `safeAreaInsets.top` in the test wouldn't match what a
+`CameraDetailView` pushed onto a real navigation stack actually sees.

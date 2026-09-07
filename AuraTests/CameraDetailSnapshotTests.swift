@@ -79,22 +79,32 @@ struct CameraDetailSnapshotTests {
 
 // MARK: - View builders
 
+/// Wrapped in a real `NavigationStack` with an inline title — `CameraDetailView` always applies
+/// `.navigationTitle` and is always pushed onto an ancestor `NavigationStack`, and `.card`'s growth
+/// canvas reads `GeometryReader`'s `safeAreaInsets.top` to find the true nav bar height, so a bare
+/// `LiveVideoLayout` here would bake the wrong (nav-bar-less) geometry into the baseline.
 @MainActor
 private func liveControls(arrangement: LiveVideoArrangement, state: LiveControlState) -> some View {
-    LiveVideoLayout(
-        arrangement: arrangement,
-        controls: LiveControlBar(
-            state: state,
-            surface: arrangement.controlSurface,
-            onPlayPause: {},
-            onMute: {},
-            onTogglePictureInPicture: {},
-            onInteract: {}
-        ),
-        areControlsVisible: true,
-        onSingleTap: {}
-    ) {
-        Color.black
+    NavigationStack {
+        LiveVideoLayout(
+            arrangement: arrangement,
+            controls: LiveControlBar(
+                state: state,
+                surface: arrangement.controlSurface,
+                onPlayPause: {},
+                onMute: {},
+                onTogglePictureInPicture: {},
+                onInteract: {}
+            ),
+            areControlsVisible: true,
+            onSingleTap: {}
+        ) {
+            Color.black
+        }
+        .navigationTitle("Driveway")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }
 
