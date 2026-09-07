@@ -6,13 +6,14 @@ import CommonPlayer
 /// The Timeline-detail screen's on-screen composition: one camera's footage with the timeline panel
 /// against it, in the arrangement the available space calls for.
 ///
-/// - **Phone upright** — the footage sits at the top, in the space the bottom glass panel leaves
-///   free at rest, so the controls never cover the resting picture; zoomed in, the picture grows
-///   past that rest-state card and the panel floats on top of it, same as `.split`.
+/// - **Phone upright** — the footage sits centred in the gap between the nav bar and the panel at
+///   rest, same as Live's own card; zoomed in, the picture grows past that rest-state card, past
+///   the panel's own space too, all the way to the screen edge, with the panel floating on top —
+///   same as `.split`.
 /// - **Phone on its side** — the footage takes the space beside a tall rail down the trailing
 ///   edge; the same rule, sideways, but this one doesn't grow past its own box yet (see `rail`'s
 ///   doc comment).
-/// - **iPad and Mac** — a 16:9 hero with the panel spread wide beneath it at rest; zoomed in, same
+/// - **iPad and Mac** — a 16:9 hero centred above the panel at rest; zoomed in, same
 ///   growth-behind-the-panel treatment as phone-upright.
 ///
 /// The video is pinch-zoomable everywhere. At rest every arrangement's video sits in a
@@ -42,6 +43,9 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomChrome` — see
     /// `LiveVideoLayout`'s identical property for why this is `@State`, not a local in `slot()`.
     @State private var zoomTransform = ZoomTransform.standard()
+    /// The timeline panel's actual rendered height, measured via `.onGeometryChange` — see
+    /// `growingAboveThePanel`'s doc comment for why.
+    @State private var panelHeight: CGFloat = 0
 
     private static var railWidth: CGFloat { 168 }
     private static var splitPanelMaxWidth: CGFloat { 1_100 }
@@ -80,27 +84,15 @@ public struct RecordingDetailLayout<Video: View>: View {
         }
     }
 
-    /// The picture grows past its rest-state card here, all the way to filling the screen behind
-    /// the panel — matching Live — since the panel now overlays the video instead of sharing space
-    /// with it in a `VStack`. `boxSize` is the 16:9 card `.aspectRatio(16/9, .fit)` would have
-    /// produced against the full `canvas` width, computed by hand because `growableSlot` needs it
-    /// explicitly (see that function's doc comment for why).
+    /// `boxSize` is the 16:9 card `.aspectRatio(16/9, .fit)` would have produced against the full
+    /// `canvas` width, computed by hand because `growableSlot` needs it explicitly (see that
+    /// function's doc comment for why).
     private func stacked(insets: EdgeInsets, canvas: CGSize) -> some View {
         let boxSize = CGSize(width: canvas.width, height: canvas.width * 9 / 16)
-        return ZStack {
-            growableSlot(boxSize: boxSize, alignment: .top)
-                .padding(.top, 8)
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                panel(.stacked)
-                    .padding(.bottom, insets.bottom)
-                    .auroraSheet(edge: .bottom, showsGrabber: false)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .auroraBackground()
-        .ignoresSafeArea(.container, edges: .bottom)
-        .overlay { surfaceHighlight }
+        return growingAboveThePanel(boxSize: boxSize, canvas: canvas, panelInsetBottom: insets.bottom, panelArrangement: .stacked)
+            .auroraBackground()
+            .ignoresSafeArea(.container, edges: .bottom)
+            .overlay { surfaceHighlight }
     }
 
     /// Unchanged from before: the picture's own aspect-fit bounds stay both the rest-state card
@@ -134,20 +126,72 @@ public struct RecordingDetailLayout<Video: View>: View {
         // `min(canvas.width, cap) - 40` is wrong when `canvas.width - 40` already undercuts `cap`.
         let boxWidth = min(canvas.width - 40, Self.splitPanelMaxWidth)
         let boxSize = CGSize(width: boxWidth, height: boxWidth * 9 / 16)
+        return growingAboveThePanel(boxSize: boxSize, canvas: canvas, panelInsetBottom: insets.bottom, panelArrangement: .split)
+            .auroraBackground()
+            .ignoresSafeArea(.container, edges: .bottom)
+            .overlay { surfaceHighlight }
+    }
+
+    /// `.stacked` and `.split`'s shared composition: the video sits centred in the gap between the
+    /// top of `canvas` (the nav bar's bottom edge — see `body`'s doc comment) and the panel, at
+    /// rest, but is free to grow past *both* boundaries when zoomed, all the way to filling
+    /// `canvas` — the panel floats on top of it rather than sharing space with it, so the two need
+    /// different reference frames: growth uses the *full* `canvas` (via `growableSlot` getting no
+    /// explicit frame of its own, same as `LiveVideoLayout`), while the rest-state position needs
+    /// the panel's actual rendered height, which is content-driven and not known in advance.
+    ///
+    /// That height is read via `.onGeometryChange` into `panelHeight` (`@State`, not a local —
+    /// the same reason `zoomTransform` is) — the same pattern `CameraGridView` already uses for
+    /// `headerHeight`. Two other approaches were tried and dropped first, both confirmed wrong by
+    /// a debug label rendering the live values, not just reasoned about:
+    /// - `PreferenceKey` + `.onPreferenceChange` compiled and looked plausible, but the debug label
+    ///   showed `panelHeight` permanently stuck at its `0` default — the change handler never fired
+    ///   in this view tree (a `GeometryReader` reporting through `.preference` from inside the
+    ///   panel's own `.background`, several containers deep, apparently isn't enough on its own;
+    ///   `.onGeometryChange` attached directly to the measured view has no such gap).
+    /// - `PreferenceKey` + `backgroundPreferenceValue` would have read the value within the same
+    ///   layout pass (no settle at all) had it worked, but building the video as a `.background` of
+    ///   a bare `ZStack { panel }` surfaced a worse, unrelated problem first: a bare `ZStack`
+    ///   proposes its own (canvas-sized) size to *every* child uniformly, and
+    ///   `RecordingTimelinePanel`'s content has enough internal flexibility to visibly grow into
+    ///   that oversized proposal, swallowing the whole canvas and hiding the video entirely.
+    ///   Avoiding that needs the panel back in its own `VStack` + leading `Spacer` (which measures
+    ///   the panel at its intrinsic height first, per `growingAboveThePanel` itself), which doesn't
+    ///   compose with `backgroundPreferenceValue`'s own structure.
+    ///
+    /// `.onGeometryChange` still settles a render after the panel first appears — the same
+    /// one-frame-late class of issue `body`'s own doc comment flags for safe-area insets — but in
+    /// practice this is a purely cosmetic settle (a card's rest position, not a value the user is
+    /// watching move), and the screen is already mid-navigation-push-transition when it first
+    /// appears, which masks it.
+    private func growingAboveThePanel(
+        boxSize: CGSize,
+        canvas: CGSize,
+        panelInsetBottom: CGFloat,
+        panelArrangement: RecordingTimelinePanel.Arrangement
+    ) -> some View {
+        let availableHeight = max(0, canvas.height - panelHeight)
+        let topInset = max(0, (availableHeight - boxSize.height) / 2)
+        // The panel sits in its own `VStack` with a leading `Spacer`, not directly in the outer
+        // `ZStack` — a bare `ZStack` proposes its own (canvas-sized) size to *every* child
+        // uniformly, and `RecordingTimelinePanel`'s content has enough internal flexibility to
+        // actually grow into that oversized proposal (confirmed: it visibly expanded to swallow
+        // the whole canvas, hiding the video entirely, before this was caught and fixed). A
+        // `VStack` measures the panel at its own intrinsic height first and hands only the
+        // *leftover* space to the `Spacer` — the same reason the original, pre-growth `VStack`
+        // layout never had this problem.
         return ZStack {
             growableSlot(boxSize: boxSize, alignment: .top)
-                .padding(.top, 20)
+                .padding(.top, topInset)
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                panel(.split)
-                    .padding(.bottom, insets.bottom)
+                panel(panelArrangement)
+                    .padding(.bottom, panelInsetBottom)
                     .auroraSheet(edge: .bottom, showsGrabber: false)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .auroraBackground()
-        .ignoresSafeArea(.container, edges: .bottom)
-        .overlay { surfaceHighlight }
     }
 
     /// The rail's zoomable video area — the video's own aspect-fit bounds are both the rest-state
@@ -193,9 +237,10 @@ public struct RecordingDetailLayout<Video: View>: View {
     /// is the rest-state card's own size; the caller must offer a canvas *larger* than it (via
     /// `.frame(maxWidth: .infinity, maxHeight: .infinity)` somewhere above this in the view tree)
     /// for there to be anything to grow into, and `alignment` says where the card sits within
-    /// that larger canvas at rest (`.top`, for both callers, so the footage stays at the top of
-    /// the space the panel leaves free — see `LiveVideoLayout.videoSurface` for the `.center`
-    /// version of the same pattern).
+    /// that larger canvas (`.top`, for both callers — `growingAboveThePanel` achieves visual
+    /// centering above the panel by padding the *top* of this `.top`-aligned card by a computed
+    /// amount, not by changing this alignment; see `LiveVideoLayout.videoSurface` for the
+    /// `.center` version of the same underlying pattern).
     ///
     /// The blur only ever shows in the picture that's grown *past* the card's rest-state rect, not
     /// the whole picture: a non-interactive mirror of the same content, scaled and panned
@@ -209,6 +254,9 @@ public struct RecordingDetailLayout<Video: View>: View {
             video
                 .frame(width: boxSize.width, height: boxSize.height)
                 .background(Color.auroraBase)
+                // Rounded to match the sharp layer's own clip and its mask — otherwise the
+                // blurred backdrop's square corners peek past the border's rounded ones.
+                .clipShape(RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous))
                 .scaleEffect(zoomTransform.scale)
                 .offset(zoomTransform.offset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
@@ -226,7 +274,11 @@ public struct RecordingDetailLayout<Video: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous))
             }
             .mask(alignment: alignment) {
-                Rectangle().frame(width: boxSize.width, height: boxSize.height)
+                // Rounded to match the sharp layer's own clip — see `LiveVideoLayout.videoSurface`'s
+                // identical mask for why a plain rectangle here would cut a hard square corner at
+                // the box's fixed edge once the scaled content's own rounding moves past it.
+                RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous)
+                    .frame(width: boxSize.width, height: boxSize.height)
             }
         }
         .overlay(alignment: alignment) {

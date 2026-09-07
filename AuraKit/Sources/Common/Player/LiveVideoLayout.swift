@@ -80,6 +80,9 @@ public struct LiveVideoLayout<Video: View>: View {
             video
                 .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
                 .background(.black)
+                // Rounded to match the sharp layer's own clip and its mask — otherwise the
+                // blurred backdrop's square corners peek past the border's rounded ones.
+                .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
                 .scaleEffect(zoomTransform.scale)
                 .offset(zoomTransform.offset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -96,7 +99,13 @@ public struct LiveVideoLayout<Video: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous))
             }
             .mask {
-                Rectangle().frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
+                // Rounded to match the sharp layer's own clip — a *plain* rectangle mask would cut
+                // a hard square corner at the box's fixed edge regardless of what's rendered
+                // underneath: past scale 1 the sharp content's own rounded corners are scaled up
+                // and pushed outward by the pinch, past where this fixed-size mask cuts, so the
+                // corner arc actually visible at the boundary is whichever shape *this* mask is.
+                RoundedRectangle(cornerRadius: metrics.videoCornerRadius * chrome.borderOpacity, style: .continuous)
+                    .frame(width: metrics.videoSize?.width, height: metrics.videoSize?.height)
             }
         }
         .overlay {

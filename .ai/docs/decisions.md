@@ -1520,3 +1520,76 @@ the correct formula is `min(canvas.width - 40, splitPanelMaxWidth)`. These diffe
 `RecordingHeroOverlay`'s trailing-aligned "Alert" badge off the edge — caught by the iPad `.split`
 baselines failing at rest (unchanged zoom state), fixed, then confirmed against a re-recorded
 baseline that the rest-state render is pixel-equivalent to before.
+
+## The mask and the blurred backdrop both need their own rounded corners (0.6.4, same pass)
+
+Two follow-on bugs in the sharp/blurred split above, both reported directly from a rendered
+diagnostic (not a device — cheap enough to catch before it ever reached one):
+
+1. The mask (`Rectangle()`, sized to the box) is what determines the visible corner shape at the
+   box's fixed edge, independent of what the *content* underneath is clipped to — past scale 1 the
+   sharp content's own rounded corners are scaled up and pushed outward by the pinch, past where
+   the fixed-size mask cuts, so a *plain* rectangle mask always reads as a square corner there
+   regardless of the content's own rounding. Fixed by rounding the mask itself
+   (`RoundedRectangle(cornerRadius: ... * chrome.borderOpacity)`, matching the sharp layer's clip
+   exactly) in both `LiveVideoLayout.videoSurface` and `RecordingDetailLayout.growableSlot`.
+2. The blurred backdrop had no rounding applied to its own shape at all — a plain rectangle, then
+   blurred — so its corners read as soft square corners even once the mask fix above made the sharp
+   layer's corners correct, visibly mismatching the border's curvature right where the two meet.
+   Fixed by giving the backdrop the *same* `clipShape(RoundedRectangle(cornerRadius: ... *
+   chrome.borderOpacity))` as the sharp layer, before it's scaled and blurred.
+
+Both were verified via a throwaway diagnostic using an exaggerated corner radius relative to a
+small canvas (60pt radius on a 160pt box, rather than the real 22pt on ~300pt) specifically so the
+corner region is visible without needing a precise crop — a lesson from repeatedly fighting `sips`'
+`--cropOffset` semantics earlier the same session; exaggerating the geometry itself sidesteps the
+tooling problem entirely.
+
+## Timeline detail's video centers between the nav bar and the panel, not flush to the top (0.6.4)
+
+Reported directly, after the growth-behind-the-panel work above: at rest the video should sit
+*centred* in the gap between the nav bar and the panel — matching Live's own centred card — not
+flush against the top with only an 8/20pt gap. The flush positioning was also the root cause of a
+separately-reported blur asymmetry (the blurred backdrop had no margin to bleed into above a
+top-anchored, full-width box, so the halo looked cut-off on 3 of 4 sides) — centering the box fixes
+both by construction, since a centred box has margin on every side by definition.
+
+Centering needs the panel's actual rendered height, which is content-driven and not known in
+advance, while the picture's *growth* boundary when zoomed must still extend all the way to
+`canvas`, past the panel — two different reference frames for the same `growableSlot` call. Three
+approaches were tried, in order, each one caught by actually looking at the rendered result (not
+just reasoning about the API) before landing on the last:
+
+1. `PanelHeightPreferenceKey` + `backgroundPreferenceValue`, so the video could be built as a
+   same-pass function of the measured value and placed as the panel's own `.background`. Surfaced a
+   worse, unrelated bug first: with the panel as the *only* child of a bare `ZStack`, the `ZStack`
+   proposes its own (canvas-sized) size to it directly, and `RecordingTimelinePanel`'s content has
+   enough internal flexibility to visibly grow into that oversized proposal — the panel swallowed
+   the entire canvas and the video disappeared behind it completely. The original (pre-growth)
+   layout never hit this because a `VStack` measures each non-flexible child at its own intrinsic
+   size first, handing only the *leftover* space to a `Spacer` — so avoiding it needs the panel back
+   in a `VStack` + leading `Spacer`, which doesn't compose with `backgroundPreferenceValue`'s
+   same-pass structure.
+2. Reverted to a `VStack` + `Spacer` for the panel (fixing the above), keeping
+   `PanelHeightPreferenceKey` but reading it via `@State` + `.onPreferenceChange` instead. This
+   *looked* plausible (video visible again, positioned lower than flush-top) and was nearly shipped
+   — until a debug label rendering the live `panelHeight`/`topInset` values directly in the
+   screenshot showed `panelHeight` permanently stuck at its `0` default. `.onPreferenceChange` never
+   fired in this view tree at all — not "a frame late" as assumed, genuinely never — so the video was
+   silently centering against the *full* canvas as if the panel didn't exist, which happened to
+   still produce a small, plausible-looking (but wrong, and asymmetric) gap above the panel rather
+   than an obviously broken result. Reported directly: "the video is drawn behind the timeline, which
+   is ok only when we zoom, but the initial box should be above."
+3. Landed on `.onGeometryChange(for:of:action:)` — the same pattern `CameraGridView` already uses
+   for its own `headerHeight`, attached directly to the panel rather than routed through a
+   `GeometryReader`-in-`.background` + `PreferenceKey` several containers deep. Confirmed correct via
+   the same debug-label technique before removing it. This still settles a render after the panel
+   first appears (the same "settles a pass later" tradeoff `body`'s own doc comment flags for
+   safe-area insets) — accepted here because it's a purely cosmetic rest position, not something the
+   user watches move, and the screen is already mid-push-transition when it first appears, which
+   masks it.
+
+The general lesson, again: a value that's supposed to update reactively needs to be *verified*
+updating — via a debug label, a print, or some other direct evidence — not inferred from the code
+compiling and the result looking plausible. A stuck-at-default value can still produce output that
+looks like a real (if imperfect) fix.

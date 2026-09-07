@@ -45,10 +45,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ### 0.6.4 — 2026-09-07
 - **Pinch-to-zoom only blurs what's actually growing past the frame now** — it used to blur the
-  whole picture, including the part that was already sharp.
+  whole picture, including the part that was already sharp — and the blur's own corners now match
+  the border's rounding instead of reading as a plain square blur behind a rounded rim.
 - **Timeline detail's picture can now fill the whole screen when zoomed**, the same as Live —
   it used to stop growing at its own small card no matter how far you zoomed (phone-upright and
   iPad/Mac layouts; the landscape-phone rail layout is unchanged for now).
+- **Timeline detail's video is centred between the top bar and the panel at rest**, matching Live's
+  own centred card, instead of sitting flush against the top with barely a gap.
 
 ### 0.6.3 — 2026-09-07
 - **Timeline's sheet actually sits flush behind the tab bar now** — the 0.6.1 fix for this
