@@ -1435,3 +1435,28 @@ the start (not just the small card), its pinch/pan gesture recognizers — attac
 — are recognized across the whole canvas too, not just within the card's small visible bounds. This
 incidentally addresses a separate complaint ("it is difficult to zoom, as you can act only on the
 box") without any gesture-specific change.
+
+## The "Timeline sheet flush behind the tab bar" fix (0.6.1) never actually shipped (0.6.3)
+
+Reported again from a TestFlight build as if new: the Timeline-detail scrub-track sheet floats as a
+fully-rounded card with gaps on every side instead of sitting flush behind the tab bar, square
+bottom corners, exactly the bug the 0.6.1 changelog claims was fixed. `git log --all` found the real
+fix commit (`d8e1a2f`, "Timeline tab: actually fix the sheet gap") sitting on a stale local ref,
+**not an ancestor of `origin/main`** — its `AuroraSheetModifier` rewrite (glass/border/glow moved
+into a `.background(alignment:)` closure with `ignoresSafeArea` *inside* it, per the "only a
+background layer's independent geometry reaches the true edge" finding recorded when it was first
+built) was lost during this session's repeated squash-merge branch recreation
+([[squash-merge-branch-hygiene]]): a cherry-pick pass treated its content as already captured by a
+sibling commit's squash and dropped it, and nothing in the review or test suite caught the gap
+because `AuroraSheetModifier`'s own re-recorded baselines (isolated host, `.background`-based
+flushness reads correctly there too) still passed — only a *real* `TabView`'s floating tab bar
+exposes the difference, and the app was never actually run against one before the affected PR merged.
+
+Fixed by re-applying the exact diff from `d8e1a2f` on a fresh branch off `origin/main` (the source
+change only — its binary snapshot re-recordings were stale against baselines re-recorded several
+times since, for unrelated reasons) and re-recording the 6 Timeline `ready-*` states fresh.
+
+The general lesson: a cherry-pick that "looks captured" by a squash needs to be verified by diffing
+the *resulting file content*, not just by recognizing a similar commit message nearby — and a fix
+that only manifests inside real system chrome (a real `TabView`, a real `NavigationStack`) needs
+that chrome checked again after any branch surgery, not just a green isolated-host suite.
