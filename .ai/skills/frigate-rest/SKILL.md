@@ -1,6 +1,6 @@
 ---
 name: frigate-rest
-description: Frigate 0.17 HTTP REST API map — /api/config camera discovery, /api/events query params and event JSON schema, the media URLs (thumbnail / snapshot / clip / latest), the recordings / review / VOD timeline endpoints (scrubbable playback), and the auth model. The live go2rtc stream lives in frigate-live.
+description: Maps Frigate 0.17 REST endpoints, query parameters, JSON, media URLs, recordings, review and VOD timelines, and auth. Use when calling, modifying, decoding, or debugging any Frigate REST workflow.
 when_to_use: >
   Use when calling, modifying, or decoding any Frigate REST endpoint — listing or filtering
   events, discovering cameras and their enabled state, building thumbnail/snapshot/clip/latest

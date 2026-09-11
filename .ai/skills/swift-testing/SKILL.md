@@ -1,6 +1,6 @@
 ---
 name: swift-testing
-description: Aura's test conventions — Swift Testing (not XCTest), the Scenario fixture, given/when/then structure, handwritten fakes over mocks, async testing, and Codable decoding tests against fixtures.
+description: Aura's Swift Testing, Scenario, fake, async, decoding-fixture, and screenshot conventions. Use when writing or reviewing tests, fakes, decoders, async behavior, or snapshot baselines.
 when_to_use: >
   Use when writing or reviewing test code — adding a @Test, building a Scenario, writing a fake,
   or testing decoding/async behavior. Also when the user asks to "write a test", "add a fake",
