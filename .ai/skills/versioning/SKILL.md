@@ -1,6 +1,6 @@
 ---
 name: versioning
-description: Aura's version-bump + changelog convention — patch by default, minor only at user-called milestones, bump the build number, and keep the README changelog in lockstep.
+description: Aura's version-bump, build-number, and changelog convention. Use before changing the version, cutting a release, preparing a release PR, or adding user-visible behavior.
 when_to_use: >
   Consult before bumping the app version or preparing a release/PR — editing MARKETING_VERSION or
   CURRENT_PROJECT_VERSION, or when the user says "bump the version", "cut a release", or asks for a

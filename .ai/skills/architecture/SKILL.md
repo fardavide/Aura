@@ -1,6 +1,6 @@
 ---
 name: architecture
-description: Aura's layering — Clean Architecture + MVVM, the networking/service layer, DTO↔domain mappers, typed IDs, the cross-platform video/PiP wrapper, and the UserDefaults/Keychain storage rules.
+description: Aura's Clean Architecture, MVVM, service, mapping, typed-ID, cross-platform player, and storage rules. Use before spanning layers, creating ViewModels or services, placing code, wiring auth, or changing the iOS/macOS player split.
 when_to_use: >
   Consult before adding a feature that spans layers, creating a ViewModel or service, deciding
   where code belongs (domain vs data vs presentation), wiring auth into media loads, or touching

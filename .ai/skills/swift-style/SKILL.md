@@ -1,6 +1,6 @@
 ---
 name: swift-style
-description: Aura's Swift 6 / SwiftUI code conventions — strict concurrency, optionality discipline, exhaustive switch, typed wrappers over primitives, no silent init defaults, SwiftUI styling (semantic colors, @Observable, theming system controls to a design), and documentation.
+description: Aura's Swift 6 and SwiftUI conventions for concurrency, optionality, exhaustive switches, typed wrappers, initialization, styling, and documentation. Use when writing or reviewing production Swift or building UI to a design.
 when_to_use: >
   Consult when writing or reviewing Swift production code — adding types, ViewModels, or SwiftUI
   views, choosing optionality or error handling, or naming things. Also when building a screen or

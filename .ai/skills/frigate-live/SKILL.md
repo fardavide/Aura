@@ -1,6 +1,6 @@
 ---
 name: frigate-live
-description: The Frigate 0.17 + go2rtc LIVE stream — the AVFoundation-compatible HLS URL (port 1984), stream src naming, codec/latency caveats, the undocumented Frigate proxy path, and how auth reaches the media. REST endpoints live in frigate-rest.
+description: Maps Frigate 0.17 and go2rtc live streaming for AVFoundation, including HLS URLs, source names, codecs, latency, proxying, and auth. Use when building or debugging live camera playback or PiP.
 when_to_use: >
   Use when building or debugging the live camera view — choosing or fixing the go2rtc stream
   URL for AVPlayer/AVURLAsset, resolving the stream src name, handling HLS codec/latency issues,

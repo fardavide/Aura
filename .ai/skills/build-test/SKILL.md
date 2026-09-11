@@ -1,5 +1,8 @@
 ---
-description: Build and/or test Aura from the command line for iOS Simulator and native macOS
+name: build-test
+description: Builds and tests Aura for iOS Simulator and native macOS. Use when the user asks to build, test, verify, or prepare Aura for a PR.
+when_to_use: Use when the user asks to build, test, verify, or prepare Aura for a PR.
+user-invocable: true
 argument-hint: "[build|test|all] (default: all)"
 ---
 
