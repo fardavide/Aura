@@ -10,3 +10,10 @@ public enum DesignMotion: Equatable, Sendable {
 extension EnvironmentValues {
     @Entry public var designMotion: DesignMotion = .animated
 }
+
+extension Animation {
+    /// The one curve for a hero swap. Both walls that promote a camera into the large tile — the
+    /// Cameras grid and the Timeline grid — travel on it, so the same event never reads as two
+    /// different gestures depending on which tab you are looking at.
+    public static let auroraHeroSwap: Animation = .smooth(duration: 0.35)
+}

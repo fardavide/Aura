@@ -43,6 +43,14 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.8 — 2026-09-18
+- **New "Follow Activity" switch in Settings → Cameras.** On (the existing behaviour) the camera
+  with the newest alert moves into the large tile; off, the wall and the Timeline grid stay in your
+  saved Camera Order no matter what is happening. Badges are unaffected either way — the switch
+  governs where a camera sits, never what the screen tells you.
+- **The Timeline grid now animates when a camera takes the large tile** instead of snapping to the
+  new arrangement; both grids travel on the same curve.
+
 ### 0.6.7 — 2026-09-07
 - **Fixed Timeline detail's zoomed video rendering in the wrong place** — the interactive layer
   was quietly ignoring its own top-anchored position and centring itself in the much taller growth

@@ -220,6 +220,9 @@ public struct TimelineScreenView: View {
                         cameraTile(camera, style: camera.name == viewModel.heroCamera?.name ? .hero : .compactGrid)
                     }
                 }
+                // On the layout, not the tile: the tiles below the hero are positioned by
+                // `HeroGridLayout`, so an animation scoped inside a tile would let them snap.
+                .animation(.auroraHeroSwap, value: viewModel.heroCamera)
                 .padding(16)
                 .padding(.top, headerHeight)
                 .padding(.bottom, bottomInset)

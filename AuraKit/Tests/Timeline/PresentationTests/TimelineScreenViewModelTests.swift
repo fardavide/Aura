@@ -39,6 +39,45 @@ struct TimelineHeroCameraTests {
         #expect(scenario.sut.heroCamera?.name == driveway.name)
     }
 
+    @Test func `given the dynamic order is off when an alert is active then the first camera stays the hero`() async {
+        // given
+        let timeline = DayTimeline(markers: [alertMarker(camera: frontDoor, start: at(999_990), end: nil)], motion: [], gaps: [])
+        let scenario = Scenario(cameras: [driveway, frontDoor], timeline: timeline, now: now, usesDynamicOrder: false)
+
+        // when
+        await scenario.sut.load()
+
+        // then
+        #expect(scenario.sut.heroCamera?.name == driveway.name)
+    }
+
+    @Test func `given the dynamic order is off when an alert is active then its badge still shows`() async {
+        // given
+        let timeline = DayTimeline(markers: [alertMarker(camera: frontDoor, start: at(999_990), end: nil)], motion: [], gaps: [])
+        let scenario = Scenario(cameras: [driveway, frontDoor], timeline: timeline, now: now, usesDynamicOrder: false)
+
+        // when
+        await scenario.sut.load()
+
+        // then — the preference governs position, never what the screen reports
+        #expect(scenario.sut.alertLabels[frontDoor.name] == "Person")
+    }
+
+    @Test func `given an alert-led hero when the dynamic order is turned off then the first camera takes it back`() async {
+        // given
+        let timeline = DayTimeline(markers: [alertMarker(camera: frontDoor, start: at(999_990), end: nil)], motion: [], gaps: [])
+        let scenario = Scenario(cameras: [driveway, frontDoor], timeline: timeline, now: now)
+        await scenario.sut.load()
+        #expect(scenario.sut.heroCamera?.name == frontDoor.name)
+
+        // when
+        scenario.settings.saveDynamicCameraOrder(false)
+
+        // then
+        await settle { scenario.sut.heroCamera?.name == driveway.name }
+        #expect(scenario.sut.heroCamera?.name == driveway.name)
+    }
+
     @Test func `given two alerts active at the instant when loaded then the most recently started camera is the hero`() async {
         // given
         let timeline = DayTimeline(
@@ -322,14 +361,19 @@ private func settle(timeout: Duration = .seconds(2), _ condition: () -> Bool) as
 
 @MainActor
 private struct Scenario {
+    let settings: FakeSettingsRepository
     let sut: TimelineScreenViewModel
 
-    init(cameras: [Camera], timeline: DayTimeline, now: Date) {
+    init(cameras: [Camera], timeline: DayTimeline, now: Date, usesDynamicOrder: Bool = true) {
+        let settings = FakeSettingsRepository()
+        settings.savedDynamicCameraOrder = usesDynamicOrder
+        self.settings = settings
         sut = TimelineScreenViewModel(
             observeCameras: ObserveCameras(
                 getCameras: GetCameras(repository: FakeCamerasRepository(.success(cameras))),
-                observeCameraOrder: ObserveCameraOrder(repository: FakeSettingsRepository())
+                observeCameraOrder: ObserveCameraOrder(repository: settings)
             ),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: settings),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(timeline))),
             now: { now },
             days: 7

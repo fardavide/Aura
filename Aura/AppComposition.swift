@@ -49,6 +49,8 @@ final class AppComposition {
             loadTheme: LoadTheme(repository: settingsRepository),
             saveTheme: SaveTheme(repository: settingsRepository),
             loadConnection: LoadConnection(repository: settingsRepository),
+            loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: settingsRepository),
+            saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: settingsRepository),
             getCameras: connection.map { connection in
                 GetCameras(
                     repository: FrigateCamerasRepository(
@@ -101,6 +103,7 @@ final class AppComposition {
         let configProvider = configProvider(config: config)
         return CameraGridViewModel(
             observeCameras: observeCameras(configProvider: configProvider),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: settingsRepository),
             getCameraActivity: GetCameraActivity(
                 repository: FrigateCameraActivityRepository(config: config, httpClient: httpClient, now: { Date() })
             ),
@@ -162,6 +165,7 @@ final class AppComposition {
         let config = serverConfig(from: connection)
         return TimelineScreenViewModel(
             observeCameras: observeCameras(configProvider: configProvider(config: config)),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: settingsRepository),
             getDayTimeline: GetDayTimeline(
                 repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),

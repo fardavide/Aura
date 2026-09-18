@@ -413,6 +413,90 @@ struct CameraGridViewModelTests {
         ])
     }
 
+    @Test func `given the dynamic order is off when an alert arrives then the first camera stays the hero`() async {
+        // given
+        let settings = FakeSettingsRepository()
+        settings.savedDynamicCameraOrder = false
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("front_door")])),
+            settings: settings,
+            activity: FakeCameraActivityRepository(.success([
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.heroCamera?.name == CameraName("driveway"))
+    }
+
+    @Test func `given the dynamic order is off when an alert arrives then the wall keeps the saved order`() async {
+        // given
+        let settings = FakeSettingsRepository()
+        settings.savedDynamicCameraOrder = false
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([
+                enabledCamera("driveway"), enabledCamera("front_door"), enabledCamera("garage"),
+            ])),
+            settings: settings,
+            activity: FakeCameraActivityRepository(.success([
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ]))
+        )
+
+        // when
+        await sut.load()
+
+        // then
+        #expect(sut.wallCameras.map(\.name) == [
+            CameraName("driveway"), CameraName("front_door"), CameraName("garage"),
+        ])
+    }
+
+    @Test func `given a loaded wall when the dynamic order is turned off then the hero returns to the first camera`() async {
+        // given
+        let settings = FakeSettingsRepository()
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("front_door")])),
+            settings: settings,
+            activity: FakeCameraActivityRepository(.success([
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ]))
+        )
+        await sut.load()
+        #expect(sut.heroCamera?.name == CameraName("front_door"))
+
+        // when
+        settings.saveDynamicCameraOrder(false)
+
+        // then
+        for _ in 0..<100 where sut.heroCamera?.name != CameraName("driveway") {
+            await Task.yield()
+        }
+        #expect(sut.heroCamera?.name == CameraName("driveway"))
+    }
+
+    @Test func `given the dynamic order is off when reading right now then the alert is still reported`() async {
+        // given
+        let settings = FakeSettingsRepository()
+        settings.savedDynamicCameraOrder = false
+        let sut = makeViewModel(
+            repository: FakeCamerasRepository(.success([enabledCamera("driveway"), enabledCamera("front_door")])),
+            settings: settings,
+            activity: FakeCameraActivityRepository(.success([
+                activity("front_door", label: "Person", severity: .alert, startedAt: 100),
+            ]))
+        )
+
+        // when
+        await sut.load()
+
+        // then — the preference reorders the wall; it never hides what is happening
+        #expect(sut.rightNow?.camera.name == CameraName("front_door"))
+    }
+
     @Test func `given a selected group when reading the wall cameras then only its members are listed`() async {
         // given
         let sut = makeViewModel(
@@ -691,6 +775,7 @@ private func makeViewModel(
             getCameras: GetCameras(repository: repository),
             observeCameraOrder: ObserveCameraOrder(repository: settings)
         ),
+        observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: settings),
         getCameraActivity: GetCameraActivity(repository: activity),
         observeCameraGroups: ObserveCameraGroups(repository: groups),
         getTodayEventCounts: GetTodayEventCounts(repository: today, now: { fixedNow }),

@@ -123,6 +123,40 @@ struct SettingsViewModelTests {
         #expect(scenario.sut.cameraCountText == "2 cameras")
     }
 
+    @Test func `given nothing stored when appearing then the dynamic camera order reads on`() {
+        // given
+        let scenario = Scenario()
+
+        // when
+        scenario.sut.onAppear()
+
+        // then
+        #expect(scenario.sut.usesDynamicCameraOrder)
+    }
+
+    @Test func `given the dynamic camera order is off when appearing then it is prefilled off`() {
+        // given
+        let scenario = Scenario()
+        scenario.settings.savedDynamicCameraOrder = false
+
+        // when
+        scenario.sut.onAppear()
+
+        // then
+        #expect(scenario.sut.usesDynamicCameraOrder == false)
+    }
+
+    @Test func `when the dynamic camera order is turned off then it is saved immediately`() {
+        // given
+        let scenario = Scenario()
+
+        // when
+        scenario.sut.usesDynamicCameraOrder = false
+
+        // then
+        #expect(scenario.settings.savedDynamicCameraOrder == false)
+    }
+
     @Test func `given the platform cannot switch icons when appearing then the app icon is absent`() {
         // given
         let scenario = Scenario()
@@ -168,6 +202,8 @@ private struct Scenario {
             loadTheme: LoadTheme(repository: settings),
             saveTheme: SaveTheme(repository: settings),
             loadConnection: LoadConnection(repository: settings),
+            loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: settings),
+            saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: settings),
             getCameras: self.cameras.map(GetCameras.init),
             loadAppIcon: currentIcon.map { LoadAppIcon(switcher: FakeAppIconSwitcher(current: $0)) }
         )

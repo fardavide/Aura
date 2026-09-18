@@ -10,7 +10,8 @@ import SettingsDomain
 public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable {
     private let defaults: UserDefaults
     private let keychain: any KeychainStore
-    private let observers = CameraOrderObservers()
+    private let cameraOrderObservers = PreferenceObservers<[CameraName]>()
+    private let dynamicCameraOrderObservers = PreferenceObservers<Bool>()
 
     public init(defaults: UserDefaults = .standard, keychain: any KeychainStore) {
         self.defaults = defaults
@@ -56,13 +57,34 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
 
     public func saveCameraOrder(_ order: [CameraName]) {
         defaults.set(order.map(\.value), forKey: Keys.cameraOrder)
-        observers.yield(order)
+        cameraOrderObservers.yield(order)
     }
 
     public func observeCameraOrder() -> AsyncStream<[CameraName]> {
         AsyncStream { continuation in
-            let id = observers.register(continuation, seededWith: loadCameraOrder)
-            continuation.onTermination = { [observers] _ in observers.remove(id) }
+            let id = cameraOrderObservers.register(continuation, seededWith: loadCameraOrder)
+            continuation.onTermination = { [cameraOrderObservers] _ in cameraOrderObservers.remove(id) }
+        }
+    }
+
+    /// Absent means on: the alert-led wall is the shipped behaviour, and an untouched install
+    /// must not read as "turned off" just because `UserDefaults` answers `false` for a missing key.
+    public func loadDynamicCameraOrder() -> Bool {
+        guard defaults.object(forKey: Keys.dynamicCameraOrder) != nil else { return true }
+        return defaults.bool(forKey: Keys.dynamicCameraOrder)
+    }
+
+    public func saveDynamicCameraOrder(_ isEnabled: Bool) {
+        defaults.set(isEnabled, forKey: Keys.dynamicCameraOrder)
+        dynamicCameraOrderObservers.yield(isEnabled)
+    }
+
+    public func observeDynamicCameraOrder() -> AsyncStream<Bool> {
+        AsyncStream { continuation in
+            let id = dynamicCameraOrderObservers.register(continuation, seededWith: loadDynamicCameraOrder)
+            continuation.onTermination = { [dynamicCameraOrderObservers] _ in
+                dynamicCameraOrderObservers.remove(id)
+            }
         }
     }
 
@@ -75,20 +97,21 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
     }
 }
 
-/// A reference type so every copy of the repository value shares the one observer set.
-private final class CameraOrderObservers: Sendable {
-    private let continuations = Mutex<[UUID: AsyncStream<[CameraName]>.Continuation]>([:])
+/// A reference type so every copy of the repository value shares the one observer set, per
+/// observable preference.
+private final class PreferenceObservers<Value: Sendable>: Sendable {
+    private let continuations = Mutex<[UUID: AsyncStream<Value>.Continuation]>([:])
 
     /// Seeding and registration happen under the one lock that `yield` also takes, so a
     /// concurrent save is either visible to the seed read or delivered to the registered
     /// continuation — never lost between the two.
     func register(
-        _ continuation: AsyncStream<[CameraName]>.Continuation,
-        seededWith currentOrder: () -> [CameraName]
+        _ continuation: AsyncStream<Value>.Continuation,
+        seededWith currentValue: () -> Value
     ) -> UUID {
         let id = UUID()
         continuations.withLock {
-            continuation.yield(currentOrder())
+            continuation.yield(currentValue())
             $0[id] = continuation
         }
         return id
@@ -98,10 +121,10 @@ private final class CameraOrderObservers: Sendable {
         continuations.withLock { _ = $0.removeValue(forKey: id) }
     }
 
-    func yield(_ order: [CameraName]) {
+    func yield(_ value: Value) {
         let active = continuations.withLock { Array($0.values) }
         for continuation in active {
-            continuation.yield(order)
+            continuation.yield(value)
         }
     }
 }
@@ -114,4 +137,5 @@ private enum Keys {
     static let password = "connection.password"
     static let theme = "theme"
     static let cameraOrder = "cameraOrder"
+    static let dynamicCameraOrder = "dynamicCameraOrder"
 }

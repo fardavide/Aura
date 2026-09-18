@@ -90,6 +90,34 @@ struct DefaultSettingsRepositoryTests {
         #expect(await iterator.next() == [CameraName("front door")])
     }
 
+    @Test func `given nothing saved when loading the dynamic camera order then it is on`() {
+        #expect(Scenario().sut.loadDynamicCameraOrder() == true)
+    }
+
+    @Test func `given the dynamic camera order turned off when loading then it round-trips`() {
+        // given
+        let scenario = Scenario()
+
+        // when
+        scenario.sut.saveDynamicCameraOrder(false)
+
+        // then
+        #expect(scenario.sut.loadDynamicCameraOrder() == false)
+    }
+
+    @Test func `given an observer when the dynamic camera order is turned off then it is emitted`() async {
+        // given
+        let scenario = Scenario()
+        var iterator = scenario.sut.observeDynamicCameraOrder().makeAsyncIterator()
+        _ = await iterator.next()
+
+        // when
+        scenario.sut.saveDynamicCameraOrder(false)
+
+        // then
+        #expect(await iterator.next() == false)
+    }
+
     @Test func `given a saved theme when loading then it round-trips`() {
         // given
         let scenario = Scenario()

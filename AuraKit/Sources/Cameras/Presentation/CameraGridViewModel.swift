@@ -3,6 +3,7 @@ import Observation
 
 import CamerasDomain
 import CamerasEntities
+import SettingsDomain
 
 @Observable
 @MainActor
@@ -30,6 +31,7 @@ public final class CameraGridViewModel {
     public private(set) var storage: RecordingStorage?
 
     private let observeCameras: ObserveCameras
+    private let observeDynamicCameraOrder: ObserveDynamicCameraOrder
     private let getCameraActivity: GetCameraActivity
     private let observeCameraGroups: ObserveCameraGroups
     private let getTodayEventCounts: GetTodayEventCounts
@@ -38,11 +40,17 @@ public final class CameraGridViewModel {
     private var observation: Task<Void, Never>?
     private var groupsObservation: Task<Void, Never>?
     private var storageObservation: Task<Void, Never>?
+    private var dynamicOrderObservation: Task<Void, Never>?
     private var previews: [CameraName: Data] = [:]
     private var offlineCameras: Set<CameraName> = []
+    /// The user's "Follow Activity" preference. Seeded from the observation `load()` starts; the
+    /// shipped default until it arrives, so the first frame matches the first frame of an install
+    /// that never opened Settings.
+    private var usesDynamicOrder = true
 
     public init(
         observeCameras: ObserveCameras,
+        observeDynamicCameraOrder: ObserveDynamicCameraOrder,
         getCameraActivity: GetCameraActivity,
         observeCameraGroups: ObserveCameraGroups,
         getTodayEventCounts: GetTodayEventCounts,
@@ -50,6 +58,7 @@ public final class CameraGridViewModel {
         imageLoader: any CameraImageLoading
     ) {
         self.observeCameras = observeCameras
+        self.observeDynamicCameraOrder = observeDynamicCameraOrder
         self.getCameraActivity = getCameraActivity
         self.observeCameraGroups = observeCameraGroups
         self.getTodayEventCounts = getTodayEventCounts
@@ -61,6 +70,7 @@ public final class CameraGridViewModel {
         observation?.cancel()
         groupsObservation?.cancel()
         storageObservation?.cancel()
+        dynamicOrderObservation?.cancel()
     }
 
     /// Loaded cameras whose preview still failed to load — our one honest per-camera offline signal.
@@ -82,7 +92,12 @@ public final class CameraGridViewModel {
     /// The wall's hero: the visible camera with the most recently started **alert** — never a mere
     /// detection, so the 2 s activity loop can't churn the layout for ordinary motion — else the
     /// first visible camera; nil when there is none to show.
+    ///
+    /// With "Follow Activity" off, the hero is always the first visible camera, so the wall keeps
+    /// the user's saved order however the alerts move. The badges are untouched: the preference
+    /// governs *position*, never what the screen reports.
     public var heroCamera: Camera? {
+        guard usesDynamicOrder else { return visibleCameras.first }
         let alertedCameras = visibleCameras.compactMap { camera -> (Camera, Date)? in
             guard let activity = activity[camera.name], activity.severity == .alert else { return nil }
             return (camera, activity.startedAt)
@@ -169,6 +184,7 @@ public final class CameraGridViewModel {
     /// content. The view model owns preview and activity loading so the tiles stay pure — they never
     /// write back into it mid-render.
     public func load() async {
+        await observeDynamicOrder()
         do {
             let cameras = try await observeCameras.execute()
             // A racing load() may have assigned a fresh observation while we were suspended
@@ -234,6 +250,24 @@ public final class CameraGridViewModel {
         await observeGroups()
         todayEvents = try? await getTodayEventCounts.execute()
         await observeStorage()
+    }
+
+    private func observeDynamicOrder() async {
+        guard dynamicOrderObservation == nil else { return }
+        let stream = observeDynamicCameraOrder.execute()
+        await withCheckedContinuation { continuation in
+            dynamicOrderObservation = Task { [weak self] in
+                var firstEmission: CheckedContinuation<Void, Never>? = continuation
+                for await isEnabled in stream {
+                    self?.usesDynamicOrder = isEnabled
+                    firstEmission?.resume()
+                    firstEmission = nil
+                }
+                firstEmission?.resume()
+                // Cleared so a later load() re-subscribes if the stream ended.
+                self?.dynamicOrderObservation = nil
+            }
+        }
     }
 
     private func observeGroups() async {

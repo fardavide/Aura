@@ -123,6 +123,7 @@ private func cameraGridScreen(
             getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
             observeCameraOrder: ObserveCameraOrder(repository: FakeSettingsRepository())
         ),
+        observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
         getCameraActivity: GetCameraActivity(repository: FakeCameraActivityRepository(.success(activity))),
         observeCameraGroups: ObserveCameraGroups(repository: FakeCameraGroupsRepository(groups)),
         getTodayEventCounts: GetTodayEventCounts(
