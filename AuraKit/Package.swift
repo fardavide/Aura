@@ -123,7 +123,7 @@ let package = Package(
 
         .target(
             name: "CamerasPresentation",
-            dependencies: ["CamerasDomain", "CamerasEntities", "CommonPlayer", "CommonDesign"],
+            dependencies: ["CamerasDomain", "CamerasEntities", "SettingsDomain", "CommonPlayer", "CommonDesign"],
             path: "Sources/Cameras/Presentation"
         ),
         .testTarget(
@@ -200,7 +200,7 @@ let package = Package(
 
         .target(
             name: "TimelinePresentation",
-            dependencies: ["TimelineDomain", "CamerasDomain", "CamerasEntities", "CommonPlayer", "CommonDesign"],
+            dependencies: ["TimelineDomain", "CamerasDomain", "CamerasEntities", "SettingsDomain", "CommonPlayer", "CommonDesign"],
             path: "Sources/Timeline/Presentation"
         ),
         .testTarget(

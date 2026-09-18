@@ -133,6 +133,8 @@ private func settingsMenu(
         loadTheme: LoadTheme(repository: repository),
         saveTheme: SaveTheme(repository: repository),
         loadConnection: LoadConnection(repository: repository),
+        loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: repository),
+        saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: repository),
         getCameras: cameras.map { GetCameras(repository: FakeCamerasRepository($0)) },
         loadAppIcon: LoadAppIcon(switcher: appIcon)
     )

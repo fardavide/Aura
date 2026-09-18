@@ -3,6 +3,7 @@ import Observation
 
 import CamerasDomain
 import CamerasEntities
+import SettingsDomain
 import TimelineDomain
 
 @Observable
@@ -27,19 +28,25 @@ public final class TimelineScreenViewModel {
     public private(set) var span: TimeRange
     /// The camera the compact grid puts first — the one with the alert active at the scrub instant
     /// (most recently started, if more than one), falling back to the first camera. `nil` before the
-    /// first load or when there are no cameras.
+    /// first load or when there are no cameras. With "Follow Activity" off it is always the first
+    /// camera, so the grid keeps the user's saved order; the alert badges are unaffected.
     public private(set) var heroCamera: Camera?
     /// The tracked-object word for every camera with an active alert at the scrub instant, keyed by
     /// camera — the tile's headline badge. Empty when nothing is alerting.
     public private(set) var alertLabels: [CameraName: String] = [:]
 
     private let observeCameras: ObserveCameras
+    private let observeDynamicCameraOrder: ObserveDynamicCameraOrder
     private let getDayTimeline: GetDayTimeline
     private let now: @MainActor () -> Date
     /// The motion-strip resolution, pinned from the span at birth so every overlay window — and
     /// every refresh — comes back at the same bucket width.
     private let bucket: TimeInterval
     private var observation: Task<Void, Never>?
+    private var dynamicOrderObservation: Task<Void, Never>?
+    /// The user's "Follow Activity" preference. Seeded from the observation `load()` starts; the
+    /// shipped default until it arrives.
+    private var usesDynamicOrder = true
     /// The freshest stream emission — read at ready-time so an order change landing while
     /// the timeline fetch is in flight is not lost.
     private var latestCameras: [Camera] = []
@@ -53,8 +60,15 @@ public final class TimelineScreenViewModel {
     /// multi-day span) is excluded — historical footage doesn't change, so refreshing it is moot.
     private static let liveEdgeWindow: TimeInterval = 600
 
-    public init(observeCameras: ObserveCameras, getDayTimeline: GetDayTimeline, now: @escaping @MainActor () -> Date, days: Int) {
+    public init(
+        observeCameras: ObserveCameras,
+        observeDynamicCameraOrder: ObserveDynamicCameraOrder,
+        getDayTimeline: GetDayTimeline,
+        now: @escaping @MainActor () -> Date,
+        days: Int
+    ) {
         self.observeCameras = observeCameras
+        self.observeDynamicCameraOrder = observeDynamicCameraOrder
         self.getDayTimeline = getDayTimeline
         self.now = now
         let start = now()
@@ -69,10 +83,12 @@ public final class TimelineScreenViewModel {
 
     isolated deinit {
         observation?.cancel()
+        dynamicOrderObservation?.cancel()
     }
 
     public func load() async {
         state = .loading
+        await observeDynamicOrder()
         span = TimeRange(start: span.start, end: now())
         overlaysLoadedBack = span.end
 
@@ -266,12 +282,37 @@ public final class TimelineScreenViewModel {
         for alert in activeAlerts {
             newLabels[alert.camera] = alert.label
         }
-        let newHero = activeAlerts.max { $0.start < $1.start }
-            .flatMap { alert in cameras.first { $0.name == alert.camera } }
-            ?? cameras.first
+        // With "Follow Activity" off the grid keeps the saved order, so the hero is simply the
+        // first camera — the badges above still report every active alert where it sits.
+        let newHero = usesDynamicOrder
+            ? activeAlerts.max { $0.start < $1.start }
+                .flatMap { alert in cameras.first { $0.name == alert.camera } }
+                ?? cameras.first
+            : cameras.first
         guard newHero?.name != heroCamera?.name || newLabels != alertLabels else { return }
         heroCamera = newHero
         alertLabels = newLabels
+    }
+
+    /// Follows the "Follow Activity" preference for the screen's life, re-picking the hero on every
+    /// change so a wall already on screen re-settles the moment the toggle flips.
+    private func observeDynamicOrder() async {
+        guard dynamicOrderObservation == nil else { return }
+        let stream = observeDynamicCameraOrder.execute()
+        await withCheckedContinuation { continuation in
+            dynamicOrderObservation = Task { [weak self] in
+                var firstEmission: CheckedContinuation<Void, Never>? = continuation
+                for await isEnabled in stream {
+                    self?.usesDynamicOrder = isEnabled
+                    self?.updateHeroSelection()
+                    firstEmission?.resume()
+                    firstEmission = nil
+                }
+                firstEmission?.resume()
+                // Cleared so a later load() re-subscribes if the stream ended.
+                self?.dynamicOrderObservation = nil
+            }
+        }
     }
 
     /// Restarts the camera observation and returns its first emission. The observation keeps

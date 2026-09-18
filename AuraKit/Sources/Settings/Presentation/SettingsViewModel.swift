@@ -21,6 +21,12 @@ public final class SettingsViewModel {
     public var theme: ThemePreference = .system {
         didSet { saveTheme.execute(theme) }
     }
+    /// Whether the camera walls may promote the newest alert's camera ahead of the saved order.
+    /// Saved on every change, like `theme`; the walls observe the preference and re-settle on their
+    /// own rather than waiting for the sheet to be dismissed.
+    public var usesDynamicCameraOrder = true {
+        didSet { saveDynamicCameraOrder.execute(usesDynamicCameraOrder) }
+    }
     public private(set) var serverSummary: ServerSummary = .notConfigured
     public private(set) var cameraCount: CameraCount = .unknown
     /// `nil` where the platform has no swappable app icon — the row is absent, matching
@@ -37,6 +43,8 @@ public final class SettingsViewModel {
     private let loadTheme: LoadTheme
     private let saveTheme: SaveTheme
     private let loadConnection: LoadConnection
+    private let loadDynamicCameraOrder: LoadDynamicCameraOrder
+    private let saveDynamicCameraOrder: SaveDynamicCameraOrder
     /// `nil` before a connection is configured — the menu has no Camera Order row and nothing
     /// to count.
     private let getCameras: GetCameras?
@@ -47,18 +55,23 @@ public final class SettingsViewModel {
         loadTheme: LoadTheme,
         saveTheme: SaveTheme,
         loadConnection: LoadConnection,
+        loadDynamicCameraOrder: LoadDynamicCameraOrder,
+        saveDynamicCameraOrder: SaveDynamicCameraOrder,
         getCameras: GetCameras?,
         loadAppIcon: LoadAppIcon?
     ) {
         self.loadTheme = loadTheme
         self.saveTheme = saveTheme
         self.loadConnection = loadConnection
+        self.loadDynamicCameraOrder = loadDynamicCameraOrder
+        self.saveDynamicCameraOrder = saveDynamicCameraOrder
         self.getCameras = getCameras
         self.loadAppIcon = loadAppIcon
     }
 
     public func onAppear() {
         theme = loadTheme.execute()
+        usesDynamicCameraOrder = loadDynamicCameraOrder.execute()
         serverSummary = if let connection = loadConnection.execute() {
             .configured(hostPort: "\(connection.host):\(connection.port)")
         } else {

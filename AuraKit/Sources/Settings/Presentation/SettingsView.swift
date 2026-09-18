@@ -51,10 +51,22 @@ public struct SettingsView: View {
                         } label: {
                             SettingsMenuRow(title: "Camera Order", value: viewModel.cameraCountText)
                         }
+                        // Tinted to the app accent like every other control on this sheet — the
+                        // stock green reads as a foreign control against the aurora palette.
+                        Toggle(isOn: $viewModel.usesDynamicCameraOrder) {
+                            Text("Follow Activity")
+                                .auroraText(.headline)
+                                .foregroundStyle(.auroraTextPrimary)
+                        }
+                        .tint(.accentColor)
                     } header: {
                         Text("Cameras")
                             .auroraText(.sectionHeading)
                             .textCase(.uppercase)
+                            .foregroundStyle(.auroraTextQuaternary)
+                    } footer: {
+                        Text("Moves the camera with the newest alert into the large tile. Off keeps the wall in your Camera Order.")
+                            .auroraText(.caption)
                             .foregroundStyle(.auroraTextQuaternary)
                     }
                     .listRowBackground(Color.auroraSettingsRow)

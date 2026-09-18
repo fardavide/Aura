@@ -120,6 +120,44 @@ struct CameraOrderUseCaseTests {
     }
 }
 
+struct DynamicCameraOrderUseCaseTests {
+
+    @Test func `when turning the dynamic order off then the repository stores it`() {
+        // given
+        let repository = FakeSettingsRepository()
+
+        // when
+        SaveDynamicCameraOrder(repository: repository).execute(false)
+
+        // then
+        #expect(repository.savedDynamicCameraOrder == false)
+    }
+
+    @Test func `given the dynamic order is off when loading then it is returned`() {
+        // given
+        let repository = FakeSettingsRepository()
+        repository.savedDynamicCameraOrder = false
+
+        // when - then
+        #expect(LoadDynamicCameraOrder(repository: repository).execute() == false)
+    }
+
+    @Test func `when observing then the current preference is emitted first and changes follow`() async {
+        // given
+        let repository = FakeSettingsRepository()
+        var iterator = ObserveDynamicCameraOrder(repository: repository).execute().makeAsyncIterator()
+
+        // when - then
+        #expect(await iterator.next() == true)
+
+        // when
+        repository.saveDynamicCameraOrder(false)
+
+        // then
+        #expect(await iterator.next() == false)
+    }
+}
+
 @MainActor
 struct AppIconUseCaseTests {
 

@@ -189,7 +189,7 @@ public struct CameraGridView<CameraTimeline: View>: View {
                 .buttonStyle(.plain)
             }
         }
-        .animation(.smooth(duration: 0.35), value: viewModel.heroCamera)
+        .animation(.auroraHeroSwap, value: viewModel.heroCamera)
         .background {
             AuroraGlow()
                 .padding(.horizontal, -contentPadding)

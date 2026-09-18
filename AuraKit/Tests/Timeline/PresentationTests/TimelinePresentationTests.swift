@@ -98,6 +98,7 @@ struct TimelineScreenViewModelTests {
         let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { at(1_000_000) },
             days: 2
@@ -126,6 +127,7 @@ struct TimelineScreenViewModelTests {
         let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { clock.value },
             days: 2
@@ -154,6 +156,7 @@ struct TimelineScreenViewModelTests {
         }
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { clock.value },
             days: 2
@@ -180,6 +183,7 @@ struct TimelineScreenViewModelTests {
         let timelineRepo = FakeCameraDayTimelineRepository(.success(busyTimeline))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { at(1_000_000) },
             days: 2
@@ -199,6 +203,7 @@ struct TimelineScreenViewModelTests {
         let cameras = FakeCamerasRepository(.failure(.unreachable))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: cameras),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(busyTimeline))),
             now: { at(1_000_000) },
             days: 2
@@ -219,6 +224,7 @@ struct TimelineScreenViewModelTests {
         let clock = TestClock(at(1_000_000))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { clock.value },
             days: 2
@@ -241,6 +247,7 @@ struct TimelineScreenViewModelTests {
         let clock = TestClock(at(1_000_000))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { clock.value },
             days: 2
@@ -260,6 +267,7 @@ struct TimelineScreenViewModelTests {
         let clock = TestClock(at(1_000_000))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { clock.value },
             days: 2
@@ -281,6 +289,7 @@ struct TimelineScreenViewModelTests {
         let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { clock.value },
             days: 2
@@ -308,6 +317,7 @@ struct TimelineScreenViewModelTests {
         let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { clock.value },
             days: 2
@@ -330,6 +340,7 @@ struct TimelineScreenViewModelTests {
         let clock = TestClock(at(1_000_000))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { clock.value },
             days: 2
@@ -350,6 +361,7 @@ struct TimelineScreenViewModelTests {
         let clock = TestClock(at(1_000_000))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { clock.value },
             days: 2
@@ -371,6 +383,7 @@ struct TimelineScreenViewModelTests {
         let timelineRepo = FakeCameraDayTimelineRepository(.success(emptyTimeline))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: FakeCamerasRepository(.success([camera]))),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { clock.value },
             days: 2
@@ -417,6 +430,7 @@ struct TimelineScreenViewModelTests {
         let cameras = FakeCamerasRepository(.success([camera]))
         let sut = TimelineScreenViewModel(
             observeCameras: makeObserveCameras(repository: cameras),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
             getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(.success(emptyTimeline))),
             now: { at(1_000_000) },
             days: 2
@@ -440,6 +454,7 @@ struct TimelineScreenViewModelTests {
                 repository: FakeCamerasRepository(.success([camera, garageCamera])),
                 settings: settings
             ),
+            observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: settings),
             getDayTimeline: GetDayTimeline(repository: timelineRepo),
             now: { at(1_000_000) },
             days: 2
@@ -838,6 +853,7 @@ private func makeViewModel(
 ) -> TimelineScreenViewModel {
     TimelineScreenViewModel(
         observeCameras: makeObserveCameras(repository: FakeCamerasRepository(cameras), settings: settings),
+        observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: settings),
         getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(timeline)),
         now: { at(1_000_000) },
         days: 2

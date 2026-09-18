@@ -10,4 +10,7 @@ public protocol SettingsRepository: Sendable {
     func loadCameraOrder() -> [CameraName]
     func saveCameraOrder(_ order: [CameraName])
     func observeCameraOrder() -> AsyncStream<[CameraName]>
+    func loadDynamicCameraOrder() -> Bool
+    func saveDynamicCameraOrder(_ isEnabled: Bool)
+    func observeDynamicCameraOrder() -> AsyncStream<Bool>
 }

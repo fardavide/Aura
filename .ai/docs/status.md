@@ -282,6 +282,13 @@ not snapshot-tested — they center on video players that can't render in a snap
   rounding, panel-height measurement, a `.padding()` silently shrinking the growth canvas, and —
   found only after two rounds of on-device testing — every pinch's anchor/pan/clamp math being
   computed against the whole container instead of the actual (smaller) content it was measuring).
+- **Alert-led ordering is now the user's choice, and the Timeline grid animates it (0.6.8).** A
+  "Follow Activity" switch in Settings → Cameras governs both walls at once: on (the shipped
+  default, so nothing changes for anyone who ignores it) the newest alert's camera takes the large
+  tile; off, both grids stay in the saved Camera Order whatever the alerts do. Alert badges are
+  untouched by it — the preference decides *position*, not what the screen reports. The Timeline
+  grid's hero flip was unanimated and snapped; it now travels on the same shared curve the Cameras
+  wall already used.
 
 ## Next
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a

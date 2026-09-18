@@ -135,6 +135,7 @@ func timelineScreen(
             getCameras: GetCameras(repository: FakeCamerasRepository(cameras)),
             observeCameraOrder: ObserveCameraOrder(repository: FakeSettingsRepository())
         ),
+        observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: FakeSettingsRepository()),
         getDayTimeline: GetDayTimeline(repository: FakeCameraDayTimelineRepository(timeline)),
         now: { snapshotNow },
         days: snapshotDays

@@ -1796,3 +1796,38 @@ doesn't read `insetTop` but its canvas still shrinks if a nav bar is visibly res
 that production hides in that arrangement. Re-recording surfaced the fix directly: the `SURFACE`
 diagnostic outline (previously stopping short below the nav title) now runs behind it, visually
 matching Live's own already-fixed behaviour.
+
+## Alert-led ordering becomes a preference, and both grids animate the swap (0.6.8)
+
+The alert-led hero (0.6.0, on the Cameras wall and the Timeline tab's compact grid alike) moves a
+camera out from under the user's thumb. It is now governed by one observed boolean preference —
+"Follow Activity", in Settings → Cameras — rather than being unconditional.
+
+Four decisions worth keeping:
+
+- **One preference, both grids.** The Cameras wall and the Timeline grid do the same thing for the
+  same reason, so a switch that governed only one would leave the other reshuffling and read as a
+  bug. It lives on the single `SettingsRepository` beside the camera order, not on a new
+  micro-repository — a new field is not a new entity.
+- **Off means the hero slot holds the first camera, not that the hero disappears.** The layouts are
+  unchanged; only the promotion stops. Flattening the wall to a uniform grid would have been a much
+  bigger visual change than the complaint warranted, and would have thrown away the design's focal
+  point to fix an ordering problem.
+- **The preference governs position, never reporting.** Alert badges, the activity chip and
+  `rightNow` are all untouched by it. Suppressing what the screen *says* because the user asked for a
+  stable *layout* would answer a question they didn't ask, and would hide real events.
+- **Default on.** It is the shipped behaviour, so an install that never opens Settings sees no
+  change; `loadDynamicCameraOrder` treats an absent key as `true` rather than letting
+  `UserDefaults.bool(forKey:)` read a missing value as "turned off".
+
+Both view models observe the preference (per the "preferences are observed, not polled" rule) and
+re-pick the hero on every emission, so a wall already on screen re-settles the moment the toggle
+flips rather than waiting for the sheet to be dismissed.
+
+Separately: **the Timeline grid's hero flip had no animation at all** and snapped to the new
+arrangement — the Cameras wall had had `.smooth(duration: 0.35)` since 0.6.0. That curve is now a
+single `Animation.auroraHeroSwap` token in `CommonDesign`, used by both grids, applied to the
+`Layout` container (not the tile) so the tiles *below* the hero travel too instead of being
+repositioned outside the animated scope. The Settings toggle is `.tint(.accentColor)`: the stock
+green reads as a foreign control against the aurora palette, and unlike a segmented `Picker`'s
+selection indicator, a `Toggle`'s tint genuinely takes.
