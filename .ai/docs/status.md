@@ -311,6 +311,12 @@ not snapshot-tested — they center on video players that can't render in a snap
   the severity tag and the badge each mid-word. A reported detection now reads struck through in
   muted grey and nothing else; the event screen's panel still says it in full. Snapshot fixtures
   carry the longest realistic label now, which is what eight green baselines had been missing.
+- **The ink alone still wasn't enough, twice over (0.6.13–0.6.14).** `TextTertiary` barely dimmed;
+  the fix to `TextMuted` still didn't read as "wrong" at a glance while scanning. Four treatments
+  were rendered side by side as a throwaway comparison and shown to the user before choosing: a
+  small fixed-width `xmark.circle.fill` in front of the label is what actually breaks the scan
+  pattern — in the list, the hero card, and the event screen. The row's `minimumScaleFactor`
+  tightened to `0.6` to keep "Motorcycle" on one line with the icon added to its width budget.
 
 ## Next
 - **Verify detection feedback against the real server (0.6.10).** Every path is unit-tested against

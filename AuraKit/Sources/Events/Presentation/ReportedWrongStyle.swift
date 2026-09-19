@@ -4,17 +4,14 @@ import CommonDesign
 
 extension View {
 
-    /// How a label reads once the user has told Frigate+ it was wrong: struck through and dropped to
-    /// muted ink, so the row recedes like a crossed-off item.
+    /// How a label reads once the user has told Frigate+ it was wrong: struck through and dropped
+    /// to `TextMuted` — the one token that sits furthest back in **both** schemes (`#8C87A8` light,
+    /// `#7C7896` dark; the ramp is otherwise monotonic per scheme, so `TextTertiary`/`TextQuaternary`
+    /// invert between them and only `TextMuted` recedes either way).
     ///
-    /// A "NOT A …" badge shipped here first and had to go: a long label ("Motorcycle") left the row
-    /// no width for one, so the badge, the severity tag *and* the label all wrapped mid-word. The
-    /// meaning it carried is stated in full on the event screen's panel instead, which has the room.
-    ///
-    /// The ink is `TextMuted`, the one token that sits furthest back in **both** schemes
-    /// (`#8C87A8` light, `#7C7896` dark). `TextTertiary` shipped here first and read as barely
-    /// dimmed: at `#5F5A7C` against a `#1A1630` primary it is only a shade off a normal label,
-    /// which left the strikethrough doing all the work on its own.
+    /// Pair with `ReportedWrongIcon()` placed before the label — colour and a strikethrough alone
+    /// read as merely dimmed at a glance (confirmed against a live comparison of four treatments);
+    /// the icon is what actually breaks the scan pattern.
     ///
     /// Untouched when the label stands, so a row with no verdict keeps inheriting its colour.
     @ViewBuilder func reportedWrong(_ isReportedWrong: Bool) -> some View {
@@ -23,5 +20,19 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+/// The fixed-width glyph placed before a label reported wrong. Sized independently of the label's
+/// font, unlike the "NOT A …" text badge it replaced — that one scaled with the label and wrapped a
+/// long word ("Motorcycle") across the row, the severity tag and itself all at once. Purely
+/// decorative: the struck-through label beside it, and the event screen's panel, already carry the
+/// meaning for VoiceOver.
+struct ReportedWrongIcon: View {
+    var body: some View {
+        Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.auroraTextMuted)
+            .accessibilityHidden(true)
     }
 }
