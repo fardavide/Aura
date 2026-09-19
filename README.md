@@ -45,6 +45,11 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.13 — 2026-09-19
+- **A detection you reported as wrong now visibly fades back.** Its label was only a shade lighter
+  than a normal one, so the strikethrough was doing all the work; it now uses the palette's
+  furthest-back ink in both light and dark.
+
 ### 0.6.12 — 2026-09-19
 - **Fixed the mangled event row on a detection reported wrong.** The "NOT A DOG" badge left no width
   for anything else, so with a longer label the row broke into "Motorc / ycle", "ALE / RT" and "NOT

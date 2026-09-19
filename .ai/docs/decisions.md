@@ -1929,3 +1929,9 @@ text scales with the label, so `motorcycle` left the row no width and the label,
   fixture label was `person`, `dog` or `car`. The snapshot fixtures now carry `motorcycle`, so the
   overflow lands in a committed PNG rather than in a user's screenshot. Rule recorded in
   `swift-testing`; the width-planning rule in `swift-style`.
+- **The ink is `TextMuted`, not `TextTertiary` (0.6.13).** Tertiary shipped first and read as barely
+  dimmed — `#5F5A7C` against a `#1A1630` primary is a shade, not a step, so the strikethrough was
+  carrying the whole signal alone. `TextMuted` is the one token that sits furthest back in **both**
+  schemes (`#8C87A8` light, `#7C7896` dark); the ramp is otherwise monotonic per scheme, so
+  Quaternary/Muted invert between them and only Muted recedes either way. At 17pt bold the label is
+  "large text" for contrast purposes, so the dimmer ink still clears the 3:1 threshold.
