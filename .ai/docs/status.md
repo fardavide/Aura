@@ -293,8 +293,20 @@ not snapshot-tested — they center on video players that can't render in a snap
   events. Scrolling to the end of the list now fetches the next page with Frigate's `before` cursor
   and appends it, repeating until the server has nothing older. Loaded content is never blanked to
   page: a failed page costs only the footer, which offers a retry.
+- **Detection feedback on the event screen (0.6.10).** On a server with Frigate+ enabled, an event
+  detail asks "Is this a dog?" and sends the answer — confirm (`POST …/plus`) or false positive
+  (`PUT …/false_positive`). Suggesting the *right* label is impossible: the API annotates with the
+  event's own label and takes no corrected one, so the panel links to plus.frigate.video where the
+  relabelling actually happens (see `decisions.md`). Hidden entirely unless the server reports the
+  add-on and the event is submittable. First write path in the app — `FrigateApiClient` gained
+  `post`/`put`.
 
 ## Next
+- **Verify detection feedback against the real server (0.6.10).** Every path is unit-tested against
+  the v0.17.2 contract, but no verdict has ever been sent to a live Frigate+ instance. Confirm on
+  the running server: the panel appears at all (i.e. `/api/config` really carries `plus.enabled`);
+  a confirm and a false positive both return 200 and show up in the Frigate+ dataset; and that the
+  admin-role requirement on port 8971 doesn't reject the app's Basic-auth credentials.
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a
   symbol effect inside a custom `Tab` label is unconfirmed (see `decisions.md`); if stripped, the
   icons just stay static.

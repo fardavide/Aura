@@ -87,6 +87,17 @@ struct FrigateUrlTests {
         )
     }
 
+    @Test func `when building the detection feedback urls then they target the event`() {
+        #expect(
+            FrigatePlusUrl.submit(base: base, eventId: "ev1")
+                == URL(string: "http://frigate.local:5000/api/events/ev1/plus")!
+        )
+        #expect(
+            FrigatePlusUrl.falsePositive(base: base, eventId: "ev1")
+                == URL(string: "http://frigate.local:5000/api/events/ev1/false_positive")!
+        )
+    }
+
     @Test func `when building event media urls then they target the event`() {
         #expect(
             FrigateMediaUrl.thumbnail(base: base, eventId: "ev1")

@@ -155,9 +155,13 @@ final class AppComposition {
         for event: Event,
         connection: ConnectionSettings
     ) -> EventDetailViewModel {
-        EventDetailViewModel(
+        let config = serverConfig(from: connection)
+        let repository = FrigateEventsRepository(config: config, httpClient: httpClient)
+        return EventDetailViewModel(
             event: event,
-            clipLoader: FrigateEventClipLoader(config: serverConfig(from: connection), httpClient: httpClient)
+            clipLoader: FrigateEventClipLoader(config: config, httpClient: httpClient),
+            isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled(repository: repository),
+            submitDetectionVerdict: SubmitDetectionVerdict(repository: repository)
         )
     }
 

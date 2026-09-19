@@ -65,6 +65,25 @@ public enum FrigateMediaUrl {
     }
 }
 
+/// The two Frigate+ submission endpoints — the verdicts a user can give a detection. Both put the
+/// event's snapshot in the Frigate+ dataset; `falsePositive` additionally records that the label
+/// was wrong. Neither carries the *right* label: Frigate's API has no parameter for it, so the
+/// correction is made on the Frigate+ site.
+public enum FrigatePlusUrl {
+
+    /// Confirms the detection. Takes a JSON body; `{"include_annotation": 1}` uploads the bounding
+    /// box with the image.
+    public static func submit(base: URL, eventId: String) -> URL {
+        makeUrl(base: base, path: "api/events/\(eventId)/plus")
+    }
+
+    /// Reports the detection as wrong. A **PUT**, unlike its sibling, and bodyless — it submits the
+    /// event first if it isn't in the dataset yet.
+    public static func falsePositive(base: URL, eventId: String) -> URL {
+        makeUrl(base: base, path: "api/events/\(eventId)/false_positive")
+    }
+}
+
 /// The live go2rtc HLS stream, proxied through Frigate so it reuses the base URL + its auth
 /// (no separate go2rtc port to expose). `src` is the go2rtc stream name.
 public enum FrigateLiveUrl {

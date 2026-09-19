@@ -76,32 +76,38 @@ private func snapshotEvents() -> [Event] {
         Event(
             id: EventId("evt-1"), camera: CameraName("front_door"), label: "person", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 3), endTime: nil,
-            hasClip: true, hasSnapshot: true, score: 0.94, zones: ["porch"]
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            score: 0.94, zones: ["porch"]
         ),
         Event(
             id: EventId("evt-2"), camera: CameraName("driveway"), label: "car", severity: .alert,
             subLabel: nil, startTime: at(minutesAgo: 22), endTime: at(minutesAgo: 21),
-            hasClip: true, hasSnapshot: true, score: 0.88, zones: ["driveway"]
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            score: 0.88, zones: ["driveway"]
         ),
         Event(
             id: EventId("evt-3"), camera: CameraName("backyard"), label: "dog", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 65), endTime: at(minutesAgo: 63),
-            hasClip: true, hasSnapshot: false, score: 0.71, zones: []
+            hasClip: true, hasSnapshot: false, isObjectDetection: true, isSubmittedForTraining: false,
+            score: 0.71, zones: []
         ),
         Event(
             id: EventId("evt-4"), camera: CameraName("front_door"), label: "person", severity: .alert,
             subLabel: "delivery", startTime: at(minutesAgo: 130), endTime: at(minutesAgo: 128),
-            hasClip: false, hasSnapshot: true, score: 0.9, zones: ["porch"]
+            hasClip: false, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            score: 0.9, zones: ["porch"]
         ),
         Event(
             id: EventId("evt-5"), camera: CameraName("garage"), label: "cat", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 260), endTime: at(minutesAgo: 259),
-            hasClip: true, hasSnapshot: true, score: nil, zones: []
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            score: nil, zones: []
         ),
         Event(
             id: EventId("evt-6"), camera: CameraName("driveway"), label: "car", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 1_500), endTime: at(minutesAgo: 1_495),
-            hasClip: true, hasSnapshot: true, score: 0.82, zones: ["driveway"]
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            score: 0.82, zones: ["driveway"]
         ),
     ]
 }
@@ -113,7 +119,9 @@ private func snapshotDetections() -> [Event] {
         Event(
             id: event.id, camera: event.camera, label: event.label, severity: .detection,
             subLabel: event.subLabel, startTime: event.startTime, endTime: event.endTime,
-            hasClip: event.hasClip, hasSnapshot: event.hasSnapshot, score: event.score, zones: event.zones
+            hasClip: event.hasClip, hasSnapshot: event.hasSnapshot,
+            isObjectDetection: event.isObjectDetection, isSubmittedForTraining: event.isSubmittedForTraining,
+            score: event.score, zones: event.zones
         )
     }
 }
@@ -150,6 +158,14 @@ private func eventsListScreen(
         viewModel: viewModel,
         onOpenSettings: {},
         // Unused: the detail factory is never invoked in a list snapshot (no navigation happens).
-        makeDetailViewModel: { EventDetailViewModel(event: $0, clipLoader: FakeEventClipLoader()) }
+        makeDetailViewModel: {
+            let repository = FakeEventsRepository(.success([]))
+            return EventDetailViewModel(
+                event: $0,
+                clipLoader: FakeEventClipLoader(),
+                isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled(repository: repository),
+                submitDetectionVerdict: SubmitDetectionVerdict(repository: repository)
+            )
+        }
     )
 }

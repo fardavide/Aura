@@ -164,6 +164,7 @@ public struct EventsListView: View {
         switch error {
         case .unreachable: "Can't reach the server. Check the address and your connection."
         case .notAuthorized: "Authentication failed. Check your username and password."
+        case .notAccepted: "The server refused the request."
         case .serverUnavailable: "The server returned an error. Try again later."
         case .invalidData: "The server's response couldn't be read."
         case .unknown: "Something went wrong."

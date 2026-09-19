@@ -36,6 +36,33 @@ public struct FrigateEventsRepository: EventsRepository {
         return events.map { alertIds.contains($0.id.value) ? $0.withSeverity(.alert) : $0 }
     }
 
+    public func isDetectionFeedbackEnabled() async throws(EventsError) -> Bool {
+        let data = try await get(.config)
+        do {
+            return try JSONDecoder().decode(PlusConfigDto.self, from: data).plus?.enabled ?? false
+        } catch {
+            throw EventsError.invalidData
+        }
+    }
+
+    public func submit(_ verdict: DetectionVerdict, for event: EventId) async throws(EventsError) {
+        do {
+            switch verdict {
+            case .correct:
+                // The annotation is the bounding box Frigate already tracked; without it the upload
+                // is an unlabelled image and confirming the label teaches nothing.
+                _ = try await api.post(
+                    FrigatePlusUrl.submit(base: config.baseUrl, eventId: event.value),
+                    body: Data(#"{"include_annotation": 1}"#.utf8)
+                )
+            case .incorrect:
+                _ = try await api.put(FrigatePlusUrl.falsePositive(base: config.baseUrl, eventId: event.value))
+            }
+        } catch {
+            throw EventsError(error)
+        }
+    }
+
     /// Best effort: any failure (transport or decode) yields an empty set, so the events list
     /// still renders with no ALERT tags rather than a review outage blacking out the tab.
     private func alertEventIds(for events: [Event]) async -> Set<String> {
@@ -69,6 +96,7 @@ private extension EventsError {
         switch error {
         case .unreachable: self = .unreachable
         case .notAuthorized: self = .notAuthorized
+        case .rejected: self = .notAccepted
         case .serverUnavailable: self = .serverUnavailable
         case .unknown: self = .unknown
         }

@@ -17,10 +17,30 @@ public struct FrigateApiClient: Sendable {
     }
 
     public func get(_ url: URL) async throws(FrigateApiError) -> Data {
+        try await send("GET", url: url, body: nil)
+    }
+
+    /// A JSON write. `body` is sent verbatim — the caller owns the encoding, since the two Frigate
+    /// write endpoints the app uses take hand-shaped one-key objects rather than a domain model.
+    public func post(_ url: URL, body: Data) async throws(FrigateApiError) -> Data {
+        try await send("POST", url: url, body: body)
+    }
+
+    /// A bodyless write — Frigate's false-positive submission takes its only argument in the path.
+    public func put(_ url: URL) async throws(FrigateApiError) -> Data {
+        try await send("PUT", url: url, body: nil)
+    }
+
+    private func send(_ method: String, url: URL, body: Data?) async throws(FrigateApiError) -> Data {
         var request = URLRequest(url: url)
+        request.httpMethod = method
         request.timeoutInterval = Self.requestTimeout
         if let auth = AuthorizationHeader.basic(username: config.username, password: config.password) {
             request.setValue(auth, forHTTPHeaderField: "Authorization")
+        }
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         let data: Data
         let response: HTTPURLResponse
@@ -31,6 +51,7 @@ public struct FrigateApiClient: Sendable {
         }
         switch response.statusCode {
         case 200...299: return data
+        case 400: throw FrigateApiError.rejected
         case 401, 403: throw FrigateApiError.notAuthorized
         case 500...599: throw FrigateApiError.serverUnavailable
         default: throw FrigateApiError.unknown
@@ -50,6 +71,9 @@ public struct FrigateApiClient: Sendable {
 public enum FrigateApiError: Error, Equatable, Sendable {
     case unreachable
     case notAuthorized
+    /// The server understood the request and refused it — repeating it verbatim will fail the same
+    /// way, so it is never a retry-worthy failure.
+    case rejected
     case serverUnavailable
     case unknown
 }

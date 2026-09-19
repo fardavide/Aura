@@ -36,6 +36,31 @@ struct EventDecodingTests {
         #expect(garage.score == nil)
         #expect(garage.zones == [])
     }
+
+    @Test func `given an event carrying a plus id when decoding then it is already submitted for training`() throws {
+        // given - when
+        let events = try decodeEvents()
+
+        // then
+        #expect(events.first { $0.id == EventId("ev1") }?.isSubmittedForTraining == true)
+        #expect(events.first { $0.id == EventId("ev2") }?.isSubmittedForTraining == false)
+    }
+
+    @Test func `given an audio event when decoding then it is not an object detection`() throws {
+        // given - when
+        let events = try JSONDecoder().decode([EventDto].self, from: Data(audioEventJson.utf8)).toEvents()
+
+        // then
+        #expect(events.first?.isObjectDetection == false)
+    }
+
+    @Test func `given an event with no type when decoding then it is an object detection`() throws {
+        // given - when
+        let events = try decodeEvents()
+
+        // then
+        #expect(events.first { $0.id == EventId("ev2") }?.isObjectDetection == true)
+    }
 }
 
 struct EventReviewDecodingTests {
@@ -261,6 +286,89 @@ struct FrigateEventsRepositoryTests {
     }
 }
 
+struct FrigateDetectionFeedbackTests {
+
+    @Test func `given plus enabled in the config when reading availability then feedback is offered`() async throws {
+        // given
+        let sut = FrigateEventsRepository(
+            config: .test,
+            httpClient: FakeHttpClient(.response(status: 200, body: Data(plusEnabledConfigJson.utf8)))
+        )
+
+        // when - then
+        #expect(try await sut.isDetectionFeedbackEnabled() == true)
+    }
+
+    @Test func `given plus disabled in the config when reading availability then feedback is not offered`() async throws {
+        // given
+        let sut = FrigateEventsRepository(
+            config: .test,
+            httpClient: FakeHttpClient(.response(status: 200, body: Data(plusDisabledConfigJson.utf8)))
+        )
+
+        // when - then
+        #expect(try await sut.isDetectionFeedbackEnabled() == false)
+    }
+
+    @Test func `given a config with no plus section when reading availability then feedback is not offered`() async throws {
+        // given
+        let sut = FrigateEventsRepository(
+            config: .test,
+            httpClient: FakeHttpClient(.response(status: 200, body: Data("{}".utf8)))
+        )
+
+        // when - then
+        #expect(try await sut.isDetectionFeedbackEnabled() == false)
+    }
+
+    @Test func `when confirming a detection then it posts the annotated submission`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let sut = FrigateEventsRepository(config: .test, httpClient: http)
+
+        // when
+        try await sut.submit(.correct, for: EventId("ev1"))
+
+        // then
+        #expect(http.lastRequest?.url?.absoluteString == "http://frigate.test:5000/api/events/ev1/plus")
+        #expect(http.lastRequest?.httpMethod == "POST")
+        #expect(http.lastRequest?.httpBody == Data(#"{"include_annotation": 1}"#.utf8))
+    }
+
+    @Test func `when reporting a detection wrong then it puts the false positive`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let sut = FrigateEventsRepository(config: .test, httpClient: http)
+
+        // when
+        try await sut.submit(.incorrect, for: EventId("ev1"))
+
+        // then
+        #expect(http.lastRequest?.url?.absoluteString == "http://frigate.test:5000/api/events/ev1/false_positive")
+        #expect(http.lastRequest?.httpMethod == "PUT")
+    }
+
+    @Test func `given the server refuses the submission then it throws not accepted`() async {
+        // given
+        let sut = FrigateEventsRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 400, body: Data()))
+        )
+
+        // when - then
+        await #expect(throws: EventsError.notAccepted) { try await sut.submit(.correct, for: EventId("ev1")) }
+    }
+
+    @Test func `given a 401 when submitting then it throws not authorized`() async {
+        // given
+        let sut = FrigateEventsRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 401, body: Data()))
+        )
+
+        // when - then
+        await #expect(throws: EventsError.notAuthorized) { try await sut.submit(.incorrect, for: EventId("ev1")) }
+    }
+}
+
 struct FrigateEventThumbnailLoaderTests {
 
     @Test func `when loading a thumbnail then the request carries a bounded timeout`() async {
@@ -321,7 +429,8 @@ private func event(hasClip: Bool) -> Event {
     Event(
         id: EventId("ev1"), camera: CameraName("driveway"), label: "person", severity: .detection,
         subLabel: nil, startTime: Date(timeIntervalSince1970: 0), endTime: nil,
-        hasClip: hasClip, hasSnapshot: true, score: nil, zones: []
+        hasClip: hasClip, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+        score: nil, zones: []
     )
 }
 
@@ -330,16 +439,30 @@ private let eventsJson = """
   {
     "id": "ev1", "camera": "driveway", "label": "person", "sub_label": null,
     "start_time": 1707000000.0, "end_time": 1707000060.0,
-    "has_clip": true, "has_snapshot": true, "zones": ["yard"],
-    "data": { "score": 0.87, "top_score": 0.9 }
+    "has_clip": true, "has_snapshot": true, "zones": ["yard"], "plus_id": "plus-1",
+    "data": { "score": 0.87, "top_score": 0.9, "type": "object" }
   },
   {
     "id": "ev2", "camera": "garage", "label": "car",
     "start_time": 1707000100.0, "end_time": null,
-    "has_clip": false, "has_snapshot": true, "data": {}
+    "has_clip": false, "has_snapshot": true, "plus_id": null, "data": {}
   }
 ]
 """
+
+/// An audio detection — no bounding box, so it can never carry a verdict.
+private let audioEventJson = """
+[
+  {
+    "id": "ev3", "camera": "garage", "label": "speech",
+    "start_time": 1707000050.0, "end_time": 1707000055.0,
+    "has_clip": false, "has_snapshot": false, "data": { "type": "audio" }
+  }
+]
+"""
+
+private let plusEnabledConfigJson = #"{ "plus": { "enabled": true } }"#
+private let plusDisabledConfigJson = #"{ "plus": { "enabled": false } }"#
 
 private let emptyReviewJson = "[]"
 
