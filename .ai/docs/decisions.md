@@ -1856,3 +1856,31 @@ footer would be built eagerly with the rest of the list, and its `.task` would f
 on first paint instead of on scroll. It is keyed `.task(id: loadedCount)` so a page that lands
 re-arms the trigger while the footer is still on screen, and paging stops when it scrolls away.
 Nothing is drawn once the server has no older events — the list simply ends.
+
+## Detection feedback is a yes/no — the API carries nothing else (0.6.10)
+The ask was "tell it the cat isn't a dog". **Frigate cannot take that.** Verified against v0.17.2:
+`POST /api/events/{id}/plus` and `PUT /api/events/{id}/false_positive` both annotate using the
+event's **own** label (`plus_api.add_annotation(plus_id, box, event.label)`), and there is no
+parameter for a corrected one. Frigate's own web dialog is binary for exactly this reason — the
+relabelling happens on plus.frigate.video once the image is in the dataset. So the panel ships the
+same two verdicts the web UI has, and says where the correction is actually made. Rejected
+alternatives: writing the right label to `POST /events/{id}/sub_label` (local Frigate metadata that
+never reaches training — it would look like teaching the model while doing nothing), and shipping
+nothing.
+
+- **The panel is invisible until the server confirms it.** `/api/config` carries a top-level
+  `plus.enabled`, and a submission additionally needs a finished event, a snapshot, and a tracked
+  object (`data.type == "object"`) — the same gate Frigate's own UI uses. A control that reports
+  nothing is worse than no control, so the view model starts at `.unavailable` and only leaves it
+  once every condition holds; a *failed* capability read leaves it hidden too.
+- **`plus_id` on the event means "already in the dataset".** Frigate refuses a second submission
+  with a 400, so an event that carries one reports its state instead of asking again. It also
+  covers the false-positive path, which sets `plus_id` on the way through.
+- **400 got its own transport error.** `FrigateApiError.rejected` → `EventsError.notAccepted`, and
+  the panel offers **no retry** for it: the server understood and refused, so a repeat fails
+  identically. Cameras and the Timeline fold it into `.unknown` — they only read.
+- **The verdict rides in the failure state** (`.failed(DetectionVerdict, EventsError)`) so a retry
+  re-sends the user's own answer rather than silently substituting one.
+
+`FrigateApiClient` gained `post`/`put` for this — the first writes the app makes. `GET` now routes
+through the same private `send`, so auth, the 15s timeout and status mapping stay in one place.

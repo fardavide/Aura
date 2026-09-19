@@ -12,7 +12,8 @@ extension TimelineError {
         case .unreachable: self = .unreachable
         case .notAuthorized: self = .notAuthorized
         case .serverUnavailable: self = .serverUnavailable
-        case .unknown: self = .unknown
+        // The Timeline only ever reads, and a rejected read is as opaque to the user as any other.
+        case .rejected, .unknown: self = .unknown
         }
     }
 }

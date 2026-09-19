@@ -8,6 +8,8 @@ struct EventDto: Decodable {
     let endTime: Double?
     let hasClip: Bool?
     let hasSnapshot: Bool?
+    /// Non-nil once the event's snapshot has been uploaded to Frigate+.
+    let plusId: String?
     let zones: [String]?
     let data: EventDataDto?
 
@@ -18,15 +20,27 @@ struct EventDto: Decodable {
         case endTime = "end_time"
         case hasClip = "has_clip"
         case hasSnapshot = "has_snapshot"
+        case plusId = "plus_id"
     }
 }
 
 struct EventDataDto: Decodable {
     let score: Double?
     let topScore: Double?
+    /// `object`, `audio` or `manual`. Absent on events old enough to predate the field.
+    let type: String?
 
     enum CodingKeys: String, CodingKey {
-        case score
+        case score, type
         case topScore = "top_score"
     }
+}
+
+/// The slice of `/api/config` that says whether this deployment can take detection feedback.
+struct PlusConfigDto: Decodable {
+    let plus: PlusFlagDto?
+}
+
+struct PlusFlagDto: Decodable {
+    let enabled: Bool?
 }

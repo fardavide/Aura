@@ -50,6 +50,8 @@ private func event(
         endTime: nil,
         hasClip: true,
         hasSnapshot: true,
+        isObjectDetection: true,
+        isSubmittedForTraining: false,
         score: nil,
         zones: []
     )

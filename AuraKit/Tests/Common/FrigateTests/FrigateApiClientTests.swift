@@ -73,6 +73,62 @@ struct FrigateApiClientTests {
         await expect(status: 404, mapsTo: .unknown)
     }
 
+    @Test func `given a 400 when getting then it throws rejected`() async {
+        await expect(status: 400, mapsTo: .rejected)
+    }
+
+    @Test func `when posting then the request carries the method body and content type`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let sut = FrigateApiClient(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.post(url, body: Data("{}".utf8))
+
+        // then
+        #expect(http.lastRequest?.httpMethod == "POST")
+        #expect(http.lastRequest?.httpBody == Data("{}".utf8))
+        #expect(http.lastRequest?.value(forHTTPHeaderField: "Content-Type") == "application/json")
+    }
+
+    @Test func `when putting then the request carries the method and no body`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let sut = FrigateApiClient(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.put(url)
+
+        // then
+        #expect(http.lastRequest?.httpMethod == "PUT")
+        #expect(http.lastRequest?.httpBody == nil)
+    }
+
+    @Test func `given credentials when posting then a basic auth header is sent`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data()))
+        let config = ServerConfig(
+            scheme: .http, host: "frigate.test", port: 5000, username: "admin", password: "secret"
+        )
+        let sut = FrigateApiClient(config: config, httpClient: http)
+
+        // when
+        _ = try await sut.post(url, body: Data())
+
+        // then
+        #expect(http.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Basic YWRtaW46c2VjcmV0")
+    }
+
+    @Test func `given a 400 when posting then it throws rejected`() async {
+        // given
+        let sut = FrigateApiClient(
+            config: .test, httpClient: FakeHttpClient(.response(status: 400, body: Data()))
+        )
+
+        // when - then
+        await #expect(throws: FrigateApiError.rejected) { try await sut.post(url, body: Data()) }
+    }
+
     @Test func `given a transport failure when getting then it throws unreachable`() async {
         // given
         let sut = FrigateApiClient(

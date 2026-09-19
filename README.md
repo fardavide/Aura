@@ -14,7 +14,8 @@ single-user companion app and portfolio piece.
   bar, a scrubbable activity track with a fixed centre playhead, Hour/Day/Week zoom, and a transport
   that jumps between activity. iPhone landscape gets a dedicated side-by-side layout throughout.
 - **Events** — detection event list (thumbnail, label, camera, time) with recorded-clip playback,
-  paging back through history as you scroll.
+  paging back through history as you scroll. On a Frigate+ server, each event can be confirmed or
+  reported as a false positive.
 - **Settings** — Frigate server connection (password in Keychain), theme, and camera ordering.
 
 ## Requirements
@@ -43,6 +44,17 @@ portrait/landscape × light/dark) in code, so a single simulator run covers all 
 CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
+
+### 0.6.10 — 2026-09-19
+- **Tell Frigate+ whether a detection was right, from the event screen.** Open an event and, if your
+  server has Frigate+ enabled, a panel asks "Is this a dog?" — Yes confirms it, No reports it as a
+  false positive. Either answer puts the snapshot in your Frigate+ dataset, and the panel links
+  straight to plus.frigate.video, which is where you can say it was actually a cat: Frigate's API
+  carries a yes/no verdict and no way to name the right object, so neither this app nor Frigate's
+  own web UI can send the correction itself.
+- The panel is hidden entirely unless the server reports Frigate+ as enabled and the event is one it
+  can accept — a finished, tracked object with a snapshot. Events already in your dataset say so
+  instead of asking again.
 
 ### 0.6.9 — 2026-09-19
 - **The Events tab now keeps loading as you scroll.** It used to stop at the first 100 events with

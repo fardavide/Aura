@@ -8,11 +8,21 @@ import EventsDomain
 public final class FakeEventsRepository: EventsRepository, @unchecked Sendable {
     public var result: Result<[Event], EventsError>
     public var olderResult: Result<[Event], EventsError>?
+    public var detectionFeedbackEnabled: Result<Bool, EventsError>
+    public var submitResult: Result<Void, EventsError>
     public private(set) var requestedCursors: [Date?] = []
+    public private(set) var submittedVerdicts: [(verdict: DetectionVerdict, event: EventId)] = []
 
-    public init(_ result: Result<[Event], EventsError>, olderResult: Result<[Event], EventsError>? = nil) {
+    public init(
+        _ result: Result<[Event], EventsError>,
+        olderResult: Result<[Event], EventsError>? = nil,
+        detectionFeedbackEnabled: Result<Bool, EventsError> = .success(false),
+        submitResult: Result<Void, EventsError> = .success(())
+    ) {
         self.result = result
         self.olderResult = olderResult
+        self.detectionFeedbackEnabled = detectionFeedbackEnabled
+        self.submitResult = submitResult
     }
 
     public func events(limit: Int, before: Date?) async throws(EventsError) -> [Event] {
@@ -21,5 +31,14 @@ public final class FakeEventsRepository: EventsRepository, @unchecked Sendable {
             return try olderResult.get()
         }
         return try result.get()
+    }
+
+    public func isDetectionFeedbackEnabled() async throws(EventsError) -> Bool {
+        try detectionFeedbackEnabled.get()
+    }
+
+    public func submit(_ verdict: DetectionVerdict, for event: EventId) async throws(EventsError) {
+        submittedVerdicts.append((verdict: verdict, event: event))
+        try submitResult.get()
     }
 }

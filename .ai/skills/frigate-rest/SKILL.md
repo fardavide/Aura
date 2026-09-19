@@ -160,11 +160,46 @@ else (including absent) falls back to `date_desc`.
 | `zones` | [string] | |
 | `top_score` / `score` | double | Marked-for-removal in the model; read score from `data` |
 | `false_positive` | bool? | |
-| `data` | object | `{ box, region, score, top_score, type, attributes, ... }` |
+| `data` | object | `{ box, region, score, top_score, type, attributes, ... }`; `type` ∈ `object`\|`audio`\|`manual` |
+| `plus_id` | string? | Non-nil once the snapshot is in the Frigate+ dataset |
+| `retain_indefinitely` | bool | |
 | `thumbnail` | string? | base64 JPEG — present **only** with `include_thumbnails=1` |
+
+The handler's `selected_columns` is exactly: `id, camera, label, zones, start_time, end_time,
+has_clip, has_snapshot, plus_id, retain_indefinitely, sub_label, top_score, false_positive, box,
+data` (+ `thumbnail` when asked). No key is renamed or added on the way out.
 
 `start_time`/`end_time` are epoch seconds (decode as `Double`, convert to `Date`
 at the mapper boundary).
+
+### Frigate+ detection feedback — the only writes the app makes (verified v0.17.2)
+
+| Purpose | Route | Body |
+|---------|-------|------|
+| "Yes, it's a `<label>`" | `POST /api/events/{id}/plus` | `{"include_annotation": 1}` (optional) |
+| "No, it isn't" | `PUT /api/events/{id}/false_positive` | none |
+
+⚠️ **There is no way to suggest the correct label.** Both handlers annotate with the event's **own**
+`event.label` (`plus_api.add_annotation(plus_id, box, event.label)` /
+`add_false_positive(..., event.label, ...)`) and accept no corrected one. Frigate's own web dialog
+is binary for this reason; relabelling happens on plus.frigate.video after the image lands in the
+dataset. Don't design a label picker — the API cannot carry it.
+
+- **Note the methods differ**: `plus` is a **POST**, `false_positive` is a **PUT**. Both require the
+  `admin` role on the authenticated port.
+- `false_positive` submits the event to Frigate+ first when it has no `plus_id` yet, so the two are
+  not "submit, then flag" — either one alone is a complete action.
+- **Availability**: `/api/config` carries a top-level `plus: { enabled: bool }` (false unless
+  `PLUS_API_KEY` is set). Gate the UI on it.
+- **Preconditions the server enforces** (all return **400**, so gate client-side and treat 400 as
+  final, never retryable): `plus.enabled`; `end_time != null` (no clean snapshot exists for an
+  in-progress event); a `clean.webp`/`clean.png` on disk; `data.box` present (pre-0.13 events have
+  none); and **not already submitted** (`plus_id` set → "Already submitted to plus"). Frigate's own
+  UI additionally requires `has_snapshot` and `data.type == "object"`.
+- Success is `{"success": true, "plus_id": "…"}`; failures are `{"success": false, "message": "…"}`
+  with a 400/404 status.
+- Related, **not** Frigate+: `POST /api/events/{id}/sub_label` (`{subLabel, subLabelScore}`) writes
+  local Frigate metadata only and never reaches training — it is not a substitute for a verdict.
 
 ### Media URLs
 

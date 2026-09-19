@@ -21,6 +21,10 @@ extension EventDto {
             endTime: endTime.map { Date(timeIntervalSince1970: $0) },
             hasClip: hasClip ?? false,
             hasSnapshot: hasSnapshot ?? false,
+            // An absent type predates the field, which only ever tagged object events until audio
+            // and manual events were added — so the missing value is `object`, not "unknown".
+            isObjectDetection: (data?.type ?? "object") == "object",
+            isSubmittedForTraining: plusId != nil,
             score: data?.score ?? data?.topScore,
             zones: zones ?? []
         )
@@ -41,6 +45,8 @@ extension Event {
             endTime: endTime,
             hasClip: hasClip,
             hasSnapshot: hasSnapshot,
+            isObjectDetection: isObjectDetection,
+            isSubmittedForTraining: isSubmittedForTraining,
             score: score,
             zones: zones
         )
