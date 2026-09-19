@@ -52,15 +52,10 @@ struct EventHeroCard: View {
             Spacer()
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 7) {
-                        Text(event.label.capitalized)
-                            .auroraText(.heroTitle)
-                            .strikethrough(event.verdict == .incorrect, color: .auroraTextTertiary)
-                        if event.verdict == .incorrect {
-                            Text("Not a \(event.label)").textCase(.uppercase)
-                                .auroraBadge(.neutral, size: .compact)
-                        }
-                    }
+                    Text(event.label.capitalized)
+                        .auroraText(.heroTitle)
+                        .reportedWrong(event.verdict == .incorrect)
+                        .lineLimit(1)
                     Text(cameraName).auroraText(.caption).foregroundStyle(.auroraTextSecondary)
                 }
                 Spacer()

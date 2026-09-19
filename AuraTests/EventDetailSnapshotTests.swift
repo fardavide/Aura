@@ -75,7 +75,7 @@ struct EventDetailSnapshotTests {
 
 private func snapshotEvent(hasClip: Bool, verdict: DetectionVerdict? = nil) -> Event {
     Event(
-        id: EventId("evt-1"), camera: CameraName("front_door"), label: "person", severity: .alert,
+        id: EventId("evt-1"), camera: CameraName("front_door"), label: "motorcycle", severity: .alert,
         subLabel: nil, startTime: snapshotNow, endTime: snapshotNow.addingTimeInterval(42),
         hasClip: hasClip, hasSnapshot: true, isObjectDetection: true,
         verdict: verdict, score: 0.94, zones: ["porch"]

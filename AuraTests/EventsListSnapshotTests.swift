@@ -87,7 +87,9 @@ private func snapshotEvents() -> [Event] {
             score: 0.88, zones: ["driveway"]
         ),
         Event(
-            id: EventId("evt-3"), camera: CameraName("backyard"), label: "dog", severity: .detection,
+            // The longest label a row has to survive, reported wrong and severity-tagged: the
+            // combination that used to wrap the label, the tag and a badge all mid-word.
+            id: EventId("evt-3"), camera: CameraName("backyard"), label: "motorcycle", severity: .alert,
             subLabel: nil, startTime: at(minutesAgo: 65), endTime: at(minutesAgo: 63),
             hasClip: true, hasSnapshot: false, isObjectDetection: true, verdict: .incorrect,
             score: 0.71, zones: []

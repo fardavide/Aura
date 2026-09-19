@@ -45,6 +45,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.12 — 2026-09-19
+- **Fixed the mangled event row on a detection reported wrong.** The "NOT A DOG" badge left no width
+  for anything else, so with a longer label the row broke into "Motorc / ycle", "ALE / RT" and "NOT
+  A MOT / ORCY / CLE". The badge is gone: a reported detection now just reads struck through in
+  muted grey, which the event screen still explains in full underneath ("Reported as not a
+  motorcycle"). Long labels stay on one line, shrinking slightly rather than wrapping or truncating.
+
 ### 0.6.11 — 2026-09-19
 - **A reported detection now stays reported.** The app used to forget as soon as you left the
   event, then offer to report it again — and that second attempt failed, because Frigate had
