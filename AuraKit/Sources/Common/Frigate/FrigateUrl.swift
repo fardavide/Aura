@@ -5,9 +5,11 @@ public enum FrigateEndpoint: Sendable {
     case config
     /// Runtime stats — the light endpoint carrying `service.storage` (disk free/total).
     case stats
-    /// Events list. `after` (Unix epoch seconds) bounds the window server-side — the grid's
-    /// "today" summary passes the start of the day; the list view passes nil for all events.
-    case events(limit: Int, after: Double?)
+    /// Events list. `after` and `before` (Unix epoch seconds) bound the window server-side — the
+    /// grid's "today" summary passes the start of the day as `after`; the list view pages
+    /// backwards by passing the oldest event it holds as `before` (the server's clause is
+    /// `start_time < before`).
+    case events(limit: Int, after: Double?, before: Double?)
 
     public func url(base: URL) -> URL {
         switch self {
@@ -15,12 +17,15 @@ public enum FrigateEndpoint: Sendable {
             makeUrl(base: base, path: "api/config")
         case .stats:
             makeUrl(base: base, path: "api/stats")
-        case .events(let limit, let after):
+        case .events(let limit, let after, let before):
             makeUrl(
                 base: base,
                 path: "api/events",
                 queryItems: [URLQueryItem(name: "limit", value: String(limit))]
                     + (after.map { [URLQueryItem(name: "after", value: String(Int($0.rounded())))] } ?? [])
+                    // Unrounded, unlike `after`: the cursor is an event's exact start time, and
+                    // rounding it to a whole second would skip (or re-serve) a busy second's events.
+                    + (before.map { [URLQueryItem(name: "before", value: String($0))] } ?? [])
             )
         }
     }

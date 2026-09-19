@@ -17,7 +17,7 @@ public struct FrigateTodayEventsRepository: TodayEventsRepository {
     }
 
     public func labels(since: Date) async throws(CamerasError) -> [String] {
-        let data = try await get(.events(limit: eventsLimit, after: since.timeIntervalSince1970))
+        let data = try await get(.events(limit: eventsLimit, after: since.timeIntervalSince1970, before: nil))
         do {
             return try JSONDecoder().decode([EventLabelDto].self, from: data).map(\.label)
         } catch {

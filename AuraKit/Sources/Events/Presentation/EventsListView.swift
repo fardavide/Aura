@@ -35,6 +35,10 @@ public struct EventsListView: View {
                         EventFilterChips(filters: viewModel.filters, selection: viewModel.filter, onSelect: viewModel.select)
                             .padding(.vertical, 12)
                         content
+                        // A direct child of the LazyVStack rather than part of `content`, so it is
+                        // only built once the list has been scrolled near its end — that is what
+                        // makes it a scroll trigger instead of an eager "fetch all of history".
+                        olderEventsFooter
                     }
                 }
                 .auroraTrackingScrollGlass(isGlass: $isHeaderGlass)
@@ -123,6 +127,36 @@ public struct EventsListView: View {
                     .auroraChip()
             }
             .frame(maxWidth: .infinity, minHeight: 280)
+        }
+    }
+
+    /// Paging is orthogonal to `state`: the loaded list stays on screen while an older page loads,
+    /// and a failed page costs the footer, never the content. Nothing is drawn once the server has
+    /// no older events — the list simply ends.
+    @ViewBuilder private var olderEventsFooter: some View {
+        switch viewModel.paging {
+        case .ready, .loading:
+            ProgressView()
+                .tint(.auroraGradientPink)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .accessibilityLabel("Loading older events")
+                // Keyed on the loaded count so a page that lands re-arms the trigger while the
+                // footer is still on screen, and paging stops the moment it scrolls out of view.
+                .task(id: viewModel.loadedCount) { await viewModel.loadMore() }
+        case .failed:
+            VStack(spacing: 10) {
+                Text("Couldn't load older events")
+                    .auroraText(.caption)
+                    .foregroundStyle(.auroraTextSecondary)
+                Button("Try again") { Task { await viewModel.loadMore() } }
+                    .buttonStyle(.plain)
+                    .auroraChip()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        case .exhausted:
+            EmptyView()
         }
     }
 

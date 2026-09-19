@@ -1831,3 +1831,28 @@ single `Animation.auroraHeroSwap` token in `CommonDesign`, used by both grids, a
 repositioned outside the animated scope. The Settings toggle is `.tint(.accentColor)`: the stock
 green reads as a foreign control against the aurora palette, and unlike a segmented `Picker`'s
 selection indicator, a `Toggle`'s tint genuinely takes.
+
+## Events paging: a cursor on the oldest event, nudged, deduplicated (0.6.9)
+Frigate has no page/offset parameter — `/api/events` orders `start_time desc` and bounds the window
+with `start_time < before`. So the cursor is the oldest event already held, and paging walks the
+window backwards. Four things this settled:
+
+- **The cursor is nudged a millisecond past the oldest event, not set to it.** The server's clause
+  is strictly-less-than, so cursoring on the exact start time silently drops anything sharing that
+  instant. Nudging re-serves the boundary event instead, and the page is deduplicated by id, so the
+  overlap costs nothing.
+- **`before` goes on the wire unrounded**, unlike the `after` the Cameras summary sends: the cursor
+  is an event's exact start time, and rounding it to a whole second would skip (or re-serve) a busy
+  second's worth of events.
+- **A page that adds nothing means the end of the list**, alongside the obvious short-page test.
+  Without it, a window where every event shares the cursor's instant would be re-requested forever.
+- **Paging state is orthogonal to the screen's state.** Loaded events are never blanked or replaced
+  to fetch older ones; a failed page parks a `paging` value on `.failed` and the footer offers a
+  retry, exactly as the "refresh in place, never re-blank" rule already demands of `load()`.
+
+The footer that drives it is a **direct child of the `LazyVStack`**, deliberately not part of the
+`content` view. A `LazyVStack` only defers its own children: nested inside the content `VStack` the
+footer would be built eagerly with the rest of the list, and its `.task` would fetch all of history
+on first paint instead of on scroll. It is keyed `.task(id: loadedCount)` so a page that lands
+re-arms the trigger while the footer is still on screen, and paging stops when it scrolls away.
+Nothing is drawn once the server has no older events — the list simply ends.

@@ -15,10 +15,22 @@ struct GetEventsTests {
         ])))
 
         // when
-        let result = try await sut.execute(limit: 10)
+        let result = try await sut.execute(limit: 10, before: nil)
 
         // then
         #expect(result.map(\.id) == [EventId("newer"), EventId("older")])
+    }
+
+    @Test func `given a cursor when getting events then the repository is asked for older ones`() async throws {
+        // given
+        let repository = FakeEventsRepository(.success([]))
+        let sut = GetEvents(repository: repository)
+
+        // when
+        _ = try await sut.execute(limit: 10, before: Date(timeIntervalSince1970: 500))
+
+        // then
+        #expect(repository.requestedCursors == [Date(timeIntervalSince1970: 500)])
     }
 }
 

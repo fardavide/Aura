@@ -68,15 +68,22 @@ struct FrigateUrlTests {
 
     @Test func `when building the events endpoint then it includes the limit`() {
         #expect(
-            FrigateEndpoint.events(limit: 50, after: nil).url(base: base)
+            FrigateEndpoint.events(limit: 50, after: nil, before: nil).url(base: base)
                 == URL(string: "http://frigate.local:5000/api/events?limit=50")!
         )
     }
 
     @Test func `given an after bound when building the events endpoint then it rounds it into the query`() {
         #expect(
-            FrigateEndpoint.events(limit: 50, after: 1_000.6).url(base: base)
+            FrigateEndpoint.events(limit: 50, after: 1_000.6, before: nil).url(base: base)
                 == URL(string: "http://frigate.local:5000/api/events?limit=50&after=1001")!
+        )
+    }
+
+    @Test func `given a before cursor when building the events endpoint then it keeps sub-second precision`() {
+        #expect(
+            FrigateEndpoint.events(limit: 50, after: nil, before: 1_000.25).url(base: base)
+                == URL(string: "http://frigate.local:5000/api/events?limit=50&before=1000.25")!
         )
     }
 

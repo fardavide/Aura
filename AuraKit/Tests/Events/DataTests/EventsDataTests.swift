@@ -92,7 +92,7 @@ struct FrigateEventsRepositoryTests {
         )
 
         // when
-        let events = try await sut.events(limit: 10)
+        let events = try await sut.events(limit: 10, before: nil)
 
         // then
         #expect(events.map(\.id) == [EventId("ev1"), EventId("ev2")])
@@ -107,7 +107,7 @@ struct FrigateEventsRepositoryTests {
         let sut = FrigateEventsRepository(config: .test, httpClient: http)
 
         // when
-        _ = try await sut.events(limit: 10)
+        _ = try await sut.events(limit: 10, before: nil)
 
         // then
         #expect(http.lastRequest?.timeoutInterval == 15)
@@ -118,7 +118,7 @@ struct FrigateEventsRepositoryTests {
             config: .test,
             httpClient: FakeHttpClient(routes: [("api/events", .response(status: 401, body: Data()))])
         )
-        await #expect(throws: EventsError.notAuthorized) { try await sut.events(limit: 10) }
+        await #expect(throws: EventsError.notAuthorized) { try await sut.events(limit: 10, before: nil) }
     }
 
     @Test func `given malformed json when fetching events then it throws invalidData`() async {
@@ -126,7 +126,7 @@ struct FrigateEventsRepositoryTests {
             config: .test,
             httpClient: FakeHttpClient(routes: [("api/events", .response(status: 200, body: Data("nope".utf8)))])
         )
-        await #expect(throws: EventsError.invalidData) { try await sut.events(limit: 10) }
+        await #expect(throws: EventsError.invalidData) { try await sut.events(limit: 10, before: nil) }
     }
 
     @Test func `given an event listed by an alert review item when fetching events then it is an alert`() async throws {
@@ -140,7 +140,7 @@ struct FrigateEventsRepositoryTests {
         )
 
         // when
-        let events = try await sut.events(limit: 10)
+        let events = try await sut.events(limit: 10, before: nil)
 
         // then
         #expect(events.first { $0.id == EventId("ev1") }?.severity == .alert)
@@ -157,7 +157,7 @@ struct FrigateEventsRepositoryTests {
         )
 
         // when
-        let events = try await sut.events(limit: 10)
+        let events = try await sut.events(limit: 10, before: nil)
 
         // then
         #expect(events.first { $0.id == EventId("ev2") }?.severity == .detection)
@@ -174,7 +174,7 @@ struct FrigateEventsRepositoryTests {
         )
 
         // when
-        let events = try await sut.events(limit: 10)
+        let events = try await sut.events(limit: 10, before: nil)
 
         // then
         #expect(events.allSatisfy { $0.severity == .detection })
@@ -191,7 +191,7 @@ struct FrigateEventsRepositoryTests {
         )
 
         // when
-        let events = try await sut.events(limit: 10)
+        let events = try await sut.events(limit: 10, before: nil)
 
         // then
         #expect(events.allSatisfy { $0.severity == .detection })
@@ -206,12 +206,44 @@ struct FrigateEventsRepositoryTests {
         let sut = FrigateEventsRepository(config: .test, httpClient: http)
 
         // when
-        _ = try await sut.events(limit: 10)
+        _ = try await sut.events(limit: 10, before: nil)
 
         // then
         let reviewUrl = try #require(http.requestedUrls.first { $0.contains("api/review") })
         #expect(reviewUrl.contains("after=1707000000"))
         #expect(reviewUrl.contains("before=1707000100"))
+    }
+
+    @Test func `given a cursor when fetching events then it bounds the request with a before query`() async throws {
+        // given
+        let http = FakeHttpClient(routes: [
+            ("api/events", .response(status: 200, body: Data(eventsJson.utf8))),
+            ("api/review", .response(status: 200, body: Data(emptyReviewJson.utf8))),
+        ])
+        let sut = FrigateEventsRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.events(limit: 10, before: Date(timeIntervalSince1970: 1_707_000_000.25))
+
+        // then
+        let eventsUrl = try #require(http.requestedUrls.first { $0.contains("api/events") })
+        #expect(eventsUrl.contains("before=1707000000.25"))
+    }
+
+    @Test func `given no cursor when fetching events then the request has no before query`() async throws {
+        // given
+        let http = FakeHttpClient(routes: [
+            ("api/events", .response(status: 200, body: Data(eventsJson.utf8))),
+            ("api/review", .response(status: 200, body: Data(emptyReviewJson.utf8))),
+        ])
+        let sut = FrigateEventsRepository(config: .test, httpClient: http)
+
+        // when
+        _ = try await sut.events(limit: 10, before: nil)
+
+        // then
+        let eventsUrl = try #require(http.requestedUrls.first { $0.contains("api/events") })
+        #expect(!eventsUrl.contains("before="))
     }
 
     @Test func `given no events when fetching events then the review endpoint is not called`() async throws {
@@ -222,7 +254,7 @@ struct FrigateEventsRepositoryTests {
         let sut = FrigateEventsRepository(config: .test, httpClient: http)
 
         // when
-        _ = try await sut.events(limit: 10)
+        _ = try await sut.events(limit: 10, before: nil)
 
         // then
         #expect(http.requestedUrls.count == 1)

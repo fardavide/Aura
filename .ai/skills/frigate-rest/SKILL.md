@@ -132,6 +132,19 @@ Returns a **JSON array** of event objects (newest first by default). Key query p
 For the MVP event list, `GET /api/events?limit=...` (optionally `&cameras=` /
 `&labels=`) is enough. Don't request `include_thumbnails` — load the image lazily.
 
+**Paging is a cursor, not a page number** (verified v0.17.2 `frigate/api/event.py`). There is no
+`page`/`offset` param. The handler orders `Event.start_time.desc()` by default and the window
+params add `start_time < before` and `start_time > after` — so the next page back is
+`&before=<oldest loaded start_time>`. Two consequences:
+
+- The clause is **strictly** less-than, so cursoring on an event's exact start time drops anything
+  sharing that instant. Nudge the cursor a hair past it and deduplicate the returned page by id.
+- Send `before` **unrounded** — it is an event's fractional epoch seconds, and rounding to a whole
+  second skips or re-serves a busy second.
+
+`sort` accepts `date_asc`/`date_desc`/`score_asc`/`score_desc`/`speed_asc`/`speed_desc`; anything
+else (including absent) falls back to `date_desc`.
+
 ### Event object — client-relevant fields
 
 | Field | Type | Notes |

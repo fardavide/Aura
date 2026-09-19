@@ -289,6 +289,10 @@ not snapshot-tested — they center on video players that can't render in a snap
   untouched by it — the preference decides *position*, not what the screen reports. The Timeline
   grid's hero flip was unanimated and snapped; it now travels on the same shared curve the Cameras
   wall already used.
+- **Events pages backwards through history (0.6.9).** The tab used to stop dead at its first 100
+  events. Scrolling to the end of the list now fetches the next page with Frigate's `before` cursor
+  and appends it, repeating until the server has nothing older. Loaded content is never blanked to
+  page: a failed page costs only the footer, which offers a retry.
 
 ## Next
 - **Verify the tab-icon bounce on device** — whether the iOS 26 / macOS 26 system tab bars honor a

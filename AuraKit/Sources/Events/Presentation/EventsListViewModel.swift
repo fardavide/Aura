@@ -15,7 +15,20 @@ public final class EventsListViewModel {
         case failed(EventsError)
     }
 
+    /// Where the list stands on **older** events, independently of `state` — the loaded content is
+    /// never blanked to page, so the two are orthogonal.
+    public enum Paging: Equatable {
+        /// Older events may exist and nothing is in flight.
+        case ready
+        case loading
+        /// The last page failed; the footer offers a retry.
+        case failed
+        /// The server has no older events to give.
+        case exhausted
+    }
+
     public private(set) var state: State = .loading
+    public private(set) var paging: Paging = .exhausted
     public private(set) var filter: EventFilter = .all
 
     private let getEvents: GetEvents
@@ -26,6 +39,10 @@ public final class EventsListViewModel {
     private let calendar: Calendar
     private let limit: Int
     private var cameraNames: [CameraName: String] = [:]
+    /// Frigate's cursor is exclusive (`start_time < before`), so paging on the oldest event's exact
+    /// start time would silently drop anything sharing that instant. Nudging a millisecond past it
+    /// re-serves the boundary event instead — harmless, since the page is deduplicated by id.
+    private let cursorNudge: TimeInterval = 0.001
 
     public init(
         getEvents: GetEvents,
@@ -77,6 +94,12 @@ public final class EventsListViewModel {
         allEvents.matching(filter).groupedByHour(calendar: calendar)
     }
 
+    /// How much history is held. The footer keys its auto-paging on this, so a page that lands
+    /// re-arms the trigger while it is still on screen.
+    public var loadedCount: Int {
+        allEvents.count
+    }
+
     public func select(_ filter: EventFilter) {
         self.filter = filter
     }
@@ -86,18 +109,43 @@ public final class EventsListViewModel {
     /// refresh keeps the last good content instead of swapping it for a full-screen error.
     public func load() async {
         do {
-            let events = try await getEvents.execute(limit: limit)
+            let events = try await getEvents.execute(limit: limit, before: nil)
             state = events.isEmpty ? .empty : .loaded(events)
+            paging = events.count < limit ? .exhausted : .ready
             if !events.labelFilters().contains(filter) {
                 filter = .all
             }
         } catch {
             if case .loaded = state { return }
             state = .failed(error)
+            paging = .exhausted
         }
         // Best-effort: a failed camera read leaves the map empty and rows fall back to the slug.
         cameraNames = ((try? await getCameras.execute()) ?? []).reduce(into: [:]) {
             $0[$1.name] = $1.friendlyName
+        }
+    }
+
+    /// Appends the page of events immediately older than the oldest one held. Loaded content is
+    /// never blanked or replaced — a failure only parks `paging` on `.failed` so the footer can
+    /// offer a retry.
+    public func loadMore() async {
+        switch paging {
+        case .ready, .failed: break
+        case .loading, .exhausted: return
+        }
+        guard case .loaded(let current) = state, let oldest = current.map(\.startTime).min() else { return }
+        paging = .loading
+        do {
+            let page = try await getEvents.execute(limit: limit, before: oldest.addingTimeInterval(cursorNudge))
+            let known = Set(current.map(\.id))
+            let added = page.filter { !known.contains($0.id) }
+            state = .loaded((current + added).sorted { $0.startTime > $1.startTime })
+            // A page that adds nothing is the other end condition: without it a window where every
+            // event shares the cursor's start time would be re-requested forever.
+            paging = added.isEmpty || page.count < limit ? .exhausted : .ready
+        } catch {
+            paging = .failed
         }
     }
 
