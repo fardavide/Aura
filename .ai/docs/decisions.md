@@ -1884,3 +1884,31 @@ nothing.
 
 `FrigateApiClient` gained `post`/`put` for this — the first writes the app makes. `GET` now routes
 through the same private `send`, so auth, the 15s timeout and status mapping stay in one place.
+
+## The verdict on record is the server's memory, not ours (0.6.11)
+0.6.10 shipped with a real bug: the detail screen judged "already reported" from the `Event` the
+**list** handed it, which was fetched before the report. Leave the screen, come back, and it offered
+to report again — and that second attempt failed, because Frigate had taken the first.
+
+**No local store was added.** Frigate already remembers, on the event row: `plus_id` (in the
+dataset) and `false_positive` (the label was reported wrong). `GET /api/events/{id}` returns the
+whole row, so the detail screen re-reads it on open. That is authoritative, survives reinstalls,
+and picks up verdicts given in Frigate's web UI or on another device — none of which a cache would.
+The list gets both columns in the response it already makes, so marking rows cost no extra request.
+
+- **One optional type, not two booleans.** `Event.verdict: DetectionVerdict?` — `nil` means nothing
+  is on record, which is the only state in which one can still be sent. `false_positive` wins when
+  both are set: the false-positive endpoint fills `plus_id` on its way through, so the pair is true
+  together and only the former says which verdict it was.
+- **`verdict` is separate from the panel's `feedback` phase** on the view model. The struck-through
+  label has to stand even when the panel is hidden — Frigate+ turned off since, or the capability
+  read failed — or the detail screen would contradict the row it was opened from.
+- **The re-read is best effort and takes the verdict only**, never the whole event: the single-event
+  endpoint carries no review join, so adopting its copy wholesale would drop the event's alert
+  severity from the header.
+- **A verdict given here is written back into the loaded list** (`record(_:for:)`), rather than
+  re-fetching it — a refresh would discard every older page the user had scrolled to.
+
+The reporting panel also moved to the bottom edge, with the clip centred in the space above it: the
+`VStack` packed them together mid-screen, so the panel read as part of the video rather than as the
+screen's own footer.

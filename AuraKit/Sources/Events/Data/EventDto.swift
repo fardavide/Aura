@@ -10,6 +10,8 @@ struct EventDto: Decodable {
     let hasSnapshot: Bool?
     /// Non-nil once the event's snapshot has been uploaded to Frigate+.
     let plusId: String?
+    /// Set by the false-positive submission — the server's record that the label was reported wrong.
+    let falsePositive: Bool?
     let zones: [String]?
     let data: EventDataDto?
 
@@ -21,6 +23,7 @@ struct EventDto: Decodable {
         case hasClip = "has_clip"
         case hasSnapshot = "has_snapshot"
         case plusId = "plus_id"
+        case falsePositive = "false_positive"
     }
 }
 

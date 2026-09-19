@@ -20,11 +20,8 @@ public final class EventDetailViewModel {
         case unavailable
         case ready
         case sending
-        /// The snapshot is in the training dataset. The verdict is `nil` when it was already there
-        /// when the screen opened, so there is nothing of this session's to confirm back.
-        case submitted(DetectionVerdict?)
-        /// Carries the verdict that failed, so a retry re-sends the user's answer rather than
-        /// silently substituting one.
+        /// A verdict is on record; `verdict` says which.
+        case submitted
         case failed(DetectionVerdict, EventsError)
     }
 
@@ -34,26 +31,34 @@ public final class EventDetailViewModel {
     public let duration: Duration?
     public private(set) var state: State
     public private(set) var feedback: Feedback = .unavailable
+    /// The verdict on record — seeded from the list's copy, corrected by the server on open, and
+    /// updated when one is given here. Drives the struck-through label, which stands even when the
+    /// panel itself is hidden, so the screen never disagrees with the row it was opened from.
+    public private(set) var verdict: DetectionVerdict?
 
     private let event: Event
     private let clipLoader: any EventClipLoading
+    private let getEvent: GetEvent
     private let isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled
     private let submitDetectionVerdict: SubmitDetectionVerdict
 
     public init(
         event: Event,
         clipLoader: any EventClipLoading,
+        getEvent: GetEvent,
         isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled,
         submitDetectionVerdict: SubmitDetectionVerdict
     ) {
         self.event = event
         self.clipLoader = clipLoader
+        self.getEvent = getEvent
         self.isDetectionFeedbackEnabled = isDetectionFeedbackEnabled
         self.submitDetectionVerdict = submitDetectionVerdict
         label = event.label
         severity = event.severity
         startTime = event.startTime
         duration = event.endTime.map { Duration.seconds($0.timeIntervalSince(event.startTime)) }
+        verdict = event.verdict
         state = event.hasClip ? .loading : .unavailable
     }
 
@@ -74,10 +79,14 @@ public final class EventDetailViewModel {
         case .unavailable: break
         case .ready, .sending, .submitted, .failed: return
         }
-        guard canSubmit || event.isSubmittedForTraining else { return }
+        guard canSubmit || verdict != nil else { return }
         // Best effort: a failed capability read leaves the panel hidden, never shown-and-broken.
         guard (try? await isDetectionFeedbackEnabled.execute()) == true else { return }
-        feedback = event.isSubmittedForTraining ? .submitted(nil) : .ready
+        // The list's copy ages the moment a verdict is given — here, on another device, or in
+        // Frigate's own web UI — and only the server knows the current answer. A failed re-read
+        // falls back to what the list said rather than blocking the panel.
+        verdict = (try? await getEvent.execute(event.id))?.verdict ?? verdict
+        feedback = verdict == nil ? .ready : .submitted
     }
 
     public func submit(_ verdict: DetectionVerdict) async {
@@ -88,7 +97,8 @@ public final class EventDetailViewModel {
         feedback = .sending
         do {
             try await submitDetectionVerdict.execute(verdict, for: event.id)
-            feedback = .submitted(verdict)
+            self.verdict = verdict
+            feedback = .submitted
         } catch {
             feedback = .failed(verdict, error)
         }

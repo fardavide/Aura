@@ -149,6 +149,14 @@ public final class EventsListViewModel {
         }
     }
 
+    /// Writes back a verdict the detail screen learned, so the row it was opened from stops
+    /// disagreeing with it. Deliberately not a re-fetch: that would discard every older page the
+    /// user had already scrolled to.
+    public func record(_ verdict: DetectionVerdict, for id: EventId) {
+        guard case .loaded(let events) = state else { return }
+        state = .loaded(events.map { $0.id == id ? $0.withVerdict(verdict) : $0 })
+    }
+
     public func displayName(for camera: CameraName) -> String {
         cameraNames[camera] ?? camera.value
     }

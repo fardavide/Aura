@@ -37,13 +37,21 @@ struct EventDecodingTests {
         #expect(garage.zones == [])
     }
 
-    @Test func `given an event carrying a plus id when decoding then it is already submitted for training`() throws {
+    @Test func `given an event carrying a plus id when decoding then its verdict is a confirmation`() throws {
         // given - when
         let events = try decodeEvents()
 
         // then
-        #expect(events.first { $0.id == EventId("ev1") }?.isSubmittedForTraining == true)
-        #expect(events.first { $0.id == EventId("ev2") }?.isSubmittedForTraining == false)
+        #expect(events.first { $0.id == EventId("ev1") }?.verdict == .correct)
+        #expect(events.first { $0.id == EventId("ev2") }?.verdict == nil)
+    }
+
+    @Test func `given an event flagged a false positive when decoding then its verdict says the label was wrong`() throws {
+        // given - when
+        let events = try JSONDecoder().decode([EventDto].self, from: Data(falsePositiveEventJson.utf8)).toEvents()
+
+        // then
+        #expect(events.first?.verdict == .incorrect)
     }
 
     @Test func `given an audio event when decoding then it is not an object detection`() throws {
@@ -286,6 +294,33 @@ struct FrigateEventsRepositoryTests {
     }
 }
 
+struct FrigateSingleEventTests {
+
+    @Test func `when re-reading one event then it targets that event and maps its verdict`() async throws {
+        // given
+        let http = FakeHttpClient(.response(status: 200, body: Data(singleEventJson.utf8)))
+        let sut = FrigateEventsRepository(config: .test, httpClient: http)
+
+        // when
+        let event = try await sut.event(id: EventId("ev4"))
+
+        // then
+        #expect(http.lastRequest?.url?.absoluteString == "http://frigate.test:5000/api/events/ev4")
+        #expect(event.id == EventId("ev4"))
+        #expect(event.verdict == .incorrect)
+    }
+
+    @Test func `given the event is gone when re-reading it then it throws unknown`() async {
+        // given
+        let sut = FrigateEventsRepository(
+            config: .test, httpClient: FakeHttpClient(.response(status: 404, body: Data()))
+        )
+
+        // when - then
+        await #expect(throws: EventsError.unknown) { try await sut.event(id: EventId("ev4")) }
+    }
+}
+
 struct FrigateDetectionFeedbackTests {
 
     @Test func `given plus enabled in the config when reading availability then feedback is offered`() async throws {
@@ -429,7 +464,7 @@ private func event(hasClip: Bool) -> Event {
     Event(
         id: EventId("ev1"), camera: CameraName("driveway"), label: "person", severity: .detection,
         subLabel: nil, startTime: Date(timeIntervalSince1970: 0), endTime: nil,
-        hasClip: hasClip, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+        hasClip: hasClip, hasSnapshot: true, isObjectDetection: true, verdict: nil,
         score: nil, zones: []
     )
 }
@@ -450,6 +485,20 @@ private let eventsJson = """
 ]
 """
 
+/// Reported wrong: the false-positive endpoint sets **both** flags on the way through, so the
+/// mapper has to prefer `false_positive` or every correction would read back as a confirmation.
+private let falsePositiveEventJson = """
+[
+  {
+    "id": "ev4", "camera": "garage", "label": "dog",
+    "start_time": 1707000200.0, "end_time": 1707000210.0,
+    "has_clip": true, "has_snapshot": true,
+    "plus_id": "plus-4", "false_positive": true,
+    "data": { "type": "object" }
+  }
+]
+"""
+
 /// An audio detection — no bounding box, so it can never carry a verdict.
 private let audioEventJson = """
 [
@@ -459,6 +508,17 @@ private let audioEventJson = """
     "has_clip": false, "has_snapshot": false, "data": { "type": "audio" }
   }
 ]
+"""
+
+/// `/api/events/{id}` answers with a bare object, not the list's array.
+private let singleEventJson = """
+{
+  "id": "ev4", "camera": "garage", "label": "dog",
+  "start_time": 1707000200.0, "end_time": 1707000210.0,
+  "has_clip": true, "has_snapshot": true,
+  "plus_id": "plus-4", "false_positive": true,
+  "data": { "type": "object" }
+}
 """
 
 private let plusEnabledConfigJson = #"{ "plus": { "enabled": true } }"#

@@ -309,6 +309,46 @@ struct EventsListViewModelTests {
 }
 
 @MainActor
+struct EventsListVerdictWriteBackTests {
+
+    @Test func `given a loaded list when a verdict is recorded then that row carries it`() async {
+        // given
+        let sut = makeViewModel(.success([event("a"), event("b")]))
+        await sut.load()
+
+        // when
+        sut.record(.incorrect, for: EventId("a"))
+
+        // then
+        #expect(sut.groups.flatMap(\.events).first { $0.id == EventId("a") }?.verdict == .incorrect)
+    }
+
+    @Test func `given a loaded list when a verdict is recorded then the other rows are untouched`() async {
+        // given
+        let sut = makeViewModel(.success([event("a"), event("b")]))
+        await sut.load()
+
+        // when
+        sut.record(.incorrect, for: EventId("a"))
+
+        // then
+        #expect(sut.groups.flatMap(\.events).first { $0.id == EventId("b") }?.verdict == nil)
+    }
+
+    @Test func `given nothing loaded when a verdict is recorded then the state is untouched`() async {
+        // given
+        let sut = makeViewModel(.failure(.unreachable))
+        await sut.load()
+
+        // when
+        sut.record(.incorrect, for: EventId("a"))
+
+        // then
+        #expect(sut.state == .failed(.unreachable))
+    }
+}
+
+@MainActor
 struct EventsListViewModelPagingTests {
 
     @Test func `given a full first page when loading then older events may still exist`() async {
@@ -584,14 +624,19 @@ struct EventDetailViewModelTests {
             event: Event,
             clip: Data? = nil,
             feedbackEnabled: Result<Bool, EventsError> = .success(false),
-            submit: Result<Void, EventsError> = .success(())
+            submit: Result<Void, EventsError> = .success(()),
+            onServer: Event? = nil
         ) {
             repository = FakeEventsRepository(
-                .success([]), detectionFeedbackEnabled: feedbackEnabled, submitResult: submit
+                .success([]),
+                detectionFeedbackEnabled: feedbackEnabled,
+                submitResult: submit,
+                singleEvent: onServer ?? event
             )
             sut = EventDetailViewModel(
                 event: event,
                 clipLoader: FakeEventClipLoader(clip),
+                getEvent: GetEvent(repository: repository),
                 isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled(repository: repository),
                 submitDetectionVerdict: SubmitDetectionVerdict(repository: repository)
             )
@@ -670,13 +715,44 @@ struct EventDetectionFeedbackTests {
 
     @Test func `given an already submitted event when loading feedback then it reports the earlier submission`() async {
         // given
-        let scenario = Scenario(event: finishedEvent(isSubmittedForTraining: true), feedbackEnabled: .success(true))
+        let scenario = Scenario(event: finishedEvent(verdict: .correct), feedbackEnabled: .success(true))
 
         // when
         await scenario.sut.loadFeedback()
 
         // then
-        #expect(scenario.sut.feedback == .submitted(nil))
+        #expect(scenario.sut.feedback == .submitted)
+        #expect(scenario.sut.verdict == .correct)
+    }
+
+    @Test func `given a verdict the loaded list never saw when loading feedback then the server's answer wins`() async {
+        // given — the list's copy predates a report made elsewhere
+        let scenario = Scenario(
+            event: finishedEvent(),
+            feedbackEnabled: .success(true),
+            onServer: finishedEvent(verdict: .incorrect)
+        )
+
+        // when
+        await scenario.sut.loadFeedback()
+
+        // then
+        #expect(scenario.sut.verdict == .incorrect)
+        #expect(scenario.sut.feedback == .submitted)
+        #expect(scenario.repository.requestedEventIds == [EventId("ev1")])
+    }
+
+    @Test func `given the re-read fails when loading feedback then the loaded copy is trusted`() async {
+        // given
+        let scenario = Scenario(event: finishedEvent(), feedbackEnabled: .success(true))
+        scenario.repository.singleEvent = nil
+
+        // when
+        await scenario.sut.loadFeedback()
+
+        // then
+        #expect(scenario.sut.verdict == nil)
+        #expect(scenario.sut.feedback == .ready)
     }
 
     @Test func `given an offered verdict when confirming the label then it reaches the server`() async {
@@ -690,7 +766,8 @@ struct EventDetectionFeedbackTests {
         // then
         #expect(scenario.repository.submittedVerdicts.map(\.verdict) == [.correct])
         #expect(scenario.repository.submittedVerdicts.map(\.event) == [EventId("ev1")])
-        #expect(scenario.sut.feedback == .submitted(.correct))
+        #expect(scenario.sut.feedback == .submitted)
+        #expect(scenario.sut.verdict == .correct)
     }
 
     @Test func `given an offered verdict when reporting the label wrong then it reaches the server`() async {
@@ -703,7 +780,20 @@ struct EventDetectionFeedbackTests {
 
         // then
         #expect(scenario.repository.submittedVerdicts.map(\.verdict) == [.incorrect])
-        #expect(scenario.sut.feedback == .submitted(.incorrect))
+        #expect(scenario.sut.feedback == .submitted)
+        #expect(scenario.sut.verdict == .incorrect)
+    }
+
+    @Test func `given a reported event when feedback is unavailable then the verdict still stands`() async {
+        // given — Frigate+ turned off since the report, or the capability read failed
+        let scenario = Scenario(event: finishedEvent(verdict: .incorrect), feedbackEnabled: .success(false))
+
+        // when
+        await scenario.sut.loadFeedback()
+
+        // then
+        #expect(scenario.sut.feedback == .unavailable)
+        #expect(scenario.sut.verdict == .incorrect)
     }
 
     @Test func `given a failing submission when giving a verdict then the verdict is kept for the retry`() async {
@@ -733,7 +823,8 @@ struct EventDetectionFeedbackTests {
         await scenario.sut.submit(.incorrect)
 
         // then
-        #expect(scenario.sut.feedback == .submitted(.incorrect))
+        #expect(scenario.sut.feedback == .submitted)
+        #expect(scenario.sut.verdict == .incorrect)
         #expect(scenario.repository.submittedVerdicts.count == 2)
     }
 
@@ -747,7 +838,8 @@ struct EventDetectionFeedbackTests {
         await scenario.sut.loadFeedback()
 
         // then
-        #expect(scenario.sut.feedback == .submitted(.correct))
+        #expect(scenario.sut.feedback == .submitted)
+        #expect(scenario.sut.verdict == .correct)
     }
 
     @Test func `given nothing is offered when submitting a verdict then the server is not called`() async {
@@ -768,7 +860,7 @@ struct EventDetectionFeedbackTests {
     private func finishedEvent(
         hasSnapshot: Bool = true,
         isObjectDetection: Bool = true,
-        isSubmittedForTraining: Bool = false
+        verdict: DetectionVerdict? = nil
     ) -> Event {
         event(
             "ev1",
@@ -776,7 +868,7 @@ struct EventDetectionFeedbackTests {
             endTime: Date(timeIntervalSince1970: 42),
             hasSnapshot: hasSnapshot,
             isObjectDetection: isObjectDetection,
-            isSubmittedForTraining: isSubmittedForTraining
+            verdict: verdict
         )
     }
 }
@@ -812,12 +904,12 @@ private func event(
     hasClip: Bool = true,
     hasSnapshot: Bool = true,
     isObjectDetection: Bool = true,
-    isSubmittedForTraining: Bool = false
+    verdict: DetectionVerdict? = nil
 ) -> Event {
     Event(
         id: EventId(id), camera: CameraName("driveway"), label: label, severity: severity,
         subLabel: nil, startTime: startTime, endTime: endTime,
         hasClip: hasClip, hasSnapshot: hasSnapshot, isObjectDetection: isObjectDetection,
-        isSubmittedForTraining: isSubmittedForTraining, score: nil, zones: []
+        verdict: verdict, score: nil, zones: []
     )
 }

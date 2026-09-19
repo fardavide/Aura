@@ -56,6 +56,15 @@ xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17
   -only-testing:AuraTests/TimelineScreenSnapshotTests
 ```
 
+- ⚠️ **A failed snapshot run blocks the next build until you clear its artifacts.** Mismatches write
+  into `AuraTests/__SnapshotFailures__/<Suite>/`, and the test target globs `AuraTests/**` into its
+  resources — two suites with a same-named test (e.g. `…failed-iPhone-portrait-dark.png` under both
+  `CameraGridSnapshotTests` and `TimelineSnapshotTests`) then collide with **"Multiple commands
+  produce …"** and `Testing cancelled because the build failed`. That reads as a test failure but no
+  test ran. `rm -rf AuraTests/__SnapshotFailures__` and re-run before believing a red result.
+- **Snapshot flakes cluster under load.** Back-to-back suite runs on a busy machine push Liquid Glass
+  drift past the tolerance in suites the change never touched. A handful of failures spread across
+  unrelated suites is that, not a regression — re-run once on an idle machine before chasing it.
 - **Reference images** live in `AuraTests/__Snapshots__/` and are committed.
 - **(Re)recording a baseline:** delete the stale `.png` (or the whole folder) and run — the
   first pass writes the missing reference and fails; xcodebuild's retry-on-failure then

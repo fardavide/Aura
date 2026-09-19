@@ -69,9 +69,17 @@ struct EventRowView: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 7) {
-                Text(event.label.capitalized).auroraText(.headline)
+                Text(event.label.capitalized)
+                    .auroraText(.headline)
+                    // Struck through once you've told Frigate+ the label was wrong, so an already
+                    // corrected detection is recognisable without opening it.
+                    .strikethrough(event.verdict == .incorrect, color: .auroraTextTertiary)
                 if event.severity == .alert {
                     Text("Alert").textCase(.uppercase).auroraBadge(.alertTag, size: .compact)
+                }
+                if event.verdict == .incorrect {
+                    Text("Not a \(event.label)").textCase(.uppercase)
+                        .auroraBadge(.neutral, size: .compact)
                 }
             }
             Text(cameraName).auroraText(.caption).foregroundStyle(.auroraTextSecondary)

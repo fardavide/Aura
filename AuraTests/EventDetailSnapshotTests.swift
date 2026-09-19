@@ -27,7 +27,7 @@ struct EventDetailSnapshotTests {
         let event = Event(
             id: EventId("evt-2"), camera: CameraName("driveway"), label: "car", severity: .detection,
             subLabel: nil, startTime: snapshotNow, endTime: snapshotNow.addingTimeInterval(65),
-            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, verdict: nil,
             score: 0.88, zones: []
         )
         let view = await eventDetailScreen(event: event, cameraName: "Driveway")
@@ -46,10 +46,10 @@ struct EventDetailSnapshotTests {
         assertScreenSnapshot(view, named: "feedback")
     }
 
-    @Test func `given an event already sent for training when shown then it points at Frigate Plus`() async {
+    @Test func `given an event already confirmed when shown then it points at Frigate Plus`() async {
         // given
         let view = await eventDetailScreen(
-            event: snapshotEvent(hasClip: false, isSubmittedForTraining: true),
+            event: snapshotEvent(hasClip: false, verdict: .correct),
             cameraName: "Front Door",
             feedbackEnabled: true
         )
@@ -57,16 +57,28 @@ struct EventDetailSnapshotTests {
         // then
         assertScreenSnapshot(view, named: "feedback-submitted")
     }
+
+    @Test func `given an event already reported wrong when shown then its label is struck through`() async {
+        // given
+        let view = await eventDetailScreen(
+            event: snapshotEvent(hasClip: false, verdict: .incorrect),
+            cameraName: "Front Door",
+            feedbackEnabled: true
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "feedback-incorrect")
+    }
 }
 
 // MARK: - Fixtures
 
-private func snapshotEvent(hasClip: Bool, isSubmittedForTraining: Bool = false) -> Event {
+private func snapshotEvent(hasClip: Bool, verdict: DetectionVerdict? = nil) -> Event {
     Event(
         id: EventId("evt-1"), camera: CameraName("front_door"), label: "person", severity: .alert,
         subLabel: nil, startTime: snapshotNow, endTime: snapshotNow.addingTimeInterval(42),
         hasClip: hasClip, hasSnapshot: true, isObjectDetection: true,
-        isSubmittedForTraining: isSubmittedForTraining, score: 0.94, zones: ["porch"]
+        verdict: verdict, score: 0.94, zones: ["porch"]
     )
 }
 
@@ -81,10 +93,13 @@ private func eventDetailScreen(
     cameraName: String,
     feedbackEnabled: Bool = false
 ) async -> some View {
-    let repository = FakeEventsRepository(.success([]), detectionFeedbackEnabled: .success(feedbackEnabled))
+    let repository = FakeEventsRepository(
+        .success([]), detectionFeedbackEnabled: .success(feedbackEnabled), singleEvent: event
+    )
     let viewModel = EventDetailViewModel(
         event: event,
         clipLoader: FakeEventClipLoader(nil),
+        getEvent: GetEvent(repository: repository),
         isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled(repository: repository),
         submitDetectionVerdict: SubmitDetectionVerdict(repository: repository)
     )
@@ -92,6 +107,6 @@ private func eventDetailScreen(
     await viewModel.loadFeedback()
 
     return NavigationStack {
-        EventDetailView(viewModel: viewModel, cameraName: cameraName)
+        EventDetailView(viewModel: viewModel, cameraName: cameraName, onVerdict: { _ in })
     }
 }

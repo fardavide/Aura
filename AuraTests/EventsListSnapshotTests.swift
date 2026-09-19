@@ -68,7 +68,8 @@ struct EventsListSnapshotTests {
 /// A morning's worth of events across the four snapshot cameras — distinct start times so the
 /// newest-first ordering is stable, one still in progress (nil end), varied labels. Exercises the
 /// hero ("LATEST ALERT" on `evt-2`), a ringed row, an ALERT tag, an in-progress row with no
-/// duration, several hour groups, a day boundary the subtitle must exclude, and four chips.
+/// duration, several hour groups, a day boundary the subtitle must exclude, four chips, and — on
+/// `evt-3` — a detection already reported wrong, which reads struck through with its own badge.
 private func snapshotEvents() -> [Event] {
     func at(minutesAgo: Double) -> Date { snapshotNow.addingTimeInterval(-minutesAgo * 60) }
 
@@ -76,37 +77,37 @@ private func snapshotEvents() -> [Event] {
         Event(
             id: EventId("evt-1"), camera: CameraName("front_door"), label: "person", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 3), endTime: nil,
-            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, verdict: nil,
             score: 0.94, zones: ["porch"]
         ),
         Event(
             id: EventId("evt-2"), camera: CameraName("driveway"), label: "car", severity: .alert,
             subLabel: nil, startTime: at(minutesAgo: 22), endTime: at(minutesAgo: 21),
-            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, verdict: nil,
             score: 0.88, zones: ["driveway"]
         ),
         Event(
             id: EventId("evt-3"), camera: CameraName("backyard"), label: "dog", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 65), endTime: at(minutesAgo: 63),
-            hasClip: true, hasSnapshot: false, isObjectDetection: true, isSubmittedForTraining: false,
+            hasClip: true, hasSnapshot: false, isObjectDetection: true, verdict: .incorrect,
             score: 0.71, zones: []
         ),
         Event(
             id: EventId("evt-4"), camera: CameraName("front_door"), label: "person", severity: .alert,
             subLabel: "delivery", startTime: at(minutesAgo: 130), endTime: at(minutesAgo: 128),
-            hasClip: false, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            hasClip: false, hasSnapshot: true, isObjectDetection: true, verdict: nil,
             score: 0.9, zones: ["porch"]
         ),
         Event(
             id: EventId("evt-5"), camera: CameraName("garage"), label: "cat", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 260), endTime: at(minutesAgo: 259),
-            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, verdict: nil,
             score: nil, zones: []
         ),
         Event(
             id: EventId("evt-6"), camera: CameraName("driveway"), label: "car", severity: .detection,
             subLabel: nil, startTime: at(minutesAgo: 1_500), endTime: at(minutesAgo: 1_495),
-            hasClip: true, hasSnapshot: true, isObjectDetection: true, isSubmittedForTraining: false,
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, verdict: nil,
             score: 0.82, zones: ["driveway"]
         ),
     ]
@@ -120,7 +121,7 @@ private func snapshotDetections() -> [Event] {
             id: event.id, camera: event.camera, label: event.label, severity: .detection,
             subLabel: event.subLabel, startTime: event.startTime, endTime: event.endTime,
             hasClip: event.hasClip, hasSnapshot: event.hasSnapshot,
-            isObjectDetection: event.isObjectDetection, isSubmittedForTraining: event.isSubmittedForTraining,
+            isObjectDetection: event.isObjectDetection, verdict: event.verdict,
             score: event.score, zones: event.zones
         )
     }
@@ -163,6 +164,7 @@ private func eventsListScreen(
             return EventDetailViewModel(
                 event: $0,
                 clipLoader: FakeEventClipLoader(),
+                getEvent: GetEvent(repository: repository),
                 isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled(repository: repository),
                 submitDetectionVerdict: SubmitDetectionVerdict(repository: repository)
             )

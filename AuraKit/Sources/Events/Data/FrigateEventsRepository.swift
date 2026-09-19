@@ -36,6 +36,15 @@ public struct FrigateEventsRepository: EventsRepository {
         return events.map { alertIds.contains($0.id.value) ? $0.withSeverity(.alert) : $0 }
     }
 
+    public func event(id: EventId) async throws(EventsError) -> Event {
+        let data = try await get(.event(id: id.value))
+        do {
+            return try JSONDecoder().decode(EventDto.self, from: data).toEvent()
+        } catch {
+            throw EventsError.invalidData
+        }
+    }
+
     public func isDetectionFeedbackEnabled() async throws(EventsError) -> Bool {
         let data = try await get(.config)
         do {

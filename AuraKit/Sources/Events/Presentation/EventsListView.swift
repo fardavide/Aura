@@ -52,7 +52,8 @@ public struct EventsListView: View {
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(
                     viewModel: makeDetailViewModel(event),
-                    cameraName: viewModel.displayName(for: event.camera)
+                    cameraName: viewModel.displayName(for: event.camera),
+                    onVerdict: { viewModel.record($0, for: event.id) }
                 )
             }
         }
