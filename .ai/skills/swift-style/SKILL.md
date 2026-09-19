@@ -172,6 +172,13 @@ the row), and `.fixedSize()` on the badges beside it so they keep their shape in
 "ALE / RT". Two flexible pieces on one line will both break rather than one yielding. And prefer one
 signal over two: a second badge that restates the first in words is the piece that runs out of room.
 
+**A visual judgment call that's already been guessed wrong once gets rendered, not re-guessed.** Two
+single-shot attempts at "make this stand out more" (a colour swap, then a darker colour) both missed
+before the third try rendered four candidates side by side and asked which one actually worked. If a
+styling change is purely subjective (contrast, "pops more", "reads clearer") and a first attempt
+already missed, build 2–4 small variants, render them together in one comparison image, and let the
+user pick — instead of a second solo guess that has the same odds of missing again.
+
 **Verify styling against rendered pixels, not intuition.** Re-record the affected snapshot and look
 at the PNG. If a styling modifier makes no difference, delete it: `.tint()` on a segmented `Picker`
 is a **no-op** (the selection indicator is not tinted by it) — proven by an A/B of the recorded

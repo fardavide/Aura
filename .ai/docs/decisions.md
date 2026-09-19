@@ -1935,3 +1935,23 @@ text scales with the label, so `motorcycle` left the row no width and the label,
   schemes (`#8C87A8` light, `#7C7896` dark); the ramp is otherwise monotonic per scheme, so
   Quaternary/Muted invert between them and only Muted recedes either way. At 17pt bold the label is
   "large text" for contrast purposes, so the dimmer ink still clears the 3:1 threshold.
+
+## A fixed-width icon, chosen by rendering four candidates side by side (0.6.14)
+Muted ink still didn't read as "wrong" at a glance — fair: colour alone is a weak signal when
+scanning a list, strikethrough or not. Rather than guess again, four treatments were rendered
+side by side (muted+strikethrough / icon+muted+strikethrough / row tint / opacity-only fade) as a
+throwaway comparison image and shown to the user before touching production code.
+
+- **A fixed-width icon in front of the label won.** `ReportedWrongIcon` — a small `xmark.circle.fill`
+  — is sized independent of the label's font, unlike the "NOT A …" text badge 0.6.12 removed: that
+  one scaled with the label and wrapped. The icon can't, by construction.
+- **Row tint was the runner-up but risked disappearing into production chrome.** The comparison used
+  a flat white/black background; the real row sits on a translucent glass card, which likely
+  swallows a faint wash even further. Untested — not worth the risk when the icon already worked.
+- **The icon ate into the row's width budget.** Adding it dropped `.minimumScaleFactor(0.8)`
+  (0.6.12) below what "Motorcycle" needs to stay on one line — `0.6` was needed to clear the icon +
+  label + severity tag together. The detail screen has no such pressure (full-width header, no
+  minimumScaleFactor) and didn't need a change.
+- **Comparison images were never committed.** A scratch `AuraTests` snapshot test rendered the four
+  candidates to `__Snapshots__/`, was shown to the user for the decision, then deleted along with
+  its output before implementing the winner — a one-off visual aid, not a regression guard.

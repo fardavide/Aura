@@ -57,6 +57,9 @@ public struct EventDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
+                if viewModel.verdict == .incorrect {
+                    ReportedWrongIcon()
+                }
                 Text(viewModel.label.capitalized)
                     .auroraText(.heroTitle)
                     .reportedWrong(viewModel.verdict == .incorrect)

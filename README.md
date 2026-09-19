@@ -45,6 +45,11 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.14 — 2026-09-19
+- **A detection reported wrong now reads that way at a glance.** Colour and a strikethrough alone
+  didn't stand out enough while scanning the list — a small crossed-out icon now sits before the
+  label too, in the list, the hero card and the event screen.
+
 ### 0.6.13 — 2026-09-19
 - **A detection you reported as wrong now visibly fades back.** Its label was only a shade lighter
   than a normal one, so the strikethrough was doing all the work; it now uses the palette's
