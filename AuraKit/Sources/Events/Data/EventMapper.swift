@@ -24,7 +24,9 @@ extension EventDto {
             // An absent type predates the field, which only ever tagged object events until audio
             // and manual events were added — so the missing value is `object`, not "unknown".
             isObjectDetection: (data?.type ?? "object") == "object",
-            isSubmittedForTraining: plusId != nil,
+            // `false_positive` wins: the endpoint that sets it also fills `plus_id` on the way
+            // through, so the two are true together and only the former says which verdict it was.
+            verdict: falsePositive == true ? .incorrect : (plusId != nil ? .correct : nil),
             score: data?.score ?? data?.topScore,
             zones: zones ?? []
         )
@@ -46,7 +48,7 @@ extension Event {
             hasClip: hasClip,
             hasSnapshot: hasSnapshot,
             isObjectDetection: isObjectDetection,
-            isSubmittedForTraining: isSubmittedForTraining,
+            verdict: verdict,
             score: score,
             zones: zones
         )

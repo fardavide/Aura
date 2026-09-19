@@ -300,6 +300,12 @@ not snapshot-tested — they center on video players that can't render in a snap
   relabelling actually happens (see `decisions.md`). Hidden entirely unless the server reports the
   add-on and the event is submittable. First write path in the app — `FrigateApiClient` gained
   `post`/`put`.
+- **A reported detection stays reported, and says so (0.6.11).** 0.6.10 judged "already reported"
+  from the list's stale copy, so leaving and re-opening an event offered a second report that the
+  server then refused. The detail screen now re-reads the event (`GET /api/events/{id}`) on open —
+  no local store, and it picks up verdicts given in Frigate's web UI or on another device. A
+  detection reported wrong reads struck through with a "NOT A DOG" badge in the list and on the
+  event screen. The reporting panel moved to the bottom edge, clip centred above it.
 
 ## Next
 - **Verify detection feedback against the real server (0.6.10).** Every path is unit-tested against

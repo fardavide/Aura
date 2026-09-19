@@ -17,9 +17,10 @@ public struct Event: Equatable, Hashable, Sendable, Identifiable {
     /// A tracked object, as opposed to an audio or manually-created event. Only these carry the
     /// bounding box a verdict is attached to.
     public let isObjectDetection: Bool
-    /// Its snapshot is already in the training dataset, from an earlier verdict on this or another
-    /// device. Submitting twice is refused by the server, so the screen reports instead of asking.
-    public let isSubmittedForTraining: Bool
+    /// The verdict already on record with the server, from this device, another one, or Frigate's
+    /// own web UI. `nil` means none has been given — the only state in which one can still be sent,
+    /// since the server refuses a second. This is the server's memory, not ours.
+    public let verdict: DetectionVerdict?
     public let score: Double?
     public let zones: [String]
 
@@ -34,7 +35,7 @@ public struct Event: Equatable, Hashable, Sendable, Identifiable {
         hasClip: Bool,
         hasSnapshot: Bool,
         isObjectDetection: Bool,
-        isSubmittedForTraining: Bool,
+        verdict: DetectionVerdict?,
         score: Double?,
         zones: [String]
     ) {
@@ -48,8 +49,28 @@ public struct Event: Equatable, Hashable, Sendable, Identifiable {
         self.hasClip = hasClip
         self.hasSnapshot = hasSnapshot
         self.isObjectDetection = isObjectDetection
-        self.isSubmittedForTraining = isSubmittedForTraining
+        self.verdict = verdict
         self.score = score
         self.zones = zones
+    }
+
+    /// A full re-init with a different verdict — `Event` is immutable, so writing one back after a
+    /// report has a single place to change rather than repeating every field at the call site.
+    public func withVerdict(_ verdict: DetectionVerdict) -> Event {
+        Event(
+            id: id,
+            camera: camera,
+            label: label,
+            severity: severity,
+            subLabel: subLabel,
+            startTime: startTime,
+            endTime: endTime,
+            hasClip: hasClip,
+            hasSnapshot: hasSnapshot,
+            isObjectDetection: isObjectDetection,
+            verdict: verdict,
+            score: score,
+            zones: zones
+        )
     }
 }

@@ -160,6 +160,7 @@ final class AppComposition {
         return EventDetailViewModel(
             event: event,
             clipLoader: FrigateEventClipLoader(config: config, httpClient: httpClient),
+            getEvent: GetEvent(repository: repository),
             isDetectionFeedbackEnabled: IsDetectionFeedbackEnabled(repository: repository),
             submitDetectionVerdict: SubmitDetectionVerdict(repository: repository)
         )

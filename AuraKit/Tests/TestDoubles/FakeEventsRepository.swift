@@ -10,19 +10,30 @@ public final class FakeEventsRepository: EventsRepository, @unchecked Sendable {
     public var olderResult: Result<[Event], EventsError>?
     public var detectionFeedbackEnabled: Result<Bool, EventsError>
     public var submitResult: Result<Void, EventsError>
+    /// Answers the single-event re-read. `nil` makes it fail, standing in for an unreachable server.
+    public var singleEvent: Event?
     public private(set) var requestedCursors: [Date?] = []
+    public private(set) var requestedEventIds: [EventId] = []
     public private(set) var submittedVerdicts: [(verdict: DetectionVerdict, event: EventId)] = []
 
     public init(
         _ result: Result<[Event], EventsError>,
         olderResult: Result<[Event], EventsError>? = nil,
         detectionFeedbackEnabled: Result<Bool, EventsError> = .success(false),
-        submitResult: Result<Void, EventsError> = .success(())
+        submitResult: Result<Void, EventsError> = .success(()),
+        singleEvent: Event? = nil
     ) {
         self.result = result
         self.olderResult = olderResult
         self.detectionFeedbackEnabled = detectionFeedbackEnabled
         self.submitResult = submitResult
+        self.singleEvent = singleEvent
+    }
+
+    public func event(id: EventId) async throws(EventsError) -> Event {
+        requestedEventIds.append(id)
+        guard let singleEvent else { throw EventsError.unreachable }
+        return singleEvent
     }
 
     public func events(limit: Int, before: Date?) async throws(EventsError) -> [Event] {

@@ -11,12 +11,18 @@ public struct EventDetailView: View {
     // displayed one — throwing away a verdict the user had just given.
     @State private var viewModel: EventDetailViewModel
     private let cameraName: String
+    private let onVerdict: (DetectionVerdict) -> Void
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    public init(viewModel: EventDetailViewModel, cameraName: String) {
+    public init(
+        viewModel: EventDetailViewModel,
+        cameraName: String,
+        onVerdict: @escaping (DetectionVerdict) -> Void
+    ) {
         _viewModel = State(initialValue: viewModel)
         self.cameraName = cameraName
+        self.onVerdict = onVerdict
     }
 
     public var body: some View {
@@ -24,7 +30,10 @@ public struct EventDetailView: View {
             if verticalSizeClass != .compact {
                 header
             }
+            // The clip takes every point the panel doesn't and centres itself in it, so the panel
+            // sits on the bottom edge instead of riding directly under the picture mid-screen.
             content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             feedbackPanel
         }
         .auroraBackground()
@@ -36,13 +45,28 @@ public struct EventDetailView: View {
         .task { await viewModel.load() }
         // Its own task, so the panel appears while the clip is still downloading.
         .task { await viewModel.loadFeedback() }
+        // Fires when a verdict is given here, and when the re-read finds one the list didn't know
+        // about — both are cases where the row behind this screen is out of date.
+        .onChange(of: viewModel.verdict) { _, verdict in
+            if let verdict {
+                onVerdict(verdict)
+            }
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
-                Text(viewModel.label.capitalized).auroraText(.heroTitle)
+                Text(viewModel.label.capitalized)
+                    .auroraText(.heroTitle)
+                    .strikethrough(viewModel.verdict == .incorrect, color: .auroraTextTertiary)
                 severityBadge
+                if viewModel.verdict == .incorrect {
+                    // The strikethrough alone could read as "deleted" or "expired"; the badge says
+                    // which of those it is.
+                    Text("Not a \(viewModel.label)").textCase(.uppercase)
+                        .auroraBadge(.neutral, size: .compact)
+                }
             }
             HStack(spacing: 6) {
                 Text(cameraName).auroraText(.caption)
@@ -130,10 +154,10 @@ public struct EventDetailView: View {
                         .foregroundStyle(.auroraTextSecondary)
                 }
             }
-        case .submitted(let verdict):
+        case .submitted:
             feedbackCard {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(submittedTitle(verdict))
+                    Text(submittedTitle(viewModel.verdict))
                         .auroraText(.bodyEmphasis)
                         .foregroundStyle(.auroraTextPrimary)
                     // The API carries a yes/no and nothing else — naming the right object is only

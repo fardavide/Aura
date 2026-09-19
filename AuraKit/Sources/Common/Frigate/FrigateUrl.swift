@@ -10,6 +10,8 @@ public enum FrigateEndpoint: Sendable {
     /// backwards by passing the oldest event it holds as `before` (the server's clause is
     /// `start_time < before`).
     case events(limit: Int, after: Double?, before: Double?)
+    /// One event by id — the whole row, including the fields the list's projection leaves out.
+    case event(id: String)
 
     public func url(base: URL) -> URL {
         switch self {
@@ -27,6 +29,8 @@ public enum FrigateEndpoint: Sendable {
                     // rounding it to a whole second would skip (or re-serve) a busy second's events.
                     + (before.map { [URLQueryItem(name: "before", value: String($0))] } ?? [])
             )
+        case .event(let id):
+            makeUrl(base: base, path: "api/events/\(id)")
         }
     }
 }

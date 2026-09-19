@@ -87,6 +87,13 @@ struct FrigateUrlTests {
         )
     }
 
+    @Test func `when building the single event endpoint then it targets the event by id`() {
+        #expect(
+            FrigateEndpoint.event(id: "ev1").url(base: base)
+                == URL(string: "http://frigate.local:5000/api/events/ev1")!
+        )
+    }
+
     @Test func `when building the detection feedback urls then they target the event`() {
         #expect(
             FrigatePlusUrl.submit(base: base, eventId: "ev1")

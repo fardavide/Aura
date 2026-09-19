@@ -45,6 +45,16 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.11 — 2026-09-19
+- **A reported detection now stays reported.** The app used to forget as soon as you left the
+  event, then offer to report it again — and that second attempt failed, because Frigate had
+  already taken the first. The screen now asks the server what verdict is on record when it opens,
+  so it also picks up reports you made from Frigate's web UI or another device.
+- **A detection you reported as wrong reads that way at a glance** — the label is struck through
+  with a "NOT A DOG" badge, in the event list and on the event screen alike.
+- **The reporting panel sits on the bottom edge** instead of riding directly under the clip in the
+  middle of the screen; the clip now centres in the space above it.
+
 ### 0.6.10 — 2026-09-19
 - **Tell Frigate+ whether a detection was right, from the event screen.** Open an event and, if your
   server has Frigate+ enabled, a panel asks "Is this a dog?" — Yes confirms it, No reports it as a

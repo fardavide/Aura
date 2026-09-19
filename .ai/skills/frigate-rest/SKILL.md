@@ -198,6 +198,15 @@ dataset. Don't design a label picker — the API cannot carry it.
   UI additionally requires `has_snapshot` and `data.type == "object"`.
 - Success is `{"success": true, "plus_id": "…"}`; failures are `{"success": false, "message": "…"}`
   with a 400/404 status.
+- **The server remembers the verdict — don't cache it locally.** `plus_id` means "in the dataset";
+  `false_positive` means "reported wrong". Both are columns on the event, both come back in the
+  `/api/events` list projection, and `GET /api/events/{event_id}` returns the **whole row**
+  (`model_to_dict(event)` — every column, so also anything the list projection omits; 404 if the id
+  is unknown or the camera is denied). Re-read that to answer "has this already been reported",
+  which also catches verdicts given in the web UI or on another device.
+- ⚠️ **`false_positive` implies `plus_id`.** The false-positive handler submits the event first when
+  it has no `plus_id`, so both are set afterwards. Read `false_positive` first or every correction
+  looks like a confirmation.
 - Related, **not** Frigate+: `POST /api/events/{id}/sub_label` (`{subLabel, subLabelScore}`) writes
   local Frigate metadata only and never reaches training — it is not a substitute for a verdict.
 
