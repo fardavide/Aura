@@ -1912,3 +1912,20 @@ The list gets both columns in the response it already makes, so marking rows cos
 The reporting panel also moved to the bottom edge, with the clip centred in the space above it: the
 `VStack` packed them together mid-screen, so the panel read as part of the video rather than as the
 screen's own footer.
+
+## The "NOT A …" badge is out; the strikethrough carries it alone (0.6.12)
+0.6.11's marker was a struck-through label **plus** a `Not a <label>` badge, on the argument that a
+strikethrough alone could read as "deleted". On a real deployment it shipped a mangled row: the badge
+text scales with the label, so `motorcycle` left the row no width and the label, the severity tag
+**and** the badge each wrapped mid-word — `Motorc / ycle`, `ALE / RT`, `NOT A MOT / ORCY / CLE`.
+
+- **One signal, not two.** The badge restated in the narrowest place what the event screen's panel
+  already says in a full sentence with room to say it ("Reported as not a motorcycle."). The
+  strikethrough plus muted ink is the glance-level cue; the sentence is the explanation.
+- **The label yields by shrinking, not by truncating or wrapping.** `.lineLimit(1)` +
+  `.minimumScaleFactor(0.8)`; truncating to `Motorcyc…` hides *which* object it was, which is the
+  only thing the row exists to say. The severity tag takes `.fixedSize()` so it keeps its shape.
+- **The fixture was the real defect.** Eight green baselines per state proved nothing because every
+  fixture label was `person`, `dog` or `car`. The snapshot fixtures now carry `motorcycle`, so the
+  overflow lands in a committed PNG rather than in a user's screenshot. Rule recorded in
+  `swift-testing`; the width-planning rule in `swift-style`.

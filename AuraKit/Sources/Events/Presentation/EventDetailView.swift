@@ -59,14 +59,11 @@ public struct EventDetailView: View {
             HStack(spacing: 7) {
                 Text(viewModel.label.capitalized)
                     .auroraText(.heroTitle)
-                    .strikethrough(viewModel.verdict == .incorrect, color: .auroraTextTertiary)
-                severityBadge
-                if viewModel.verdict == .incorrect {
-                    // The strikethrough alone could read as "deleted" or "expired"; the badge says
-                    // which of those it is.
-                    Text("Not a \(viewModel.label)").textCase(.uppercase)
-                        .auroraBadge(.neutral, size: .compact)
-                }
+                    .reportedWrong(viewModel.verdict == .incorrect)
+                    .lineLimit(1)
+                // What the strikethrough means is spelled out in full by the panel below, which has
+                // the room for a sentence — no badge needs to compete with the severity tag here.
+                severityBadge.fixedSize()
             }
             HStack(spacing: 6) {
                 Text(cameraName).auroraText(.caption)

@@ -306,6 +306,11 @@ not snapshot-tested — they center on video players that can't render in a snap
   no local store, and it picks up verdicts given in Frigate's web UI or on another device. A
   detection reported wrong reads struck through with a "NOT A DOG" badge in the list and on the
   event screen. The reporting panel moved to the bottom edge, clip centred above it.
+- **The "NOT A …" badge is gone (0.6.12).** It shipped alongside the strikethrough and mangled the
+  row on a real deployment: the badge text scales with the label, so `motorcycle` wrapped the label,
+  the severity tag and the badge each mid-word. A reported detection now reads struck through in
+  muted grey and nothing else; the event screen's panel still says it in full. Snapshot fixtures
+  carry the longest realistic label now, which is what eight green baselines had been missing.
 
 ## Next
 - **Verify detection feedback against the real server (0.6.10).** Every path is unit-tested against

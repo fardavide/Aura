@@ -153,6 +153,11 @@ never `Package.swift`, so the app stays dependency-free).
   injected into the view-model, plus `.environment` for locale (`en_US_POSIX`) and calendar + time
   zone (GMT). A view that reads `Calendar.current`/`Date()` directly isn't snapshottable — thread the
   value through the SwiftUI environment instead.
+- **Fixture the *longest* realistic value, not a convenient one.** A baseline built from `person` and
+  `dog` proved nothing about a row's width: `motorcycle` shipped and wrapped the label, the severity
+  tag and a badge all mid-word, across every device — invisible in eight green snapshots. Whenever a
+  screen renders a string that comes from the server, at least one fixture carries the longest one a
+  real deployment produces, so the overflow is in a committed PNG rather than in a user's screenshot.
 - **Cover both light and dark.** Theme is a first-class app feature, so every screen is captured in
   both — loop the color scheme (`.environment(\.colorScheme,…)` + matching `UITraitCollection`
   userInterfaceStyle) and suffix the snapshot name with the scheme.

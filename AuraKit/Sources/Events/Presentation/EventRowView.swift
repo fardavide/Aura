@@ -71,15 +71,17 @@ struct EventRowView: View {
             HStack(spacing: 7) {
                 Text(event.label.capitalized)
                     .auroraText(.headline)
-                    // Struck through once you've told Frigate+ the label was wrong, so an already
-                    // corrected detection is recognisable without opening it.
-                    .strikethrough(event.verdict == .incorrect, color: .auroraTextTertiary)
+                    .reportedWrong(event.verdict == .incorrect)
+                    // A long label ("Motorcycle") next to the tag overruns the row's remaining
+                    // width. One line, shrunk a little to fit — wrapping breaks the word in half
+                    // and truncating hides which object it was, and the object is the whole point.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 if event.severity == .alert {
                     Text("Alert").textCase(.uppercase).auroraBadge(.alertTag, size: .compact)
-                }
-                if event.verdict == .incorrect {
-                    Text("Not a \(event.label)").textCase(.uppercase)
-                        .auroraBadge(.neutral, size: .compact)
+                        // The tag keeps its shape whatever the label does — left to flex it wraps
+                        // to "ALE / RT".
+                        .fixedSize()
                 }
             }
             Text(cameraName).auroraText(.caption).foregroundStyle(.auroraTextSecondary)

@@ -165,6 +165,13 @@ Two failure modes this rule sits between, both real:
   scrubber card washes out; `.font(.footnote.weight(.bold))` + `.fixedSize()` made the same control
   legible and closer to the mock than the default was.
 
+**Data-driven text needs a width plan.** A row that interpolates a server string — a label, a camera
+name — has to say what happens when it is long: `.lineLimit(1)` plus `.minimumScaleFactor` where the
+word itself matters (truncating "Motorcycle" to "Motorcyc…" hides the object, which is the point of
+the row), and `.fixedSize()` on the badges beside it so they keep their shape instead of wrapping to
+"ALE / RT". Two flexible pieces on one line will both break rather than one yielding. And prefer one
+signal over two: a second badge that restates the first in words is the piece that runs out of room.
+
 **Verify styling against rendered pixels, not intuition.** Re-record the affected snapshot and look
 at the PNG. If a styling modifier makes no difference, delete it: `.tint()` on a segmented `Picker`
 is a **no-op** (the selection indicator is not tinted by it) — proven by an A/B of the recorded
