@@ -21,8 +21,8 @@ public struct FrigateEventsRepository: EventsRepository {
         api = FrigateApiClient(config: config, httpClient: httpClient)
     }
 
-    public func events(limit: Int) async throws(EventsError) -> [Event] {
-        let data = try await get(.events(limit: limit, after: nil))
+    public func events(limit: Int, before: Date?) async throws(EventsError) -> [Event] {
+        let data = try await get(.events(limit: limit, after: nil, before: before?.timeIntervalSince1970))
         let events: [Event]
         do {
             events = try JSONDecoder().decode([EventDto].self, from: data).toEvents()

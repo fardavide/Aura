@@ -309,6 +309,224 @@ struct EventsListViewModelTests {
 }
 
 @MainActor
+struct EventsListViewModelPagingTests {
+
+    @Test func `given a full first page when loading then older events may still exist`() async {
+        // given
+        let scenario = Scenario(first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]))
+
+        // when
+        await scenario.sut.load()
+
+        // then
+        #expect(scenario.sut.paging == .ready)
+    }
+
+    @Test func `given a short first page when loading then there are no older events`() async {
+        // given
+        let scenario = Scenario(first: .success([event("a", startTime: at(300))]))
+
+        // when
+        await scenario.sut.load()
+
+        // then
+        #expect(scenario.sut.paging == .exhausted)
+    }
+
+    @Test func `given a full first page when loading more then the older events are appended oldest last`() async {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .success([event("c", startTime: at(100))])
+        )
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.sut.state == .loaded([
+            event("a", startTime: at(300)),
+            event("b", startTime: at(200)),
+            event("c", startTime: at(100)),
+        ]))
+    }
+
+    @Test func `when loading more then the cursor sits just past the oldest loaded event`() async throws {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .success([])
+        )
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        let cursor = try #require(scenario.repository.requestedCursors.last ?? nil)
+        #expect(cursor > at(200))
+        #expect(cursor.timeIntervalSince(at(200)) < 1)
+    }
+
+    @Test func `given an older page repeating a loaded event when loading more then it is not duplicated`() async {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .success([event("b", startTime: at(200)), event("c", startTime: at(100))])
+        )
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.sut.state == .loaded([
+            event("a", startTime: at(300)),
+            event("b", startTime: at(200)),
+            event("c", startTime: at(100)),
+        ]))
+    }
+
+    @Test func `given a short older page when loading more then there is nothing left to load`() async {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .success([event("c", startTime: at(100))])
+        )
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.sut.paging == .exhausted)
+    }
+
+    @Test func `given a full older page adding nothing new when loading more then there is nothing left to load`() async {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .success([event("a", startTime: at(300)), event("b", startTime: at(200))])
+        )
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.sut.paging == .exhausted)
+    }
+
+    @Test func `given nothing left to load when loading more then the server is not asked again`() async {
+        // given
+        let scenario = Scenario(first: .success([event("a", startTime: at(300))]))
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.repository.requestedCursors == [nil])
+    }
+
+    @Test func `given a failing older page when loading more then the loaded events are kept`() async {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .failure(.unreachable)
+        )
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.sut.paging == .failed)
+        #expect(scenario.sut.state == .loaded([
+            event("a", startTime: at(300)),
+            event("b", startTime: at(200)),
+        ]))
+    }
+
+    @Test func `given a failed older page when loading more again then it is retried`() async {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .failure(.unreachable)
+        )
+        await scenario.sut.load()
+        await scenario.sut.loadMore()
+
+        // when
+        scenario.repository.olderResult = .success([event("c", startTime: at(100))])
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.sut.state == .loaded([
+            event("a", startTime: at(300)),
+            event("b", startTime: at(200)),
+            event("c", startTime: at(100)),
+        ]))
+    }
+
+    @Test func `given older events loaded when refreshing then paging is armed again`() async {
+        // given
+        let scenario = Scenario(
+            first: .success([event("a", startTime: at(300)), event("b", startTime: at(200))]),
+            older: .success([event("c", startTime: at(100))])
+        )
+        await scenario.sut.load()
+        await scenario.sut.loadMore()
+
+        // when
+        await scenario.sut.load()
+
+        // then
+        #expect(scenario.sut.paging == .ready)
+        #expect(scenario.sut.state == .loaded([
+            event("a", startTime: at(300)),
+            event("b", startTime: at(200)),
+        ]))
+    }
+
+    @Test func `given a failed first load when loading more then the server is not asked`() async {
+        // given
+        let scenario = Scenario(first: .failure(.unreachable))
+        await scenario.sut.load()
+
+        // when
+        await scenario.sut.loadMore()
+
+        // then
+        #expect(scenario.repository.requestedCursors == [nil])
+    }
+
+    @MainActor
+    private struct Scenario {
+        let repository: FakeEventsRepository
+        let sut: EventsListViewModel
+
+        init(
+            first: Result<[Event], EventsError>,
+            older: Result<[Event], EventsError>? = nil,
+            limit: Int = 2
+        ) {
+            repository = FakeEventsRepository(first, olderResult: older)
+            sut = EventsListViewModel(
+                getEvents: GetEvents(repository: repository),
+                getCameras: GetCameras(repository: FakeCamerasRepository(.success([]))),
+                thumbnailLoader: FakeEventThumbnailLoader(),
+                snapshotLoader: FakeEventSnapshotLoader(),
+                now: { snapshotInstant },
+                calendar: gmtCalendar,
+                limit: limit
+            )
+        }
+    }
+}
+
+@MainActor
 struct EventDetailViewModelTests {
 
     @Test func `given an event with no clip then it is unavailable`() {
@@ -374,6 +592,10 @@ private func makeViewModel(
         now: { snapshotInstant },
         calendar: gmtCalendar
     )
+}
+
+private func at(_ epoch: TimeInterval) -> Date {
+    Date(timeIntervalSince1970: epoch)
 }
 
 private func event(

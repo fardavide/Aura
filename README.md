@@ -13,7 +13,8 @@ single-user companion app and portfolio piece.
   recording forward together. Tap a tile for **that camera on its own time axis**: a day-overview
   bar, a scrubbable activity track with a fixed centre playhead, Hour/Day/Week zoom, and a transport
   that jumps between activity. iPhone landscape gets a dedicated side-by-side layout throughout.
-- **Events** — detection event list (thumbnail, label, camera, time) with recorded-clip playback.
+- **Events** — detection event list (thumbnail, label, camera, time) with recorded-clip playback,
+  paging back through history as you scroll.
 - **Settings** — Frigate server connection (password in Keychain), theme, and camera ordering.
 
 ## Requirements
@@ -42,6 +43,12 @@ portrait/landscape × light/dark) in code, so a single simulator run covers all 
 CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
+
+### 0.6.9 — 2026-09-19
+- **The Events tab now keeps loading as you scroll.** It used to stop at the first 100 events with
+  no way to reach anything older; scrolling to the bottom now fetches the next page, and keeps
+  going until the server has no more history. If a page fails, the list you already have stays put
+  and the footer offers a retry.
 
 ### 0.6.8 — 2026-09-18
 - **New "Follow Activity" switch in Settings → Cameras.** On (the existing behaviour) the camera
