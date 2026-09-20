@@ -210,6 +210,41 @@ dataset. Don't design a label picker — the API cannot carry it.
 - Related, **not** Frigate+: `POST /api/events/{id}/sub_label` (`{subLabel, subLabelScore}`) writes
   local Frigate metadata only and never reaches training — it is not a substitute for a verdict.
 
+### Exports — the server's clip library (verified v0.17.2)
+
+Clips cut out of continuous recording and kept server-side. Routes (`frigate/api/export.py`):
+
+| Purpose | Route |
+|---------|-------|
+| List the library | `GET /api/exports` |
+| One export by id | `GET /api/exports/{export_id}` |
+| Start an export | `POST /api/export/{camera_name}/start/{start_time}/end/{end_time}` |
+| Rename | `PATCH /api/export/{event_id}/rename` |
+| Delete | `DELETE /api/export/{event_id}` |
+
+- ⚠️ **Plural to read, singular to write** — `/api/exports` and `/api/exports/{id}` list and fetch;
+  `/api/export/{camera}/…` starts, renames and deletes. Getting the number wrong 404s.
+- Export row (`frigate/models.py`, every field, no others): `id` (CharField ≤30), `camera`,
+  `name`, `date`, `video_path`, `thumb_path` (both `CharField(unique=True)`, **not** nullable),
+  `in_progress` (bool). Served through `model_to_dict(export)`, so no key is renamed on the way out.
+- ⚠️ **`date` is a number, not a date string**, despite the column being a `DateTimeField`: the row
+  is written `Export.date: self.start_time` — the export's epoch-seconds **start**, not its creation
+  time (`frigate/record/export.py`). Decode as `Double`.
+- ⚠️ **There is no duration field**, and the name encodes only a start. A clip's length is not
+  knowable from this endpoint — read it off the media (`AVAsset`) or don't show it.
+- `in_progress` is the server's own readiness flag, flipped to false when the cut finishes. Never
+  infer readiness from elapsed time; poll `GET /api/exports/{id}` instead.
+- Paths are server filesystem paths: `video_path` = `/media/frigate/exports/{camera}_{start}-{end}_{id}.mp4`,
+  `thumb_path` = `/media/frigate/clips/export/{id}.webp` (`.jpg` for rows migrated from ≤0.13).
+- **Media is served from the ROOT with the `/media/frigate/` prefix stripped** — no `api/`, like
+  `/vod/`. The web UI builds exactly `` `${baseUrl}${video_path.replace("/media/frigate/", "")}` ``,
+  so `/media/frigate/exports/a.mp4` → `<base>/exports/a.mp4`. Treat the path as untrusted: accept
+  only the media root and reject `.`/`..`/empty segments before building a request from it.
+- Start-export body is `ExportRecordingsBody`: `playback` (`realtime`), `source`
+  (`recordings`\|`previews`), optional `name`, `image_path`, `chapters`. Returns `export_id`.
+  ⚠️ Although the route accepts floats, the handler converts the bounds to **integers** before
+  exporting — promise whole-second accuracy, never sub-second trimming.
+
 ### Media URLs
 
 | Purpose | Route | Key query params | Content-Type |

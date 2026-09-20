@@ -10,10 +10,11 @@ let package = Package(
             targets: [
                 "CamerasEntities",
                 "CamerasDomain", "CamerasData",
-                "CommonNetwork", "CommonFrigate", "CommonKeychain", "CommonPlayer", "CommonDesign",
+                "CommonNetwork", "CommonFrigate", "CommonKeychain", "CommonPlayer", "CommonDesign", "CommonFiles",
                 "SettingsDomain", "SettingsData",
                 "CamerasPresentation", "SettingsPresentation",
                 "EventsDomain", "EventsData", "EventsPresentation",
+                "ExportsDomain", "ExportsData", "ExportsPresentation",
                 "TimelineDomain", "TimelineData", "TimelinePresentation",
             ]
         ),
@@ -28,7 +29,7 @@ let package = Package(
         .target(
             name: "TestDoubles",
             dependencies: [
-                "CamerasDomain", "CamerasEntities", "EventsDomain", "SettingsDomain", "TimelineDomain",
+                "CamerasDomain", "CamerasEntities", "EventsDomain", "ExportsDomain", "SettingsDomain", "TimelineDomain",
                 "CommonNetwork", "CommonKeychain",
             ],
             path: "Tests/TestDoubles"
@@ -88,6 +89,11 @@ let package = Package(
         ),
 
         .target(name: "CommonKeychain", path: "Sources/Common/Keychain"),
+
+        // The platform's own "where do you want this?" UI — the iOS share sheet and the macOS save
+        // panel. A wrapper target so the `#if os` split stays out of feature code, exactly like
+        // `CommonPlayer` holds the video one.
+        .target(name: "CommonFiles", path: "Sources/Common/Files"),
 
         .target(name: "CommonPlayer", dependencies: ["CommonDesign"], path: "Sources/Common/Player"),
         .testTarget(
@@ -174,6 +180,39 @@ let package = Package(
             name: "EventsPresentationTests",
             dependencies: ["EventsPresentation", "EventsDomain", "CamerasDomain", "CamerasEntities", "TestDoubles"],
             path: "Tests/Events/PresentationTests"
+        ),
+
+        .target(
+            name: "ExportsDomain",
+            dependencies: ["CamerasEntities"],
+            path: "Sources/Exports/Domain"
+        ),
+        .testTarget(
+            name: "ExportsDomainTests",
+            dependencies: ["ExportsDomain", "CamerasEntities", "TestDoubles"],
+            path: "Tests/Exports/DomainTests"
+        ),
+
+        .target(
+            name: "ExportsData",
+            dependencies: ["ExportsDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork"],
+            path: "Sources/Exports/Data"
+        ),
+        .testTarget(
+            name: "ExportsDataTests",
+            dependencies: ["ExportsData", "ExportsDomain", "CamerasEntities", "CommonFrigate", "CommonNetwork", "TestDoubles"],
+            path: "Tests/Exports/DataTests"
+        ),
+
+        .target(
+            name: "ExportsPresentation",
+            dependencies: ["ExportsDomain", "CamerasDomain", "CamerasEntities", "CommonDesign", "CommonFiles", "CommonPlayer"],
+            path: "Sources/Exports/Presentation"
+        ),
+        .testTarget(
+            name: "ExportsPresentationTests",
+            dependencies: ["ExportsPresentation", "ExportsDomain", "CamerasDomain", "CamerasEntities", "CommonDesign", "TestDoubles"],
+            path: "Tests/Exports/PresentationTests"
         ),
 
         .target(

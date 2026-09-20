@@ -9,6 +9,9 @@ import CommonNetwork
 import EventsData
 import EventsDomain
 import EventsPresentation
+import ExportsData
+import ExportsDomain
+import ExportsPresentation
 import SettingsData
 import SettingsDomain
 import SettingsPresentation
@@ -22,7 +25,11 @@ import TimelinePresentation
 final class AppComposition {
     private let settingsRepository: any SettingsRepository
     private let httpClient: any HttpClient
+    private let downloadClient: any HttpDownloadClient
     private let appIconSwitcher = SystemAppIconSwitcher()
+    /// One per connection, held here rather than built in `RootView.body`: a transfer must survive
+    /// leaving the Exports tab, and a view model rebuilt on every body pass would lose it.
+    private var downloadCenters: [String: DownloadCenter] = [:]
     /// How much history the Timeline scrolls over — the same on the tab and on one camera's
     /// detail, so a tile tapped at some instant opens onto the axis it was scrubbed on.
     private let timelineSpanDays = 7
@@ -32,6 +39,7 @@ final class AppComposition {
             keychain: SystemKeychain(service: "fardavide.Aura")
         )
         httpClient = UrlSessionHttpClient()
+        downloadClient = UrlSessionHttpDownloadClient()
     }
 
     func currentConnection() -> ConnectionSettings? {
@@ -166,6 +174,50 @@ final class AppComposition {
         )
     }
 
+    func exportsListViewModel(for connection: ConnectionSettings) -> ExportsListViewModel {
+        let config = serverConfig(from: connection)
+        return ExportsListViewModel(
+            getExports: GetExports(
+                repository: FrigateExportsRepository(config: config, httpClient: httpClient)
+            ),
+            // Friendly camera names on the cards — the same shared `/api/config` read the other
+            // tabs use.
+            getCameras: GetCameras(
+                repository: FrigateCamerasRepository(configProvider: configProvider(config: config))
+            ),
+            thumbnailLoader: FrigateExportThumbnailLoader(config: config, httpClient: httpClient),
+            serverLabel: "\(connection.host):\(connection.port)",
+            now: { Date() },
+            calendar: .current,
+            processingPollInterval: .seconds(15),
+            minimumRetryDuration: .milliseconds(600),
+            refreshIndicatorDelay: .milliseconds(400)
+        )
+    }
+
+    func downloadCenter(for connection: ConnectionSettings) -> DownloadCenter {
+        let key = identity(of: connection)
+        if let existing = downloadCenters[key] { return existing }
+        let center = DownloadCenter(
+            downloadExport: DownloadExport(
+                downloader: FrigateExportDownloader(
+                    config: serverConfig(from: connection),
+                    downloadClient: downloadClient
+                )
+            ),
+            cancelledNoticeDuration: .seconds(3)
+        )
+        downloadCenters[key] = center
+        return center
+    }
+
+    func exportPlayerViewModel(for export: Export, connection: ConnectionSettings) -> ExportPlayerViewModel {
+        ExportPlayerViewModel(
+            export: export,
+            playback: FrigateExportPlaybackProvider(config: serverConfig(from: connection))
+        )
+    }
+
     func timelineScreenViewModel(for connection: ConnectionSettings) -> TimelineScreenViewModel {
         let config = serverConfig(from: connection)
         return TimelineScreenViewModel(
@@ -249,6 +301,12 @@ final class AppComposition {
             httpClient: httpClient,
             refreshInterval: .seconds(120)
         )
+    }
+
+    /// Keys the per-connection singletons above. Pointing the app at a different server starts a
+    /// fresh set rather than inheriting the previous server's transfers.
+    private func identity(of connection: ConnectionSettings) -> String {
+        "\(connection.scheme.rawValue)://\(connection.host):\(connection.port)"
     }
 
     private func serverConfig(from connection: ConnectionSettings) -> ServerConfig {
