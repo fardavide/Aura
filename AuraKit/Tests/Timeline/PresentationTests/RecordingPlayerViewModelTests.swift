@@ -77,6 +77,46 @@ struct RecordingPlayerViewModelTests {
         #expect(!sut.isPlaying)
     }
 
+    @Test func `given a live stream when loading at the live edge then it plays live`() async {
+        // given
+        let source = CameraStreamSource(
+            url: URL(string: "http://host/live.m3u8")!,
+            headers: ["Authorization": "token"]
+        )
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(isLive(sut.display))
+        #expect(sut.hasFootage)
+    }
+
+    @Test func `given live playback when refreshing then the playhead follows the new live edge`() async {
+        // given
+        let clock = Clock(now)
+        let source = CameraStreamSource(
+            url: URL(string: "http://host/live.m3u8")!,
+            headers: [:]
+        )
+        let sut = makeViewModel(
+            segments: [],
+            startingAt: now,
+            clock: clock,
+            liveSource: source
+        )
+        await sut.loadIfNeeded()
+        clock.instant = at(7330)
+
+        // when
+        await sut.refreshOverlays()
+
+        // then
+        #expect(sut.instant == at(7330))
+        #expect(isLive(sut.display))
+    }
+
     @Test func `given a failing repository when loading then it reports the failure`() async {
         // given
         let sut = makeViewModel(repository: FakeCameraRecordingsRepository(.failure(.serverUnavailable)))
@@ -527,6 +567,30 @@ struct RecordingPlayerViewModelTests {
         #expect(repository.fetchCount == 1)
     }
 
+    @Test func `given preview material when scrubbing then the low resolution preview is shown`() async {
+        // given
+        let preview = PreviewClip(
+            camera: camera.name,
+            range: TimeRange(start: at(3600), end: at(7200)),
+            path: "/preview.mp4"
+        )
+        let previews = FakeCameraPreviewProvider(clips: [preview])
+        let sut = makeViewModel(
+            segments: fullHour(from: 3600),
+            startingAt: at(5000),
+            previews: previews
+        )
+        await sut.loadIfNeeded()
+
+        // when
+        sut.beginScrub()
+        sut.scrub(to: at(6000))
+
+        // then
+        #expect(sut.isScrubbing)
+        #expect(isPreviewClip(sut.scrubPreview.display))
+    }
+
     @Test func `given a drag past the live edge when scrubbing then it is clamped to the span`() async {
         // given
         let sut = makeViewModel(segments: fullHour(from: 3600))
@@ -757,6 +821,69 @@ struct RecordingPlayerViewModelTests {
         #expect(sut.state.isLive)
     }
 
+    @Test func `given a live stream when going live then it replaces the recording`() async {
+        // given
+        let source = CameraStreamSource(
+            url: URL(string: "http://host/live.m3u8")!,
+            headers: [:]
+        )
+        let sut = makeViewModel(
+            segments: footage(from: 3600, to: 7300),
+            startingAt: at(5000),
+            liveSource: source
+        )
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.goLive()
+
+        // then
+        #expect(isLive(sut.display))
+        #expect(sut.hasFootage)
+    }
+
+    @Test func `given the live stream when seeking into history then it restores the recording`() async {
+        // given
+        let source = CameraStreamSource(
+            url: URL(string: "http://host/live.m3u8")!,
+            headers: [:]
+        )
+        let sut = makeViewModel(
+            segments: footage(from: 3600, to: 7300),
+            startingAt: now,
+            liveSource: source
+        )
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.seek(to: at(7250))
+
+        // then
+        #expect(isReady(sut.display))
+        #expect(!sut.state.isLive)
+    }
+
+    @Test func `given the live stream when skipping back then it restores the recording`() async {
+        // given
+        let source = CameraStreamSource(
+            url: URL(string: "http://host/live.m3u8")!,
+            headers: [:]
+        )
+        let sut = makeViewModel(
+            segments: footage(from: 7200, to: 7300),
+            startingAt: now,
+            liveSource: source
+        )
+        await sut.loadIfNeeded()
+
+        // when
+        await sut.skip(by: -10)
+
+        // then
+        #expect(isReady(sut.display))
+        #expect(!sut.state.isLive)
+    }
+
     // Driven by a *moving* clock: the in-progress hour grows while it plays, and the live-edge
     // check has to read "no later hour exists yet" rather than "the window looks different now" —
     // otherwise the end of the stream reloads the same hour and rewinds to the top of it.
@@ -961,17 +1088,27 @@ private func makeViewModel(
         .success(DayTimeline(markers: [], motion: [], gaps: []))
     ),
     startingAt instant: Date = at(5000),
-    clock: Clock? = nil
+    clock: Clock? = nil,
+    liveSource: CameraStreamSource? = nil,
+    previews: FakeCameraPreviewProvider = FakeCameraPreviewProvider()
 ) -> RecordingPlayerViewModel {
-    RecordingPlayerViewModel(
+    let getPreviews = GetCameraPreviews(provider: previews)
+    return RecordingPlayerViewModel(
         camera: camera,
         recordings: GetCameraRecordings(repository: repository),
         getDayTimeline: GetDayTimeline(repository: overlays),
         filmstrip: RecordingFilmstripStore(
             camera: camera.name,
-            previews: GetCameraPreviews(provider: FakeCameraPreviewProvider()),
+            previews: getPreviews,
             imageLoader: FakePreviewImageLoader()
         ),
+        scrubPreview: PreviewTileViewModel(
+            camera: camera,
+            previews: getPreviews,
+            recordings: GetCameraRecordings(repository: repository),
+            imageLoader: FakePreviewImageLoader()
+        ),
+        liveSource: liveSource,
         now: { clock?.instant ?? now },
         startingAt: instant,
         days: 2
@@ -985,13 +1122,17 @@ private func makeViewModel(
         .success(DayTimeline(markers: [], motion: [], gaps: []))
     ),
     startingAt instant: Date = at(5000),
-    clock: Clock? = nil
+    clock: Clock? = nil,
+    liveSource: CameraStreamSource? = nil,
+    previews: FakeCameraPreviewProvider = FakeCameraPreviewProvider()
 ) -> RecordingPlayerViewModel {
     makeViewModel(
         repository: FakeCameraRecordingsRepository(.success(segments)),
         overlays: overlays,
         startingAt: instant,
-        clock: clock
+        clock: clock,
+        liveSource: liveSource,
+        previews: previews
     )
 }
 
@@ -1007,5 +1148,15 @@ private func isNoFootage(_ display: RecordingPlayerViewModel.Display) -> Bool {
 
 private func isFailed(_ display: RecordingPlayerViewModel.Display) -> Bool {
     if case .failed = display { return true }
+    return false
+}
+
+private func isLive(_ display: RecordingPlayerViewModel.Display) -> Bool {
+    if case .live = display { return true }
+    return false
+}
+
+private func isPreviewClip(_ display: PreviewTileViewModel.Display) -> Bool {
+    if case .clip = display { return true }
     return false
 }

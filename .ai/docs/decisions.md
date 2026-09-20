@@ -1955,3 +1955,19 @@ throwaway comparison image and shown to the user before touching production code
 - **Comparison images were never committed.** A scratch `AuraTests` snapshot test rendered the four
   candidates to `__Snapshots__/`, was shown to the user for the decision, then deleted along with
   its output before implementing the winner — a one-off visual aid, not a regression guard.
+
+## Timeline detail: live HLS at the edge, preview media while scrubbing (0.6.15)
+
+The detail player's live edge is a distinct media mode, not the final instant of a recording VOD.
+When a camera has a `CameraStreamSource`, opening or seeking to the live edge immediately builds the
+authenticated go2rtc HLS player and reports footage as available. Recording metadata still loads in
+the background so seeking or skipping back into history can replace the live player with the
+appropriate VOD, even when the target remains inside the same hour window. A live refresh advances
+the playhead to the new present instead of leaving the clock behind the stream.
+
+Dragging the detail timeline no longer seeks the full-resolution VOD for every gesture update. It
+uses the same `PreviewTileViewModel` material as the main Timeline tab: low-resolution
+`preview.mp4` clips for recorded hours and the live-hour WebP near the edge. The full-resolution VOD
+is sought exactly once when the gesture settles, preserving the precise final playhead while making
+the drag responsive. If preview material is still loading or unavailable, the current video remains
+visible rather than replacing an operable scrubber with a blank surface.

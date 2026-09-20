@@ -199,11 +199,16 @@ final class AppComposition {
         connection: ConnectionSettings
     ) -> RecordingPlayerViewModel {
         let config = serverConfig(from: connection)
+        let recordings = GetCameraRecordings(
+            repository: FrigateCameraRecordingsRepository(config: config, httpClient: httpClient)
+        )
+        let previews = GetCameraPreviews(
+            provider: FrigatePreviewSourceProvider(config: config, httpClient: httpClient)
+        )
+        let imageLoader = FrigatePreviewImageLoader(config: config, httpClient: httpClient)
         return RecordingPlayerViewModel(
             camera: camera,
-            recordings: GetCameraRecordings(
-                repository: FrigateCameraRecordingsRepository(config: config, httpClient: httpClient)
-            ),
+            recordings: recordings,
             // Scoped to this camera, unlike the tab's all-camera read — the detail timeline shows
             // one camera's activity, not the deployment's.
             getDayTimeline: GetDayTimeline(
@@ -211,11 +216,16 @@ final class AppComposition {
             ),
             filmstrip: RecordingFilmstripStore(
                 camera: camera.name,
-                previews: GetCameraPreviews(
-                    provider: FrigatePreviewSourceProvider(config: config, httpClient: httpClient)
-                ),
-                imageLoader: FrigatePreviewImageLoader(config: config, httpClient: httpClient)
+                previews: previews,
+                imageLoader: imageLoader
             ),
+            scrubPreview: PreviewTileViewModel(
+                camera: camera,
+                previews: previews,
+                recordings: recordings,
+                imageLoader: imageLoader
+            ),
+            liveSource: FrigateCameraStreamProvider(config: config).streamSource(for: camera),
             now: { Date() },
             startingAt: instant,
             days: timelineSpanDays

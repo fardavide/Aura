@@ -3,6 +3,7 @@ import Foundation
 import Observation
 
 import CamerasDomain
+import CamerasEntities
 import CommonPlayer
 import TimelineDomain
 
@@ -25,6 +26,7 @@ public final class RecordingPlayerViewModel {
     public enum Display {
         case loading
         case ready(AVPlayer)
+        case live(AVPlayer)
         /// The hour holds no footage at all — the skips stay live so it can be left.
         case noFootage
         case failed
@@ -34,6 +36,9 @@ public final class RecordingPlayerViewModel {
     /// The Hour-zoom filmstrip's thumbnails — owned here so the strip survives zoom flips and
     /// re-layouts, handed to the layout beside `state`.
     public let filmstrip: RecordingFilmstripStore
+    /// The same low-resolution preview path used by the main Timeline grid, shown while a drag
+    /// owns the playhead so the hero follows without seeking the full-resolution recording.
+    public let scrubPreview: PreviewTileViewModel
     public private(set) var display: Display = .loading
     public private(set) var isPlaying = false
     public private(set) var speed: PlaybackSpeed = .oneX
@@ -50,6 +55,7 @@ public final class RecordingPlayerViewModel {
     public private(set) var dayTimeline = DayTimeline(markers: [], motion: [], gaps: [])
     /// The density the track is drawn at.
     public private(set) var zoom: TimelineZoom = .hour
+    public private(set) var isScrubbing = false
 
     /// Everything the layout renders, as one value — the screen's chrome is a pure function of it,
     /// which is what lets every arrangement be screenshot-tested without a player.
@@ -72,13 +78,14 @@ public final class RecordingPlayerViewModel {
     /// though the skips and the track stay live so it can be left.
     private var isPlayable: Bool {
         switch display {
-        case .ready: true
+        case .ready, .live: true
         case .loading, .noFootage, .failed: false
         }
     }
 
     private let recordings: GetCameraRecordings
     private let getDayTimeline: GetDayTimeline
+    private let liveSource: CameraStreamSource?
     private let now: @MainActor () -> Date
     /// The motion-strip resolution, pinned from the span at birth so every overlay window — and
     /// every refresh — comes back at the same bucket width.
@@ -103,7 +110,6 @@ public final class RecordingPlayerViewModel {
     private var followsLiveEdge: Bool
     /// Whether a track drag owns the playhead, and whether playback was running when it took it —
     /// the settle hands playback back, unless an explicit play/pause taken meanwhile wins.
-    private var isScrubbing = false
     private var resumePlaybackOnSettle = false
     /// Stamps each grab of the track, so a settle that suspended on an hour fetch can tell a
     /// newer grab took the playhead while it was away — and yield to it.
@@ -120,14 +126,18 @@ public final class RecordingPlayerViewModel {
         recordings: GetCameraRecordings,
         getDayTimeline: GetDayTimeline,
         filmstrip: RecordingFilmstripStore,
+        scrubPreview: PreviewTileViewModel,
+        liveSource: CameraStreamSource?,
         now: @escaping @MainActor () -> Date,
         startingAt instant: Date,
         days: Int
     ) {
         self.camera = camera
         self.filmstrip = filmstrip
+        self.scrubPreview = scrubPreview
         self.recordings = recordings
         self.getDayTimeline = getDayTimeline
+        self.liveSource = liveSource
         self.now = now
         self.instant = instant
         let present = now()
@@ -149,9 +159,14 @@ public final class RecordingPlayerViewModel {
     public func loadIfNeeded() async {
         guard case .loading = display else { return }
         isPlaying = true
+        if followsLiveEdge, let liveSource {
+            showLive(liveSource)
+        }
         async let overlays = loadOverlays(in: span)
+        async let preview: Void = scrubPreview.prepare(range: span, at: instant)
         await load(window: window, seeking: .instant(instant))
         _ = await overlays
+        _ = await preview
     }
 
     /// Extends the span to the present and re-reads **only the stretch since the last read**,
@@ -161,12 +176,20 @@ public final class RecordingPlayerViewModel {
     /// retried on the next tick.
     public func refreshOverlays() async {
         let present = now()
+        let wasFollowingLiveStream = switch display {
+        case .live: followsLiveEdge
+        case .loading, .ready, .noFootage, .failed: false
+        }
         let delta = OverlayWindow.refresh(previousEnd: span.end, now: present, bucket: bucket)
         guard await loadOverlays(in: delta) > 0 else { return }
         if overlaysLoadedBack > span.start {
             await loadOverlays(in: TimeRange(start: span.start, end: overlaysLoadedBack))
         }
         span = TimeRange(start: span.start, end: present)
+        if wasFollowingLiveStream {
+            instant = present
+        }
+        await scrubPreview.followLiveEdge(to: span, at: instant)
     }
 
     /// Keeps the track current while the screen is visible — but only while the playhead sits
@@ -216,7 +239,12 @@ public final class RecordingPlayerViewModel {
         } else if target > timeline.playableDuration {
             await loadFollowingWindow()
         } else {
-            seek(toPlayerTime: target)
+            if case .live = display {
+                followsLiveEdge = false
+                await load(window: window, seeking: .instant(timeline.instant(atPlayerTime: target)))
+            } else {
+                seek(toPlayerTime: target)
+            }
         }
         // Only a move that happened can demote the playhead to history — a forward skip with
         // nothing newer recorded is a no-op and must leave a live playhead live.
@@ -234,6 +262,16 @@ public final class RecordingPlayerViewModel {
     public func seek(to target: Date) async {
         let clamped = span.clamp(target)
         followsLiveEdge = span.end.timeIntervalSince(clamped) <= Self.liveEdgeTolerance
+        if followsLiveEdge, let liveSource {
+            instant = span.end
+            speed = .oneX
+            showLive(liveSource)
+            return
+        }
+        if case .live = display {
+            await load(window: RecordingWindow.containing(clamped), seeking: .instant(clamped))
+            return
+        }
         guard window.contains(clamped) else {
             await load(window: RecordingWindow.containing(clamped), seeking: .instant(clamped))
             return
@@ -257,21 +295,23 @@ public final class RecordingPlayerViewModel {
         // Over loaded content a grab is also newer intent than any window load still in flight —
         // the drag owns the playhead, so a landing load must not yank it. (The very first load
         // stays: discarding it would strand the spinner.)
-        if case .ready = display { loadGeneration += 1 }
+        switch display {
+        case .ready, .live: loadGeneration += 1
+        case .loading, .noFootage, .failed: break
+        }
         setPlaying(false)
+        scrubPreview.scrub(to: instant)
     }
 
-    /// Follows the finger: the readout moves at once, and the stream follows it **only within the
-    /// hour already loaded**, with a tolerant seek. Leaving that hour would mean a playlist fetch
-    /// per drag frame, so a window swap waits for `endScrub()`.
+    /// Follows the finger through the low-resolution preview material. The full-resolution stream
+    /// is left alone until release; leaving its hour would otherwise fetch a playlist per frame.
     public func scrub(to target: Date) {
         let clamped = span.clamp(target)
         instant = clamped
         followsLiveEdge = span.end.timeIntervalSince(clamped) <= Self.liveEdgeTolerance
+        scrubPreview.scrub(to: clamped)
         guard window.contains(clamped) else { return }
         hasFootage = timeline.hasFootage(at: clamped)
-        guard timeline.playableDuration > 0 else { return }
-        movePlayer(toPlayerTime: timeline.playerTime(at: clamped), exact: false)
     }
 
     /// Settles the drag on its final instant, swapping windows if it ran into another hour, and
@@ -357,6 +397,7 @@ public final class RecordingPlayerViewModel {
             // A torn-down fetch (the screen was left) is not a server failure — leave the state
             // for whatever replaces it rather than flashing an error on the way out.
             if Task.isCancelled || generation != loadGeneration { return false }
+            if case .live = display, followsLiveEdge { return false }
             // Tear the old player down first: the error screen hides the transport, so a player
             // left running would keep streaming — and keep moving the playhead — unstoppably.
             detachPlayer()
@@ -370,6 +411,7 @@ public final class RecordingPlayerViewModel {
         if newWindow == window, playback.timeline == timeline, case .ready = display { return true }
         window = newWindow
         timeline = playback.timeline
+        if case .live = display, followsLiveEdge { return true }
         detachPlayer()
 
         guard timeline.playableDuration > 0 else {
@@ -441,6 +483,16 @@ public final class RecordingPlayerViewModel {
     private func setPlaying(_ playing: Bool) {
         isPlaying = playing
         player?.rate = playing ? speed.rate : 0
+    }
+
+    private func showLive(_ source: CameraStreamSource) {
+        let shouldPlay = isPlaying
+        detachPlayer()
+        let player = makeAuthedPlayer(url: source.url, headers: source.headers)
+        self.player = player
+        display = .live(player)
+        hasFootage = true
+        player.rate = shouldPlay ? PlaybackSpeed.oneX.rate : 0
     }
 
     private func attach(_ player: AVPlayer, playing playedWindow: TimeRange) {

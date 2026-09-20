@@ -189,6 +189,15 @@ func timelineScreen(
                     previews: GetCameraPreviews(provider: FakeCameraPreviewProvider()),
                     imageLoader: FakePreviewImageLoader()
                 ),
+                scrubPreview: PreviewTileViewModel(
+                    camera: camera,
+                    previews: GetCameraPreviews(provider: FakeCameraPreviewProvider()),
+                    recordings: GetCameraRecordings(
+                        repository: FakeCameraRecordingsRepository(.success([]))
+                    ),
+                    imageLoader: FakePreviewImageLoader()
+                ),
+                liveSource: nil,
                 now: { snapshotNow },
                 startingAt: instant,
                 days: snapshotDays
