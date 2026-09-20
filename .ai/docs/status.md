@@ -317,6 +317,12 @@ not snapshot-tested — they center on video players that can't render in a snap
   small fixed-width `xmark.circle.fill` in front of the label is what actually breaks the scan
   pattern — in the list, the hero card, and the event screen. The row's `minimumScaleFactor`
   tightened to `0.6` to keep "Motorcycle" on one line with the icon added to its width budget.
+- **Timeline detail live and scrub playback are split by media purpose (0.6.15).** Live now uses the
+  camera's authenticated go2rtc HLS source rather than querying the recording VOD at its half-open end, and
+  returning to history restores VOD playback. During a drag, the video uses the main Timeline tab's
+  low-resolution `preview.mp4` / live-hour WebP material; the full-resolution VOD is sought only
+  when the scrub settles. Covered by 728 passing AuraKit tests, the complete recording-detail
+  snapshot suite, and green iOS Simulator + macOS builds.
 
 ## Next
 - **Verify detection feedback against the real server (0.6.10).** Every path is unit-tested against
@@ -350,6 +356,10 @@ not snapshot-tested — they center on video players that can't render in a snap
   actually plays smoothly or degrades to stepping (nginx-vod-module isn't known to publish
   I-frame-only playlists); whether tiles stay close enough to each other to read as synchronised;
   and that the hour swap mid-playback doesn't stall every tile at once.
+- **TestFlight: verify Timeline detail's media handoff on the real server.** At the live edge,
+  confirm the go2rtc HLS picture replaces the recording rather than showing a no-footage overlay; during a long
+  drag, confirm the low-resolution preview keeps pace; on release or a skip backward, confirm the
+  full-resolution VOD resumes at the displayed instant.
 - **Timeline follow-ups**: auto-load ranges older than the current ~7-day span as you scroll; the
   `camera=all` batch clip-list optimization; richer markers. (The tile live-follow gap — frames
   fetched once per tile on appear — was closed in 0.3.3: tiles refresh their material in place on

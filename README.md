@@ -45,6 +45,12 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.15 — 2026-09-20
+- **Timeline detail now plays the live camera at the live edge** instead of reporting that no
+  footage exists there; moving back into history restores recorded playback.
+- **Timeline detail now keeps up with a scrub** by showing the same quick preview media as the main
+  Timeline tab, then settling onto the full-resolution recording when you release it.
+
 ### 0.6.14 — 2026-09-19
 - **A detection reported wrong now reads that way at a glance.** Colour and a strikethrough alone
   didn't stand out enough while scanning the list — a small crossed-out icon now sits before the

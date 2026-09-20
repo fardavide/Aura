@@ -15,6 +15,14 @@ platforms — a change can compile on one and break the other.
 
 Run from the repo root. The scheme is `Aura`.
 
+## Delivery gate
+
+Automated builds, package tests, and applicable screenshot tests are the pre-merge acceptance gate.
+Do not ask the maintainer to build locally or verify behavior on a device or real Frigate server
+before opening or merging a ready PR. Record media paths that automation cannot exercise as residual
+risk in the PR; the maintainer validates them only from TestFlight after merge and reports any
+regression as a follow-up.
+
 ### Build only (fast compile check, no device boot)
 
 ```bash

@@ -36,11 +36,32 @@ public struct RecordingPlayerView: View {
     }
 
     @ViewBuilder private var content: some View {
+        if viewModel.isScrubbing {
+            scrubContent
+        } else {
+            recordingContent
+        }
+    }
+
+    @ViewBuilder private var scrubContent: some View {
+        switch viewModel.scrubPreview.display {
+        case .clip(let player), .recording(let player):
+            ScrubbingPlayerView(player: player, videoGravity: .resizeAspect)
+        case .frame(let image):
+            image
+                .resizable()
+                .scaledToFit()
+        case .loading, .unavailable, .failed:
+            recordingContent
+        }
+    }
+
+    @ViewBuilder private var recordingContent: some View {
         switch viewModel.display {
         case .loading:
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .ready(let player):
+        case .ready(let player), .live(let player):
             // Letterboxed, not filled: the point of this screen is the whole recorded frame.
             ScrubbingPlayerView(player: player, videoGravity: .resizeAspect)
         case .noFootage:
