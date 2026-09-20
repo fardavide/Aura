@@ -21,6 +21,19 @@ public struct UrlSessionHttpDownloadClient: HttpDownloadClient {
 
     public init() {}
 
+    /// Progress is **polled off the task's own `Progress`** rather than read from a
+    /// `URLSessionDownloadDelegate`.
+    ///
+    /// A delegate has to be an `NSObject`, and an `NSObject` subclass in `CommonNetwork` is
+    /// registered with the ObjC runtime twice at test time: once from the app's `AuraKit` package
+    /// framework and once from `AuraTests`, which links `CommonNetwork` statically through
+    /// `TestDoubles`. The runtime warns that this "may cause spurious casting failures and
+    /// mysterious crashes", and it did — the app-hosted snapshot suite crashed on CI, taking a
+    /// different, unrelated handful of tests down on each run. `CommonPlayer`'s own `NSObject`
+    /// coordinator escapes this only because nothing in the test bundle links that target.
+    ///
+    /// Polling costs one read per tick and the design throttles the bar to 10 Hz anyway, so the
+    /// delegate bought nothing the poll does not.
     public func download(
         _ request: URLRequest,
         onProgress: @escaping @Sendable (Int64, Int64?) -> Void
@@ -35,55 +48,67 @@ public struct UrlSessionHttpDownloadClient: HttpDownloadClient {
         let session = URLSession(configuration: configuration)
         defer { session.finishTasksAndInvalidate() }
 
-        let progress = ProgressReporter(onProgress: onProgress)
-        // `download(for:delegate:)` hands back a file URL that is deleted the moment this call
-        // returns, so the body is moved out of it below before anyone can read it.
-        let (temporaryUrl, response) = try await session.download(for: request, delegate: progress)
+        let running = RunningDownload()
+        let poller = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.progressInterval)
+                guard !Task.isCancelled, let progress = running.progress else { continue }
+                // A total of 0 or −1 is how a chunked response reports an unknown length; passing
+                // it on as a number would draw a bar running backwards.
+                onProgress(
+                    progress.completedUnitCount,
+                    progress.totalUnitCount > 0 ? progress.totalUnitCount : nil
+                )
+            }
+        }
+        defer { poller.cancel() }
+
+        let (temporaryUrl, response) = try await withTaskCancellationHandler {
+            // The continuation is annotated explicitly: inferring a tuple payload through it
+            // defeats the type checker outright ("failed to produce diagnostic for expression").
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(URL, URLResponse), any Error>) in
+                let task = session.downloadTask(with: request) { location, response, error in
+                    guard let location, let response else {
+                        continuation.resume(throwing: error ?? URLError(.badServerResponse))
+                        return
+                    }
+                    // `location` is deleted the moment this handler returns, so the body is moved
+                    // out of it here rather than after the await.
+                    let fileUrl = FileManager.default.temporaryDirectory
+                        .appending(path: UUID().uuidString, directoryHint: .notDirectory)
+                    do {
+                        try FileManager.default.moveItem(at: location, to: fileUrl)
+                        continuation.resume(returning: (fileUrl, response))
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+                running.task = task
+                task.resume()
+            }
+        } onCancel: {
+            running.task?.cancel()
+        }
+
         guard let http = response as? HTTPURLResponse else {
             try? FileManager.default.removeItem(at: temporaryUrl)
             throw URLError(.badServerResponse)
         }
-        let fileUrl = FileManager.default.temporaryDirectory
-            .appending(path: UUID().uuidString, directoryHint: .notDirectory)
-        do {
-            try FileManager.default.moveItem(at: temporaryUrl, to: fileUrl)
-        } catch {
-            try? FileManager.default.removeItem(at: temporaryUrl)
-            throw error
-        }
-        return (fileUrl, http)
+        // A final exact reading, so the bar always lands on full rather than wherever the last
+        // tick happened to catch it.
+        onProgress(http.expectedContentLength, http.expectedContentLength > 0 ? http.expectedContentLength : nil)
+        return (temporaryUrl, http)
     }
 
     private static let idleTimeout: TimeInterval = 30
+    private static let progressInterval: Duration = .milliseconds(100)
 }
 
-/// Forwards the download task's byte counts to the caller's closure. A per-task delegate, so the
-/// session itself stays delegate-free and one transfer's progress can never reach another's bar.
-private final class ProgressReporter: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private let onProgress: @Sendable (Int64, Int64?) -> Void
+/// Holds the in-flight task so the cancellation handler and the progress poll can reach it. A
+/// plain Swift class on purpose — see `download`'s doc comment for why nothing here may be an
+/// `NSObject`.
+private final class RunningDownload: @unchecked Sendable {
+    var task: URLSessionDownloadTask?
 
-    init(onProgress: @escaping @Sendable (Int64, Int64?) -> Void) {
-        self.onProgress = onProgress
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didWriteData bytesWritten: Int64,
-        totalBytesWritten: Int64,
-        totalBytesExpectedToWrite: Int64
-    ) {
-        // `NSURLSessionTransferSizeUnknown` (−1) is how a chunked response reports its length;
-        // passing it on as a number would draw a bar running backwards.
-        let expected = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil
-        onProgress(totalBytesWritten, expected)
-    }
-
-    /// Required by the protocol; the async `download(for:delegate:)` overload is what actually
-    /// yields the file, so there is nothing to do with it here.
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didFinishDownloadingTo location: URL
-    ) {}
+    var progress: Progress? { task?.progress }
 }

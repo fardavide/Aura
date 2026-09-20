@@ -23,7 +23,6 @@ public struct ExportsListView: View {
     /// The clip filling the detail side. Only meaningful in the side-by-side arrangement; upright,
     /// `path` carries the same choice as a push.
     @State private var selection: Export?
-    @State private var isSideBySide = false
     @State private var headerHeight: CGFloat = 74
     @State private var isHeaderGlass = false
     @State private var pendingSave: FileDestinationRequest?
@@ -54,7 +53,6 @@ public struct ExportsListView: View {
                 stackedLayout
             }
         }
-        .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height } action: { isSideBySide = $0 }
         .task { await viewModel.load() }
         // Runs alongside the load and ends itself the moment nothing is being cut.
         .task(id: viewModel.hasProcessingExports) { await viewModel.followProcessingExports() }
@@ -75,7 +73,7 @@ public struct ExportsListView: View {
     /// Upright: the library fills the screen and a clip pushes over it.
     private var stackedLayout: some View {
         NavigationStack(path: $path) {
-            library
+            library(isSideBySide: false)
                 .navigationDestination(for: Export.self) { player(for: $0) }
         }
     }
@@ -85,7 +83,7 @@ public struct ExportsListView: View {
     /// their vertical shape.
     private func splitLayout(canvas: CGSize) -> some View {
         HStack(spacing: 0) {
-            library
+            library(isSideBySide: true)
                 .frame(width: listColumnWidth(canvas: canvas))
             Divider().overlay(.auroraSheetBorder)
             Group {
@@ -131,7 +129,7 @@ public struct ExportsListView: View {
         )
     }
 
-    private var library: some View {
+    private func library(isSideBySide: Bool) -> some View {
         ZStack(alignment: .top) {
             ScrollViewReader { scroll in
                 ScrollView {
@@ -143,7 +141,7 @@ public struct ExportsListView: View {
                             }
                             .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                        content
+                        content(isSideBySide: isSideBySide)
                     }
                 }
                 .auroraTrackingScrollGlass(isGlass: $isHeaderGlass)
@@ -202,7 +200,7 @@ public struct ExportsListView: View {
 
     // MARK: Content
 
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func content(isSideBySide: Bool) -> some View {
         switch viewModel.state {
         case .loading:
             // No skeleton rows: a tappable ghost is the worst kind of dead control, and there is
@@ -236,7 +234,7 @@ public struct ExportsListView: View {
         case .loaded(let groups):
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                 ForEach(groups) { group in
-                    dayGroup(group)
+                    dayGroup(group, isSideBySide: isSideBySide)
                 }
             }
             .padding(.horizontal, ExportCardStyle.screenMargin(horizontalSizeClass: isRegularWidth))
@@ -244,7 +242,7 @@ public struct ExportsListView: View {
         }
     }
 
-    private func dayGroup(_ group: ExportDayGroup) -> some View {
+    private func dayGroup(_ group: ExportDayGroup, isSideBySide: Bool) -> some View {
         VStack(alignment: .leading, spacing: ExportCardStyle.betweenCards) {
             Text(viewModel.dayTitle(for: group))
                 .auroraText(.sectionHeading)
@@ -253,31 +251,31 @@ public struct ExportsListView: View {
                 .accessibilityAddTraits(.isHeader)
                 .padding(.top, 18)
                 .padding(.bottom, 2)
-            if usesGrid {
+            if usesGrid(isSideBySide: isSideBySide) {
                 // A wide column holds two vertical cards side by side. One stretched row across a
                 // 1366pt window is a dead gap between the name and the controls.
                 LazyVGrid(columns: gridColumns, spacing: ExportCardStyle.betweenCards) {
                     ForEach(group.exports) { export in
-                        card(export)
+                        card(export, isSideBySide: isSideBySide)
                     }
                 }
             } else {
                 ForEach(group.exports) { export in
-                    card(export)
+                    card(export, isSideBySide: isSideBySide)
                 }
             }
         }
         .animation(.auroraHeroSwap, value: group.exports)
     }
 
-    private func card(_ export: Export) -> some View {
+    private func card(_ export: Export, isSideBySide: Bool) -> some View {
         ExportCardView(
             export: export,
-            layout: cardLayout,
+            layout: cardLayout(isSideBySide: isSideBySide),
             cameraName: viewModel.displayName(for: export.camera),
             downloadState: downloads.state(for: export.id),
             loadThumbnail: viewModel.thumbnail,
-            onPlay: { play(export) },
+            onPlay: { play(export, isSideBySide: isSideBySide) },
             onDownload: { downloads.download(export) },
             onCancelDownload: { downloads.cancel(export.id) }
         )
@@ -287,7 +285,7 @@ public struct ExportsListView: View {
 
     /// Side by side the clip fills the detail column; upright it pushes. One verb either way, so
     /// the card never has to know which arrangement it is in.
-    private func play(_ export: Export) {
+    private func play(_ export: Export, isSideBySide: Bool) {
         if isSideBySide {
             selection = export
         } else {
@@ -295,14 +293,14 @@ public struct ExportsListView: View {
         }
     }
 
-    private var cardLayout: ExportCardView.Layout {
+    private func cardLayout(isSideBySide: Bool) -> ExportCardView.Layout {
         if isRegularWidth { return .stacked }
         return isSideBySide ? .compactRow : .row
     }
 
     /// Two-up only when the library has the whole screen. In the side-by-side arrangement the
     /// library is a column, and two cards across it would be narrower than their own thumbnails.
-    private var usesGrid: Bool {
+    private func usesGrid(isSideBySide: Bool) -> Bool {
         isRegularWidth && !isSideBySide
     }
 
