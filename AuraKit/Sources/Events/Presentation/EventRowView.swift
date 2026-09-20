@@ -69,14 +69,19 @@ struct EventRowView: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 7) {
+                if event.verdict == .incorrect {
+                    ReportedWrongIcon()
+                }
                 Text(event.label.capitalized)
                     .auroraText(.headline)
                     .reportedWrong(event.verdict == .incorrect)
-                    // A long label ("Motorcycle") next to the tag overruns the row's remaining
-                    // width. One line, shrunk a little to fit — wrapping breaks the word in half
-                    // and truncating hides which object it was, and the object is the whole point.
+                    // A long label ("Motorcycle") next to the tag — and, once reported wrong, the
+                    // icon too — overruns the row's remaining width. One line, shrunk to fit:
+                    // wrapping breaks the word in half and truncating hides which object it was,
+                    // and the object is the whole point. 0.6 clears "Motorcycle" plus the icon;
+                    // narrower than the row otherwise needs, but a verdict icon shares the budget.
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.6)
                 if event.severity == .alert {
                     Text("Alert").textCase(.uppercase).auroraBadge(.alertTag, size: .compact)
                         // The tag keeps its shape whatever the label does — left to flex it wraps

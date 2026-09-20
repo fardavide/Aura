@@ -69,7 +69,8 @@ struct EventsListSnapshotTests {
 /// newest-first ordering is stable, one still in progress (nil end), varied labels. Exercises the
 /// hero ("LATEST ALERT" on `evt-2`), a ringed row, an ALERT tag, an in-progress row with no
 /// duration, several hour groups, a day boundary the subtitle must exclude, four chips, and — on
-/// `evt-3` — a detection already reported wrong, which reads struck through with its own badge.
+/// `evt-3` — the longest label a row has to survive, already reported wrong (struck through,
+/// muted, with its leading icon) and severity-tagged, all in the same row.
 private func snapshotEvents() -> [Event] {
     func at(minutesAgo: Double) -> Date { snapshotNow.addingTimeInterval(-minutesAgo * 60) }
 
