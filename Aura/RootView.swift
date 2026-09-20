@@ -5,6 +5,7 @@ import CamerasPresentation
 import CommonDesign
 import EventsDomain
 import EventsPresentation
+import ExportsPresentation
 import SettingsDomain
 import SettingsPresentation
 import TimelinePresentation
@@ -70,6 +71,23 @@ struct RootView: View {
                         Label("Events", systemImage: "bell")
                             .symbolEffect(.bounce, value: iconBounces[.events])
                     }
+
+                    Tab(value: AppTab.exports) {
+                        ExportsListView(
+                            viewModel: composition.exportsListViewModel(for: connection),
+                            downloads: composition.downloadCenter(for: connection),
+                            onOpenSettings: { showingSettings = true },
+                            // The empty state's only control, and it has to do something the user
+                            // can perceive — selecting the tab where clips will be cut.
+                            onOpenTimeline: { selectedTab = .timeline },
+                            makePlayerViewModel: {
+                                composition.exportPlayerViewModel(for: $0, connection: connection)
+                            }
+                        )
+                    } label: {
+                        Label("Exports", systemImage: "film.stack")
+                            .symbolEffect(.bounce, value: iconBounces[.exports])
+                    }
                 }
                 .id(identity(of: connection))
                 .onChange(of: selectedTab) { iconBounces[selectedTab, default: 0] += 1 }
@@ -125,6 +143,7 @@ private enum AppTab: Hashable {
     case cameras
     case timeline
     case events
+    case exports
 }
 
 private extension ThemePreference {

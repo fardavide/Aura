@@ -45,6 +45,18 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.0 — 2026-09-20
+- **A new Exports tab browses the clips kept on the Frigate server.** Newest first, grouped by day,
+  with the camera and time on every card. Tap one to play it, or download a copy to the device
+  through the normal iOS share sheet or macOS save panel — the clip stays on the server and Aura
+  keeps no second library.
+- Clips the server is still cutting say so and cannot be played or downloaded until they are ready;
+  the list follows them until they are.
+- Downloads show real progress, can be cancelled, and keep running while you browse elsewhere in
+  the tab. A failed download explains itself and offers a retry.
+- On its side — and on iPad and Mac — the library sits beside the clip instead of pushing it, so
+  picking a clip never hides the list.
+
 ### 0.6.16 — 2026-09-20
 - **A detection confirmed as correct now reads that way at a glance.** A small blue check appears
   before its label in the list, hero card and event screen; reports marked wrong keep their muted

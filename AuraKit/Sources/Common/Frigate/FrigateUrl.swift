@@ -12,6 +12,10 @@ public enum FrigateEndpoint: Sendable {
     case events(limit: Int, after: Double?, before: Double?)
     /// One event by id — the whole row, including the fields the list's projection leaves out.
     case event(id: String)
+    /// The server's whole export library, newest first. Unpaged — the endpoint takes no window.
+    case exports
+    /// One export by id — how a clip still being cut is followed to ready.
+    case export(id: String)
 
     public func url(base: URL) -> URL {
         switch self {
@@ -31,7 +35,34 @@ public enum FrigateEndpoint: Sendable {
             )
         case .event(let id):
             makeUrl(base: base, path: "api/events/\(id)")
+        case .exports:
+            makeUrl(base: base, path: "api/exports")
+        case .export(let id):
+            makeUrl(base: base, path: "api/exports/\(id)")
         }
+    }
+}
+
+/// Resolves the server filesystem paths an export record carries (`video_path`, `thumb_path`) to
+/// the URLs that serve them.
+///
+/// Frigate reports these as paths under `/media/frigate/`, and the media itself is served from the
+/// **root** — no `api/` prefix, like `/vod/` — with that prefix stripped. Verified against the
+/// v0.17.2 web UI, which builds exactly `baseUrl + video_path.replace("/media/frigate/", "")`.
+public enum FrigateExportMediaUrl {
+    private static let mediaRoot = "/media/frigate/"
+
+    /// Nil for anything that is not a plain path inside the media root — the record comes from the
+    /// server and is treated as untrusted input, so a path that escapes the root, or climbs with
+    /// `..`, is refused here rather than resolved into a request against some other part of the
+    /// host. The caller drops the export instead of offering a control that cannot work.
+    public static func media(base: URL, serverPath: String) -> URL? {
+        guard serverPath.hasPrefix(mediaRoot) else { return nil }
+        let relative = String(serverPath.dropFirst(mediaRoot.count))
+        guard !relative.isEmpty else { return nil }
+        let segments = relative.split(separator: "/", omittingEmptySubsequences: false)
+        guard segments.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else { return nil }
+        return makeUrl(base: base, path: relative)
     }
 }
 

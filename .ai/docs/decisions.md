@@ -1989,3 +1989,61 @@ untouched for a correct verdict — the check communicates confirmation without 
   the hero and row across phone/tablet, portrait/landscape and light/dark; the existing submitted
   detail references also carry the check. A whole-screen percentage threshold alone can miss a
   symbol this small, so the icon-to-symbol mapping has a focused unit test as well.
+
+## Exports: browse, play and copy the server's clips (0.7.0)
+
+A fourth `Exports` tab over an `Exports` feature vertical, built to the approved design. The library
+is the server's; Aura browses it and hands a copy to the platform, and keeps nothing of its own.
+
+- **The export record has no duration, so no duration is shown.** `/api/exports` carries exactly
+  `id`, `camera`, `name`, `date`, `video_path`, `thumb_path`, `in_progress` — verified against the
+  v0.17.2 model — and the timestamp-derived name encodes only a start. The design's card overlay is
+  therefore omitted rather than inferred from the file name's `start-end` pair, which describes the
+  *requested* range and is wrong across a recording gap. The player, which has the file, can show a
+  real length. Davide's call, 2026-09-20.
+- **Media paths are untrusted input, validated in Data.** Frigate reports server filesystem paths
+  under `/media/frigate/`; the media itself is served from the **root** with that prefix stripped
+  (`<base>/exports/…`), no `api/` — verified against the v0.17.2 web UI. `FrigateExportMediaUrl`
+  refuses anything outside the root or carrying `.`/`..`/empty segments, and a row whose video path
+  is refused is **dropped from the list** rather than rendered with inert controls: "the server
+  described a file we will not fetch" has no honest on-screen state, and an inert card is the dead
+  control the app does not ship.
+- **Progress lives in an app-scoped `DownloadCenter`, not on the card.** The card and the player
+  are two views onto the same transfer, so scrolling away, leaving the tab or opening the player
+  cannot interrupt or lose it. **Not** a background `URLSession`: the transfer is a delegate-driven
+  download task on an ordinary session, so it survives navigation but **not app suspension** — true
+  out-of-process continuation needs `.background(withIdentifier:)` plus app-delegate completion
+  plumbing and is a follow-up.
+- **Server progress and transfer progress are deliberately unalike.** The server reports only a
+  boolean, so processing is an indeterminate 3pt sweep on the card's top edge with a reason printed
+  beside the disabled controls; a download knows its bytes, so it gets a determinate bar in the
+  card body. Both can be true at once on different cards.
+- **The screen can never return to `.loading` once rows exist.** `ExportsListState` has no
+  refreshing or stale case: a refresh is a separate flag and a failed refresh a separate error, so
+  blanking loaded content is unrepresentable rather than merely avoided. The Updating pill also
+  waits 400ms before appearing — the tab's own re-entry refresh usually finishes sooner, and a pill
+  that flashes on every visit teaches the user to ignore it.
+- **Wider than it is tall means the clip sits beside the library.** One geometry comparison drives
+  it, so iPhone landscape, iPad landscape and the Mac window all split while both upright
+  arrangements push. The narrow split column uses a 72×41 frame instead of 104×59 — at 352pt the
+  full-size frame squeezes the meta line until it truncates away the time, which is the part that
+  tells two clips from the same camera apart.
+- **No filter row ships.** Day grouping answers "when" and the camera is on every card; a row of
+  chips would cost 44pt off a 852pt screen — one whole card — to filter a list most people see in
+  one flick. The header subtitle ("14 clips · 4 cameras") answers the same question for 17pt and
+  cannot be tapped and disappoint anyone. It is suppressed entirely on an empty library, where
+  "0 clips · 0 cameras" above "No exports yet" reads as a broken count.
+- **The empty state's copy is not the design's.** The approved text told the user to cut clips with
+  a `Clip…` control on the Timeline tab, which ships with the range-selector release. Until it
+  does, the copy says clips are cut on the server and that cutting them in Aura arrives later —
+  naming a control that is not there would send the user hunting. Davide's call, 2026-09-20.
+- **The platform destination UI is a `CommonFiles` wrapper.** `UIActivityViewController` on iOS and
+  `NSSavePanel` on macOS, behind one view modifier, so the `#if os` split stays out of feature code
+  exactly as `CommonPlayer` holds the video one. `.fileExporter` was rejected: it gives the iOS
+  document picker, losing the AirDrop/Messages/Save Video options the design draws, and `ShareLink`
+  needs its item when the view is built while this file only exists once the transfer lands.
+
+**Not built yet, deliberately:** the macOS sidebar (`.tabViewStyle(.sidebarAdaptable)`) and the
+separate player window (`openWindow(value:)`) the design specifies for the Mac, the `⌘R`/`⌘S`/`⌘.`
+key equivalents, and the right-click "Show in Timeline" action. All four are app-scene or
+whole-app-shell changes rather than Exports-local ones.

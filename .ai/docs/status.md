@@ -331,7 +331,34 @@ not snapshot-tested — they center on video players that can't render in a snap
   verification: 729 passing AuraKit tests, the focused list/detail snapshot suites, and green iOS
   Simulator + macOS builds.
 
+- **Slice 12 — Exports (0.7.0).** A fourth `Exports` tab over a new `Exports` vertical
+  (Domain/Data/Presentation), built to the approved design. The server's clip library, newest first
+  and grouped by day: card variants for ready, no-thumbnail, processing, downloading and
+  download-failed; first-class loading, empty, unreachable, retrying and refresh-failed-over-content
+  states; a pushed player with its own transport; and a copy handed to the platform's destination UI
+  (iOS share sheet / macOS save panel) via a new `CommonFiles` wrapper. Transfers live in an
+  app-scoped `DownloadCenter` so they survive leaving the tab, driven by a new streaming
+  `HttpDownloadClient` seam in `CommonNetwork`. Wider-than-tall canvases put the clip beside the
+  library instead of pushing it. The verified `/api/exports` contract was added to `/frigate-rest`,
+  which had no exports section at all. **790 AuraKit tests + 62 app tests green, iOS and macOS
+  builds green, 64 new snapshot baselines.** See `decisions.md` for the duration, path-validation,
+  progress-ownership and empty-copy calls, and for what was deliberately left out.
+
 ## Next
+- **Finish the Mac's share of the Exports design (0.7.0).** The sidebar
+  (`.tabViewStyle(.sidebarAdaptable)`), the separate player window (`openWindow(value:)`), the
+  `⌘R` / `⌘S` / `⌘.` key equivalents and the right-click "Show in Timeline" action are all
+  specified and none are built — each is an app-shell or scene change rather than an Exports-local
+  one.
+- **Make export downloads survive app suspension.** The transfer is a delegate-driven download task
+  on an ordinary `URLSession`, so it survives navigation but dies with the app; the design calls for
+  a background session, which needs `.background(withIdentifier:)` plus app-delegate completion
+  plumbing.
+- **Verify Exports against the real server.** Every path is unit-tested against the v0.17.2
+  contract but nothing has touched a live instance. Confirm on the running server: `/api/exports`
+  decodes (especially `date` arriving as a number); the media URL really is `<base>/exports/…`
+  behind whatever proxy is in front of Frigate; authenticated mp4 playback works in `AVPlayer`; and
+  a real multi-megabyte download reports progress and hands off to the share sheet.
 - **Verify detection feedback against the real server (0.6.10).** Every path is unit-tested against
   the v0.17.2 contract, but no verdict has ever been sent to a live Frigate+ instance. Confirm on
   the running server: the panel appears at all (i.e. `/api/config` really carries `plus.enabled`);
