@@ -116,13 +116,32 @@ private func export(
     Export(
         id: ExportId(id),
         camera: CameraName(camera),
-        name: "\(camera)_20260918_143012",
+        name: generatedName(camera: camera, start: createdAt, end: createdAt.addingTimeInterval(42)),
         createdAt: createdAt,
         isProcessing: isProcessing,
         videoPath: "/media/frigate/exports/\(id).mp4",
         thumbnailPath: nil
     )
 }
+
+/// Frigate's own default, verified against v0.17.2 `frigate/record/export.py`:
+/// `f"{camera.replace('_', ' ')} {start:%Y-%m-%d %H:%M:%S} {end:%Y-%m-%d %H:%M:%S}"`.
+///
+/// Worth building faithfully rather than inventing something short: the real name is ~45
+/// characters, so a fixture with a tidy `driveway_20260918_143012` flatters every card in the
+/// matrix and hides how hard the identity column actually truncates.
+private func generatedName(camera: String, start: Date, end: Date) -> String {
+    "\(camera.replacingOccurrences(of: "_", with: " ")) \(frigateStamp.string(from: start)) \(frigateStamp.string(from: end))"
+}
+
+/// `%Y-%m-%d %H:%M:%S` in GMT, matching the server's own `strftime` and the snapshot time zone.
+private let frigateStamp: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = .gmt
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    return formatter
+}()
 
 // MARK: - View builder
 
