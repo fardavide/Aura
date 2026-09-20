@@ -57,8 +57,8 @@ public struct EventDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
-                if viewModel.verdict == .incorrect {
-                    ReportedWrongIcon()
+                if let verdict = viewModel.verdict {
+                    DetectionVerdictIcon(verdict: verdict)
                 }
                 Text(viewModel.label.capitalized)
                     .auroraText(.heroTitle)
@@ -68,6 +68,7 @@ public struct EventDetailView: View {
                 // the room for a sentence — no badge needs to compete with the severity tag here.
                 severityBadge.fixedSize()
             }
+            .animation(.default, value: viewModel.verdict)
             HStack(spacing: 6) {
                 Text(cameraName).auroraText(.caption)
                 Text(verbatim: "·")

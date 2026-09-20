@@ -18,6 +18,18 @@ private let gmtCalendar: Calendar = {
 }()
 
 @MainActor
+struct DetectionVerdictIconTests {
+
+    @Test func `given a correct verdict when choosing its symbol then it uses a verified checkmark`() {
+        // given - when
+        let systemName = DetectionVerdict.correct.iconSystemName
+
+        // then
+        #expect(systemName == "checkmark.circle.fill")
+    }
+}
+
+@MainActor
 struct EventsListViewModelTests {
 
     @Test func `given events when loading then the state is loaded`() async {

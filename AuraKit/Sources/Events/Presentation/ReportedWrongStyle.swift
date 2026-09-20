@@ -1,6 +1,16 @@
 import SwiftUI
 
 import CommonDesign
+import EventsDomain
+
+extension DetectionVerdict {
+    var iconSystemName: String {
+        switch self {
+        case .correct: "checkmark.circle.fill"
+        case .incorrect: "xmark.circle.fill"
+        }
+    }
+}
 
 extension View {
 
@@ -9,7 +19,7 @@ extension View {
     /// `#7C7896` dark; the ramp is otherwise monotonic per scheme, so `TextTertiary`/`TextQuaternary`
     /// invert between them and only `TextMuted` recedes either way).
     ///
-    /// Pair with `ReportedWrongIcon()` placed before the label — colour and a strikethrough alone
+    /// Pair with `DetectionVerdictIcon` placed before the label — colour and a strikethrough alone
     /// read as merely dimmed at a glance (confirmed against a live comparison of four treatments);
     /// the icon is what actually breaks the scan pattern.
     ///
@@ -23,16 +33,17 @@ extension View {
     }
 }
 
-/// The fixed-width glyph placed before a label reported wrong. Sized independently of the label's
-/// font, unlike the "NOT A …" text badge it replaced — that one scaled with the label and wrapped a
-/// long word ("Motorcycle") across the row, the severity tag and itself all at once. Purely
-/// decorative: the struck-through label beside it, and the event screen's panel, already carry the
-/// meaning for VoiceOver.
-struct ReportedWrongIcon: View {
+/// The fixed-width glyph placed before a label once its verdict is on record. Sized independently
+/// of the label's font, unlike the old "NOT A …" text badge — that one scaled with the label and
+/// wrapped a long word ("Motorcycle") across the row, the severity tag and itself all at once.
+/// Purely decorative: the event screen's panel carries the verdict's meaning for VoiceOver.
+struct DetectionVerdictIcon: View {
+    let verdict: DetectionVerdict
+
     var body: some View {
-        Image(systemName: "xmark.circle.fill")
+        Image(systemName: verdict.iconSystemName)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.auroraTextMuted)
+            .foregroundStyle(verdict == .correct ? .auroraGradientBlue : .auroraTextMuted)
             .accessibilityHidden(true)
     }
 }

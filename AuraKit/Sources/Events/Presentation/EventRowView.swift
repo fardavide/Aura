@@ -69,8 +69,8 @@ struct EventRowView: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 7) {
-                if event.verdict == .incorrect {
-                    ReportedWrongIcon()
+                if let verdict = event.verdict {
+                    DetectionVerdictIcon(verdict: verdict)
                 }
                 Text(event.label.capitalized)
                     .auroraText(.headline)
@@ -89,6 +89,7 @@ struct EventRowView: View {
                         .fixedSize()
                 }
             }
+            .animation(.default, value: event.verdict)
             Text(cameraName).auroraText(.caption).foregroundStyle(.auroraTextSecondary)
         }
     }

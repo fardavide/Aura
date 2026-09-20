@@ -1971,3 +1971,21 @@ uses the same `PreviewTileViewModel` material as the main Timeline tab: low-reso
 is sought exactly once when the gesture settles, preserving the precise final playhead while making
 the drag responsive. If preview material is still loading or unavailable, the current video remains
 visible rather than replacing an operable scrubber with a blank surface.
+
+## A confirmed detection gets the same fixed-width treatment (0.6.16)
+
+Correct and incorrect reports are now both visible at a glance. A correct verdict renders a small
+blue `checkmark.circle.fill` before the label; an incorrect verdict keeps the muted
+`xmark.circle.fill`, muted label and strikethrough established in 0.6.14. The label itself remains
+untouched for a correct verdict — the check communicates confirmation without restating it in text.
+
+- **One verdict icon owns both cases.** `DetectionVerdictIcon` switches exhaustively over the
+  domain verdict and is used by the list row, hero card and detail header, so the three surfaces
+  cannot choose different symbols.
+- **Verdict appearance animates with the layout.** Each label row uses the framework-default
+  transition when its verdict changes, preventing the fixed-width icon from snapping the label
+  sideways after a report succeeds.
+- **Small chrome has an explicit snapshot state.** A dedicated verified-event list fixture covers
+  the hero and row across phone/tablet, portrait/landscape and light/dark; the existing submitted
+  detail references also carry the check. A whole-screen percentage threshold alone can miss a
+  symbol this small, so the icon-to-symbol mapping has a focused unit test as well.

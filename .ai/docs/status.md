@@ -323,6 +323,13 @@ not snapshot-tested — they center on video players that can't render in a snap
   low-resolution `preview.mp4` / live-hour WebP material; the full-resolution VOD is sought only
   when the scrub settles. Covered by 728 passing AuraKit tests, the complete recording-detail
   snapshot suite, and green iOS Simulator + macOS builds.
+- **Verified detections now carry a check (0.6.16).** A correct Frigate+ verdict displays a
+  small blue `checkmark.circle.fill` before the label in the list row, hero card and event detail;
+  an incorrect verdict keeps its muted X, muted label and strikethrough. The verdict-to-symbol
+  mapping has a focused unit test, with dedicated verified-list snapshots and updated submitted-
+  detail references covering the settled UI across phone/tablet layouts and both themes. Full
+  verification: 729 passing AuraKit tests, the focused list/detail snapshot suites, and green iOS
+  Simulator + macOS builds.
 
 ## Next
 - **Verify detection feedback against the real server (0.6.10).** Every path is unit-tested against
