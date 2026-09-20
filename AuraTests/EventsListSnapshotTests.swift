@@ -46,6 +46,14 @@ struct EventsListSnapshotTests {
         assertScreenSnapshot(view, named: "detections-only")
     }
 
+    @Test func `given a verified event when loaded then its indicator matches the reference`() async {
+        // given
+        let view = await eventsListScreen(events: .success(snapshotVerifiedEvent()))
+
+        // then
+        assertScreenSnapshot(view, named: "verified")
+    }
+
     @Test func `given a label filter when selected then only that label is shown`() async {
         // given
         let view = await eventsListScreen(events: .success(snapshotEvents()), filter: .label("person"))
@@ -128,6 +136,19 @@ private func snapshotDetections() -> [Event] {
             score: event.score, zones: event.zones
         )
     }
+}
+
+private func snapshotVerifiedEvent() -> [Event] {
+    [
+        Event(
+            id: EventId("evt-verified"), camera: CameraName("driveway"), label: "motorcycle",
+            severity: .alert, subLabel: nil,
+            startTime: snapshotNow.addingTimeInterval(-22 * 60),
+            endTime: snapshotNow.addingTimeInterval(-21 * 60),
+            hasClip: true, hasSnapshot: true, isObjectDetection: true, verdict: .correct,
+            score: 0.88, zones: ["driveway"]
+        ),
+    ]
 }
 
 // MARK: - View builder

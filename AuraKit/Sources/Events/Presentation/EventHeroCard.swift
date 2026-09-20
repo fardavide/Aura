@@ -53,14 +53,15 @@ struct EventHeroCard: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 7) {
-                        if event.verdict == .incorrect {
-                            ReportedWrongIcon()
+                        if let verdict = event.verdict {
+                            DetectionVerdictIcon(verdict: verdict)
                         }
                         Text(event.label.capitalized)
                             .auroraText(.heroTitle)
                             .reportedWrong(event.verdict == .incorrect)
                             .lineLimit(1)
                     }
+                    .animation(.default, value: event.verdict)
                     Text(cameraName).auroraText(.caption).foregroundStyle(.auroraTextSecondary)
                 }
                 Spacer()

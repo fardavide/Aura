@@ -45,6 +45,11 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.6.16 — 2026-09-20
+- **A detection confirmed as correct now reads that way at a glance.** A small blue check appears
+  before its label in the list, hero card and event screen; reports marked wrong keep their muted
+  crossed-out treatment.
+
 ### 0.6.15 — 2026-09-20
 - **Timeline detail now plays the live camera at the live edge** instead of reporting that no
   footage exists there; moving back into history restores recorded playback.
