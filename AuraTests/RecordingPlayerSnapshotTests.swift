@@ -184,7 +184,9 @@ private func detailState(
     speed: PlaybackSpeed = .oneX,
     hasFootage: Bool = true,
     isLive: Bool = false,
-    isPlayable: Bool = true
+    isPlayable: Bool = true,
+    export: ExportEditorState? = nil,
+    isPlayingSelection: Bool = false
 ) -> RecordingDetailState {
     RecordingDetailState(
         cameraName: "Driveway",
@@ -196,6 +198,8 @@ private func detailState(
         speed: speed,
         hasFootage: hasFootage,
         isLive: isLive,
-        isPlayable: isPlayable
+        isPlayable: isPlayable,
+        export: export,
+        isPlayingSelection: isPlayingSelection
     )
 }

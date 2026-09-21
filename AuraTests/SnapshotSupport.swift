@@ -6,6 +6,7 @@ import SnapshotTesting
 import CamerasDomain
 import CamerasEntities
 import CommonDesign
+import ExportsDomain
 import SettingsDomain
 import TestDoubles
 import TimelineDomain
@@ -184,6 +185,8 @@ func timelineScreen(
                 getDayTimeline: GetDayTimeline(
                     repository: FakeCameraDayTimelineRepository(.success(quietTimelineFixture()))
                 ),
+                createExport: CreateExport(repository: FakeExportsRepository(.success([]))),
+                getExport: GetExport(repository: FakeExportsRepository(.success([]))),
                 filmstrip: RecordingFilmstripStore(
                     camera: camera.name,
                     previews: GetCameraPreviews(provider: FakeCameraPreviewProvider()),
@@ -202,7 +205,8 @@ func timelineScreen(
                 startingAt: instant,
                 days: snapshotDays
             )
-        }
+        },
+        onOpenExports: {}
     )
 }
 

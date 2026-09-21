@@ -49,6 +49,8 @@ private func detailState(instant: Date, markers: [ReviewMarker]) -> RecordingDet
         speed: .oneX,
         hasFootage: true,
         isLive: false,
-        isPlayable: true
+        isPlayable: true,
+        export: nil,
+        isPlayingSelection: false
     )
 }

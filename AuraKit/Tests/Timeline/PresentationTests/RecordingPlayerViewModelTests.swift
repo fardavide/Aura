@@ -3,6 +3,7 @@ import Testing
 
 import CamerasDomain
 import CamerasEntities
+import ExportsDomain
 import TestDoubles
 import TimelineDomain
 @testable import TimelinePresentation
@@ -1090,13 +1091,16 @@ private func makeViewModel(
     startingAt instant: Date = at(5000),
     clock: Clock? = nil,
     liveSource: CameraStreamSource? = nil,
-    previews: FakeCameraPreviewProvider = FakeCameraPreviewProvider()
+    previews: FakeCameraPreviewProvider = FakeCameraPreviewProvider(),
+    exports: FakeExportsRepository = FakeExportsRepository(.success([]))
 ) -> RecordingPlayerViewModel {
     let getPreviews = GetCameraPreviews(provider: previews)
     return RecordingPlayerViewModel(
         camera: camera,
         recordings: GetCameraRecordings(repository: repository),
         getDayTimeline: GetDayTimeline(repository: overlays),
+        createExport: CreateExport(repository: exports),
+        getExport: GetExport(repository: exports),
         filmstrip: RecordingFilmstripStore(
             camera: camera.name,
             previews: getPreviews,

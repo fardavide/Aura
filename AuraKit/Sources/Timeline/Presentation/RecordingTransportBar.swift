@@ -40,6 +40,11 @@ struct RecordingTransportBar: View {
                     speedLadder
                     liveChip
                 }
+                HStack(spacing: 8) {
+                    clipChip
+                    clipReason
+                    Spacer(minLength: 0)
+                }
             }
         case .compact:
             // Small controls on purpose — at regular size even a plain phone width can't hold
@@ -58,6 +63,7 @@ struct RecordingTransportBar: View {
                     // unbounded, which reads as "never fits" to the enclosing ViewThatFits.
                     HStack(spacing: 6) {
                         speedChip.fixedSize()
+                        clipChip.fixedSize()
                         liveChip.fixedSize()
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -72,6 +78,8 @@ struct RecordingTransportBar: View {
                     }
                     HStack(spacing: 8) {
                         speedChip
+                        clipChip
+                        clipReason
                         liveChip
                     }
                 }
@@ -88,6 +96,10 @@ struct RecordingTransportBar: View {
                     speedChip
                     nextMarkerButton
                 }
+                // A row of its own here: the rail has no nav bar, so every control has to live
+                // inside it, and there is no width to share this one with anything.
+                clipChip
+                    .frame(maxWidth: .infinity)
                 // The rail's only way back to live — without it there is no control here that
                 // can leave a scrubbed-away hour (Dead-control audit).
                 liveChip
@@ -95,6 +107,40 @@ struct RecordingTransportBar: View {
             }
         }
     }
+
+    /// The way into the range editor, in the chip cluster beside speed and Live rather than in a
+    /// nav bar — the rail has no nav bar, and an entry point that relocates when the phone rotates
+    /// costs more than one extra chip.
+    private var clipChip: some View {
+        Button(action: actions.beginExport) {
+            Label("Clip", systemImage: "scissors")
+                .auroraBadge(.neutral)
+        }
+        .buttonStyle(TransportBadgeButtonStyle())
+        .disabled(!canClip)
+        .accessibilityLabel("Clip")
+        .accessibilityValue(canClip ? "" : Self.noRecordingsReason)
+    }
+
+    /// Never a dimmed chip on its own: a disabled control and the sentence explaining it ship
+    /// together or not at all.
+    @ViewBuilder private var clipReason: some View {
+        if !canClip {
+            Text(Self.noRecordingsReason)
+                .auroraText(.caption)
+                .foregroundStyle(.auroraTextTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The one condition that closes the door: a camera with nothing recorded anywhere in the
+    /// loaded span. A gap under the playhead does not — you may legitimately cut from the footage
+    /// either side of it.
+    private var canClip: Bool {
+        !state.dayTimeline.gaps.isEmpty || !state.dayTimeline.motion.isEmpty || state.hasFootage
+    }
+
+    private static let noRecordingsReason = "No recordings on this camera"
 
     private var playPauseButton: some View {
         Button(action: actions.playPause) {

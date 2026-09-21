@@ -10,13 +10,17 @@ public struct RecordingPlayerView: View {
     // every re-evaluation, and the `.task`s below bind only on appearance — a plain `let` would
     // leave the displayed model waiting on a load that ran against a discarded one.
     @State private var viewModel: RecordingPlayerViewModel
+    /// How a finished clip is reached from here. The tab bar is hidden on this screen, so there is
+    /// no badge to light up — the way across has to be a control the panel owns.
+    private let onOpenExports: () -> Void
 
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
 
-    public init(viewModel: RecordingPlayerViewModel) {
+    public init(viewModel: RecordingPlayerViewModel, onOpenExports: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
+        self.onOpenExports = onOpenExports
     }
 
     public var body: some View {
@@ -90,7 +94,16 @@ public struct RecordingPlayerView: View {
             stepDay: { days in Task { await viewModel.stepDay(by: days) } },
             previousMarker: { Task { await viewModel.jumpToPreviousMarker() } },
             nextMarker: { Task { await viewModel.jumpToNextMarker() } },
-            goLive: { Task { await viewModel.goLive() } }
+            goLive: { Task { await viewModel.goLive() } },
+            beginExport: { viewModel.beginExport() },
+            cancelExport: { viewModel.cancelExport() },
+            changeSelection: { viewModel.change(selection: $0) },
+            resetSelectionToPlayhead: { viewModel.resetSelectionToPlayhead() },
+            playSelection: { Task { await viewModel.playSelection() } },
+            createExport: { Task { await viewModel.createExport() } },
+            viewInExports: onOpenExports,
+            playExport: onOpenExports,
+            finishExport: { viewModel.finishExport() }
         )
     }
 }

@@ -5,6 +5,7 @@ import Observation
 import CamerasDomain
 import CamerasEntities
 import CommonPlayer
+import ExportsDomain
 import TimelineDomain
 
 /// Full-resolution playback of one camera's recordings, opened from a tile at the instant it was
@@ -70,7 +71,24 @@ public final class RecordingPlayerViewModel {
             speed: speed,
             hasFootage: hasFootage,
             isLive: followsLiveEdge,
-            isPlayable: isPlayable
+            isPlayable: isPlayable,
+            export: exportEditor,
+            isPlayingSelection: isPlayingSelection
+        )
+    }
+
+    /// The range editor, assembled from the mutable half (the selection and where the request has
+    /// got to) and the screen's own live values. Keeping span, playhead, zoom and gaps out of
+    /// stored state is what stops the editor drifting out of step with the track beneath it.
+    private var exportEditor: ExportEditorState? {
+        guard let exportSelection else { return nil }
+        return ExportEditorState(
+            selection: exportSelection,
+            span: span,
+            playhead: instant,
+            zoom: zoom,
+            gaps: dayTimeline.gaps,
+            phase: exportPhase
         )
     }
 
@@ -83,8 +101,18 @@ public final class RecordingPlayerViewModel {
         }
     }
 
+    /// The clip being cut, or `nil` outside export mode.
+    private var exportSelection: ExportSelection?
+    private var exportPhase: ExportEditorPhase = .editing
+    /// Whether playback is fenced to the selection. Distinct from `isPlaying`, which stays the
+    /// honest answer to whether the video is moving.
+    public private(set) var isPlayingSelection = false
+    @ObservationIgnored private var exportPollTask: Task<Void, Never>?
+
     private let recordings: GetCameraRecordings
     private let getDayTimeline: GetDayTimeline
+    private let createExportUseCase: CreateExport
+    private let getExport: GetExport
     private let liveSource: CameraStreamSource?
     private let now: @MainActor () -> Date
     /// The motion-strip resolution, pinned from the span at birth so every overlay window — and
@@ -125,6 +153,8 @@ public final class RecordingPlayerViewModel {
         camera: Camera,
         recordings: GetCameraRecordings,
         getDayTimeline: GetDayTimeline,
+        createExport: CreateExport,
+        getExport: GetExport,
         filmstrip: RecordingFilmstripStore,
         scrubPreview: PreviewTileViewModel,
         liveSource: CameraStreamSource?,
@@ -137,6 +167,8 @@ public final class RecordingPlayerViewModel {
         self.scrubPreview = scrubPreview
         self.recordings = recordings
         self.getDayTimeline = getDayTimeline
+        createExportUseCase = createExport
+        self.getExport = getExport
         self.liveSource = liveSource
         self.now = now
         self.instant = instant
@@ -153,6 +185,101 @@ public final class RecordingPlayerViewModel {
 
     isolated deinit {
         detachPlayer()
+        exportPollTask?.cancel()
+    }
+
+    // MARK: - The export range editor
+
+    /// Opens the editor on the track already on screen, seeded around the playhead, and snaps the
+    /// axis to Minute — at Hour the seed is twelve points wide, so the editor would open onto a
+    /// clip nobody could grab.
+    public func beginExport() {
+        guard let seed = ExportSelection.seeded(around: instant, within: span) else { return }
+        exportSelection = seed
+        exportPhase = .editing
+        if !zoom.showsExportHandles || zoom == .hour { zoom = .minute }
+    }
+
+    /// Leaves with nothing created. Safe from any phase the user can still reach it from — and it
+    /// is absent from the ones they cannot.
+    public func cancelExport() {
+        stopSelectionPlayback()
+        exportPollTask?.cancel()
+        exportPollTask = nil
+        exportSelection = nil
+        exportPhase = .editing
+    }
+
+    public func change(selection: ExportSelection) {
+        // Editing a boundary while the selection is playing pauses it: the preview must not keep
+        // running outside the range the user is now describing.
+        stopSelectionPlayback()
+        exportSelection = selection
+        // Any move clears a rejection — the range the server refused no longer exists, so the
+        // failure it reported no longer describes anything on screen.
+        if case .failed = exportPhase { exportPhase = .editing }
+    }
+
+    public func resetSelectionToPlayhead() {
+        guard let seed = ExportSelection.seeded(around: instant, within: span) else { return }
+        change(selection: seed)
+    }
+
+    /// Seeks to the clip's start and plays, fenced by `fenceSelectionPlayback`.
+    public func playSelection() async {
+        guard let exportSelection else { return }
+        if isPlayingSelection {
+            stopSelectionPlayback()
+            return
+        }
+        await seek(to: exportSelection.start)
+        isPlayingSelection = true
+        setPlaying(true)
+    }
+
+    public func createExport() async {
+        guard let exportSelection else { return }
+        stopSelectionPlayback()
+        exportPhase = .creating
+        do {
+            let id = try await createExportUseCase.execute(
+                camera: camera.name, from: exportSelection.start, to: exportSelection.end
+            )
+            exportPhase = .processing(id)
+            followExport(id: id)
+        } catch {
+            exportPhase = .failed(error)
+        }
+    }
+
+    /// Polls until the server says the cut has finished. `in_progress` is the server's own answer;
+    /// readiness is never inferred from how long this has been running.
+    private func followExport(id: ExportId) {
+        exportPollTask?.cancel()
+        exportPollTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self else { return }
+                guard let export = try? await getExport.execute(id: id) else { continue }
+                guard !Task.isCancelled else { return }
+                if export.isReady {
+                    exportPhase = .ready(export)
+                    exportPollTask = nil
+                    return
+                }
+            }
+        }
+    }
+
+    /// The finished clip is dismissed and the panel returns to ordinary playback.
+    public func finishExport() {
+        cancelExport()
+    }
+
+    private func stopSelectionPlayback() {
+        guard isPlayingSelection else { return }
+        isPlayingSelection = false
+        setPlaying(false)
     }
 
     /// Loads on first appearance only, so returning to the screen doesn't restart the recording.
@@ -476,6 +603,17 @@ public final class RecordingPlayerViewModel {
     private func apply(instant: Date) {
         self.instant = instant
         hasFootage = timeline.hasFootage(at: instant)
+        fenceSelectionPlayback()
+    }
+
+    /// Selection playback stops at the trailing boundary and returns to the leading one — once,
+    /// not on a loop. Looping is the obvious thing to want while trimming, but a loop with no
+    /// visible loop control is a state the user can neither see nor deliberately stop.
+    private func fenceSelectionPlayback() {
+        guard isPlayingSelection, let exportSelection, instant >= exportSelection.end else { return }
+        isPlayingSelection = false
+        setPlaying(false)
+        Task { await seek(to: exportSelection.start) }
     }
 
     /// Drives the rate rather than `play()`/`pause()` so resuming picks the chosen speed back up
