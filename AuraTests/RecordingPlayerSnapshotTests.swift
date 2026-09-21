@@ -138,13 +138,13 @@ private func recordingDetail(state: RecordingDetailState) -> some View {
 /// shrinks the canvas `RecordingDetailLayout`'s own `GeometryReader` measures, so hiding it in
 /// compact height (as production does) keeps `.rail`'s baselines exactly as they were.
 @MainActor
-private func recordingDetailScreen<Video: View>(
+func recordingDetailScreen<Video: View>(
     state: RecordingDetailState, @ViewBuilder video: () -> Video
 ) -> some View {
     RecordingDetailScreen(state: state, video: video())
 }
 
-private struct RecordingDetailScreen<Video: View>: View {
+struct RecordingDetailScreen<Video: View>: View {
     let state: RecordingDetailState
     let video: Video
 

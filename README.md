@@ -45,6 +45,23 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.1 — 2026-09-21
+- **Cut a clip straight from a camera's timeline.** The new **Clip** control turns the scrub track
+  into a range editor: drag the two handles to set where the clip starts and ends, drag the middle
+  to move the whole thing, and press Create Export. No dates, no times, no second timeline — it is
+  the track you were already looking at.
+- The clip opens at thirty seconds before the playhead to a minute after it, and everything outside
+  it fades back so the part you are cutting is the part you see.
+- **Play selection** previews exactly the clip you have chosen and returns to its start when it
+  finishes, so you can check it before committing the server to the work.
+- A clip may run across a stretch with no recording — the panel says how much is missing rather
+  than stopping you, because the server exports the footage that exists.
+- The panel follows the export from request to ready and offers the finished clip in the Exports
+  tab. If the server refuses the range it says so and asks you to move a handle, rather than
+  offering a retry that could only fail the same way.
+- **A new Minute zoom** joins Hour, Day and Week — one point per second, which is what makes a
+  ninety-second clip something you can actually grab. It is available for ordinary scrubbing too.
+
 ### 0.7.0 — 2026-09-20
 - **A new Exports tab browses the clips kept on the Frigate server.** Newest first, grouped by day,
   with the camera and time on every card. Tap one to play it, or download a copy to the device

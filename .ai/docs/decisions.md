@@ -2047,3 +2047,80 @@ is the server's; Aura browses it and hands a copy to the platform, and keeps not
 separate player window (`openWindow(value:)`) the design specifies for the Mac, the `⌘R`/`⌘S`/`⌘.`
 key equivalents, and the right-click "Show in Timeline" action. All four are app-scene or
 whole-app-shell changes rather than Exports-local ones.
+
+## Cutting a clip on the timeline: the export range selector (0.7.1)
+
+The editor from issue #57, built to the Claude Design return for issue #60. Export mode transforms
+the scrub track already on screen — one timeline, not two — seeded at the playhead −0:30/+1:00 and
+quantised to whole seconds throughout.
+
+- **The zoom ladder gained a fourth rung, `Minute` at 3 600 pt/hour.** This was forced, not chosen.
+  `Hour` (480 pt/hour) was the shipped floor, and there the settled 1:30 seed is **twelve points
+  wide** — narrower than the 3pt handle bars either side of it. Three alternatives that leave the
+  ladder alone were each worse: an export-only density makes the control read "Hour" while showing
+  six minutes; a magnified inset is the second timeline the inline decision exists to prevent; and
+  seeding a fixed 90pt regardless of what it means in seconds proposes an export nobody asked for.
+  The rung is **permanent**, not export-only — a control whose option count changes under the
+  user's finger is its own defect, and one-point-per-second is useful for ordinary fine scrubbing.
+  Davide confirmed it before the UI was built. Cost paid: every `RecordingPlayerSnapshotTests`
+  baseline re-recorded.
+- **Whole seconds are an invariant of the value, not a step at submission.** `ExportSelection`
+  floors both bounds in its initializer. Frigate 0.17.2 converts export bounds to integers
+  internally, so a selection carrying fractions promises precision the server discards and leaves
+  the readout disagreeing with the file that arrives.
+- **Gaps are not bounds.** A clip may span or begin inside a stretch with no footage; the server
+  exports what exists and the result is simply shorter. The panel states the arithmetic
+  ("Includes 0:32 with no recording") rather than warning. The only invalid selection is one
+  holding **zero** recorded seconds.
+- **Handles are chrome you grab; the playhead is state you read.** The playhead keeps the brand
+  gradient, the 12pt dot and the pink glow. The handles are flat `TextPrimary` ink — no gradient,
+  no glow, no tint. That contrast is what lets both share a 72pt track. **No new colour token was
+  introduced by this feature.**
+- **Knobs sit flush outside the selection.** Facing inward, two knobs on a 14pt clip would overlap
+  each other and eat the region's own drag area. Outside, they flank it and no rule changes as the
+  clip shortens. Each bar reserves 22pt of the interior, so a drag starting near a boundary belongs
+  to that handle; at the one-second minimum nothing is left and the region gesture does not exist
+  at all rather than fighting the handles for the same pixels. A touch exactly between two bars
+  goes to whichever handle moved last — a tie broken by view order is not a rule.
+- **The dim is drawn in the Canvas, not scrimmed over it.** Content outside the clip is a layer at
+  `grayscale(1)` and 0.32 opacity; review markers get their own layer at 0.55 with hue intact,
+  because finding the event you want to clip is the task; the ruler is never dimmed at all, which
+  is why the boundary times stay trustworthy. Deliberately below the 3:1 contrast floor — nothing
+  load-bearing is carried by it, since the boundary is the handles (13:1) and the ruler (16:1). A
+  scrim toward `Base` was tried first and dropped: it washes out in light mode, where the well is
+  already light.
+- **Below Hour the handles are absent, not inert.** A 1:30 clip is 3pt at Day. The selection
+  becomes a gradient mark with brackets and the readout offers "Zoom in to adjust", which selects
+  Minute. Keyboard and VoiceOver adjustment keep working throughout.
+- **The day-overview bar is withdrawn on `stacked` during export mode** and the readout takes its
+  row — a day-scale fling is not something to leave under a thumb doing second-scale work, and the
+  swap keeps the panel the same height. `split` keeps the bar: there is room, and a pointer does
+  not fling one by accident. **The day stepper goes with it**, for the same reason: stepping a
+  whole day while cutting a ninety-second clip would leave the selection behind and the playhead
+  somewhere else entirely. Davide's call, 2026-09-21, on seeing it in the first baselines.
+- **The stepper gets a row to itself the rest of the time.** With four rungs the picker and the
+  stepper no longer fit one line on a 393pt phone, and sharing truncated the day to "SUN,…" — the
+  one thing that control exists to tell you. A second row costs 12pt of panel and is the only
+  option that keeps both the 44pt chevron targets and the full date.
+- **Dates go through `Text(_:format:)`, never `Date.formatted(_:)`.** The first resolves against
+  the **view's** locale and calendar, the second against the **process's**. Where a host overrides
+  the environment — every snapshot in this suite does — the two disagree, and the export readout
+  shipped its first baselines naming a different hour than the clock six points above it. This is
+  general, not export-specific: any date formatted to a `String` and handed to `Text` silently
+  ignores an overridden locale.
+- **`Clip` lives on the panel, in the transport's chip cluster, in all three arrangements.** Not a
+  nav bar: the `rail` has none, and an entry point that relocates when the phone rotates costs more
+  than one extra chip. It is **absent** on a camera with nothing recorded, because a dimmed chip in
+  a chip cluster reads as a fourth playback speed.
+- **Retryability is a property of the error, not of the view.** `ExportsError.isRetryable` decides
+  whether a `Try again` control exists at all. A server rejection is the one place in this app
+  where a control is **removed** rather than disabled: pressing it could only fail the same way, so
+  the caption asks for the only thing that can change the outcome, and moving any handle clears the
+  failure — the range the server refused no longer exists.
+- **Selection playback returns to the start once and stops.** Looping is the obvious thing to want
+  while trimming, but a loop with no visible loop control is a state the user can neither see nor
+  deliberately stop. Flagged as the design's open question 8.
+- **No tab badge announces a finished clip.** Timeline Detail hides the tab bar, so a badge would
+  post a notification to a surface that is not on screen. The lifecycle strip carries the state on
+  the panel start to finish, and `View in Exports` is live from the moment the request is accepted,
+  because the row genuinely exists there as `in_progress` by then.

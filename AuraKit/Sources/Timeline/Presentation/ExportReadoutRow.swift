@@ -41,7 +41,7 @@ struct ExportReadoutRow: View {
                 Spacer(minLength: 0)
                 if state.showsResetToPlayhead { resetButton }
             }
-            Text("\(timeText(state.selection.start)) → \(timeText(state.selection.end))")
+            (time(state.selection.start) + Text(verbatim: " → ") + time(state.selection.end))
                 .auroraNumerals(.rulerLabel)
                 .foregroundStyle(.auroraTextSecondary)
                 .lineLimit(1)
@@ -55,7 +55,7 @@ struct ExportReadoutRow: View {
                 .auroraText(.overline)
                 .textCase(.uppercase)
                 .foregroundStyle(.auroraTextQuaternary)
-            Text(timeText(instant))
+            time(instant)
                 .auroraNumerals(.exportBoundary)
                 .foregroundStyle(.auroraTextPrimary)
                 .contentTransition(.numericText())
@@ -89,7 +89,12 @@ struct ExportReadoutRow: View {
         .accessibilityLabel("Reset to playhead")
     }
 
-    private func timeText(_ instant: Date) -> String {
-        instant.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
+    /// Exactly the panel clock's own format, and deliberately `Text(_:format:)` rather than
+    /// `Date.formatted(_:)`: the former resolves against the **view's** locale and calendar, the
+    /// latter against the process's. Where a host overrides the environment — every snapshot in
+    /// this suite does — the two disagree, and the readout would name a different hour than the
+    /// clock six points above it.
+    private func time(_ instant: Date) -> Text {
+        Text(instant, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
     }
 }

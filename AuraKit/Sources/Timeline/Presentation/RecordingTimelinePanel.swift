@@ -91,13 +91,22 @@ struct RecordingTimelinePanel: View {
         switch arrangement {
         case .stacked:
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // The stepper gets a row to itself: with four zoom rungs it and the picker
+                    // no longer fit one line on a 393pt phone, and sharing truncated the day to
+                    // "SUN,…" — the one thing the control exists to tell you.
+                    //
+                    // In export mode it is withdrawn entirely, for the same reason the
+                    // day-overview bar is: stepping a whole day while cutting a 90-second clip
+                    // would leave the selection behind and the playhead somewhere else.
+                    if !state.isExporting {
                         dayStepper
-                        clock
                     }
-                    Spacer(minLength: 8)
-                    zoomPicker
+                    HStack(alignment: .bottom) {
+                        clock
+                        Spacer(minLength: 8)
+                        zoomPicker(spellsOutLabels: false)
+                    }
                 }
                 // The day bar is withdrawn while a clip is being cut and the readout takes its
                 // row: a day-scale fling is not something to leave under a thumb doing
@@ -135,7 +144,7 @@ struct RecordingTimelinePanel: View {
                     } else {
                         dayStepper
                     }
-                    zoomPicker
+                    zoomPicker(spellsOutLabels: true)
                     footer(density: .wide, isStacked: false)
                 }
                 .frame(width: Self.controlsWidth)
@@ -306,13 +315,16 @@ struct RecordingTimelinePanel: View {
     /// R3/R16: the flat `.well` container avoids nesting a second `glassEffect` inside the sheet's
     /// own, and the full brand gradient (not the violet→pink badge gradient) is what the mock uses
     /// for a control that is itself the screen's primary action.
-    private var zoomPicker: some View {
+    /// Four rungs do not fit a 393pt phone at full width — `Minute` wraps mid-word — so the
+    /// stacked header takes the abbreviated labels and only `split`'s 300pt column spells them
+    /// out. The abbreviation is `Minute`'s alone; the other three are already short.
+    private func zoomPicker(spellsOutLabels: Bool) -> some View {
         AuroraSegmentedControl(
             options: TimelineZoom.allCases,
             selection: Binding(get: { state.zoom }, set: coordinated.selectZoom),
             container: .well,
             selectedFill: .diagonal
-        ) { $0.title }
+        ) { spellsOutLabels ? $0.title : $0.compactTitle }
     }
 
     /// The rail has no room for the ladder — one chip cycling the same three densities.
@@ -320,7 +332,7 @@ struct RecordingTimelinePanel: View {
         Button {
             coordinated.selectZoom(state.zoom.next)
         } label: {
-            Label(state.zoom.title, systemImage: state.zoom.icon)
+            Label(state.zoom.compactTitle, systemImage: state.zoom.icon)
                 .frame(maxWidth: .infinity)
                 .auroraBadge(.neutral)
         }
