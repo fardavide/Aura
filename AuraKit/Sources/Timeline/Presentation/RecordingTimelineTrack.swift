@@ -18,6 +18,11 @@ struct RecordingTimelineTrack: View {
     let viewport: TimelineViewport
     let timeline: DayTimeline
     let span: TimeRange
+    /// The export selection to hold at full strength while everything outside it recedes. `nil`
+    /// outside export mode — and also whenever dimming would mislead rather than focus: below Hour
+    /// density, where the selection is a few points wide, and over a range holding no footage at
+    /// all, where there is nothing to emphasise.
+    var emphasis: TimeRange?
 
     @Environment(\.calendar) private var calendar
 
@@ -26,34 +31,68 @@ struct RecordingTimelineTrack: View {
         let calendar = calendar
         return Canvas { context, size in
             let geometry = TrackGeometry(axis: axis, viewport: viewport, size: size)
-            let visible = viewport.visible
+            guard let emphasis else {
+                drawFootage(in: context, geometry: geometry, calendar: calendar)
+                drawMarkers(in: context, geometry: geometry)
+                return
+            }
+            let inside = Path(
+                geometry.rect(from: emphasis.start, to: emphasis.end, crossFrom: 0, crossTo: geometry.crossExtent)
+            )
+            // Outside the clip: hue removed and well down, so the selection is the only thing the
+            // eye lands on. Deliberately below the contrast floor — nothing load-bearing is carried
+            // by it, because the boundary itself is the handles and the ruler.
+            context.drawLayer { layer in
+                layer.clip(to: inside, options: .inverse)
+                layer.addFilter(.grayscale(1))
+                layer.opacity = Self.outsideOpacity
+                drawFootage(in: layer, geometry: geometry, calendar: calendar)
+            }
+            // Markers are exempt, and sit higher than the rest of the dimmed content with their hue
+            // intact: finding the event you want to clip is the whole task.
+            context.drawLayer { layer in
+                layer.clip(to: inside, options: .inverse)
+                layer.opacity = Self.outsideMarkerOpacity
+                drawMarkers(in: layer, geometry: geometry)
+            }
+            context.drawLayer { layer in
+                layer.clip(to: inside)
+                drawFootage(in: layer, geometry: geometry, calendar: calendar)
+                drawMarkers(in: layer, geometry: geometry)
+            }
+        }
+    }
 
-            if span.start > visible.start {
-                TimelineHatch.fill(
-                    geometry.rect(from: visible.start, to: span.start, crossFrom: 0, crossTo: geometry.crossExtent),
-                    in: context
-                )
-            }
-            if span.end < visible.end {
-                TimelineHatch.fill(
-                    geometry.rect(from: span.end, to: visible.end, crossFrom: 0, crossTo: geometry.crossExtent),
-                    in: context
-                )
-            }
-            for gap in timeline.gaps where gap.range.end > visible.start && gap.range.start < visible.end {
-                TimelineHatch.fill(
-                    geometry.rect(from: gap.range.start, to: gap.range.end, crossFrom: 0, crossTo: geometry.crossExtent),
-                    in: context
-                )
-            }
+    private static let outsideOpacity: Double = 0.32
+    private static let outsideMarkerOpacity: Double = 0.55
 
-            drawDayDividers(in: context, geometry: geometry, calendar: calendar)
-            drawMotion(in: context, geometry: geometry)
-            drawMarkers(in: context, geometry: geometry)
+    /// Everything but the markers: the hatching, the day dividers, the motion and the live edge.
+    private func drawFootage(in context: GraphicsContext, geometry: TrackGeometry, calendar: Calendar) {
+        let visible = viewport.visible
+        if span.start > visible.start {
+            TimelineHatch.fill(
+                geometry.rect(from: visible.start, to: span.start, crossFrom: 0, crossTo: geometry.crossExtent),
+                in: context
+            )
+        }
+        if span.end < visible.end {
+            TimelineHatch.fill(
+                geometry.rect(from: span.end, to: visible.end, crossFrom: 0, crossTo: geometry.crossExtent),
+                in: context
+            )
+        }
+        for gap in timeline.gaps where gap.range.end > visible.start && gap.range.start < visible.end {
+            TimelineHatch.fill(
+                geometry.rect(from: gap.range.start, to: gap.range.end, crossFrom: 0, crossTo: geometry.crossExtent),
+                in: context
+            )
+        }
 
-            if visible.contains(span.end) {
-                context.stroke(geometry.line(at: span.end), with: AuroraTrack.nowLine, style: AuroraTrack.nowLineStyle)
-            }
+        drawDayDividers(in: context, geometry: geometry, calendar: calendar)
+        drawMotion(in: context, geometry: geometry)
+
+        if visible.contains(span.end) {
+            context.stroke(geometry.line(at: span.end), with: AuroraTrack.nowLine, style: AuroraTrack.nowLineStyle)
         }
     }
 
