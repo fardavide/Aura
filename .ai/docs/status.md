@@ -359,7 +359,25 @@ not snapshot-tested — they center on video players that can't render in a snap
   **862 AuraKit tests green, iOS Simulator build green.** See `decisions.md` for the rung, the
   outside-the-clip dim, the knobs-outside rule and why a rejection removes its retry control.
 
+- **Local + remote server addresses (0.7.2).** The connection now holds a required remote address
+  and an optional local one, and the app picks between them on its own: no local address or no
+  Wi-Fi → remote with no wait at all; on Wi-Fi → one 600 ms `/api/version` probe of the local
+  address, remote the moment it doesn't answer. Two interface-pinned `NWPathMonitor`s (not the
+  default path, which runs over `utun` with Tailscale up) re-point the whole app when the network
+  changes, and only a genuine change rebuilds the tree. The composition root is built from a
+  resolved `ActiveServer`, so nothing below it knows there are two. The Settings row tags the
+  address in use. **902 AuraKit tests + the app suite green, iOS Simulator and macOS builds green;
+  never run against a real second address** (see Next). See `decisions.md`.
+
 ## Next
+- **Verify the two-address switching on the real network (0.7.2).** Every path is unit-tested
+  against fakes, but no probe has ever been sent to a live Frigate. Confirm on the running
+  deployment: at home on Wi-Fi the Settings row tags **LOCAL** and the grid loads over the LAN
+  address; on cellular it tags **REMOTE**; walking out of the house re-points the app without a
+  relaunch; on a foreign Wi-Fi the delay before the first screen is not perceptible; and that iOS's
+  **Local Network** permission prompt appears and, once granted, the local probe succeeds (the
+  usage description is already in `Config/Aura-Info.plist`; a denied prompt silently means the app
+  always falls back to remote).
 - **Verify the range selector against a real Frigate server, and on a device.** Nothing in slice 13
   has touched a live instance: `POST /api/export/{camera}/start/{s}/end/{e}` is built to the
   verified v0.17.2 contract but never sent, and the create → processing → ready path has only been

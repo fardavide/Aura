@@ -23,13 +23,7 @@ struct SettingsSnapshotTests {
 
     @Test func `given a configured server when the menu is shown then it matches the reference`() async {
         // given
-        let repository = FakeSettingsRepository(
-            connection: ConnectionSettings(
-                scheme: .https, host: "frigate.local", port: 8_971,
-                username: "admin", password: "hunter2"
-            ),
-            theme: .dark
-        )
+        let repository = FakeSettingsRepository(connection: snapshotConnection(local: nil), theme: .dark)
         let view = await settingsMenu(
             repository: repository, cameras: .success(snapshotCameras()), appIcon: FakeAppIconSwitcher()
         )
@@ -38,15 +32,37 @@ struct SettingsSnapshotTests {
         assertScreenSnapshot(view, named: "menu")
     }
 
+    @Test func `given a local address in use when the menu is shown then the row is tagged`() async {
+        // given
+        let repository = FakeSettingsRepository(connection: snapshotConnection(local: localAddress), theme: .dark)
+        let view = await settingsMenu(
+            repository: repository,
+            cameras: .success(snapshotCameras()),
+            appIcon: FakeAppIconSwitcher(),
+            activeRoute: .local
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "menu-local")
+    }
+
+    @Test func `given a long remote host in use when the menu is shown then the row still fits`() async {
+        // given — the worst case the row has to survive: a MagicDNS name *and* the route tag
+        let repository = FakeSettingsRepository(connection: snapshotConnection(local: localAddress), theme: .dark)
+        let view = await settingsMenu(
+            repository: repository,
+            cameras: .success(snapshotCameras()),
+            appIcon: FakeAppIconSwitcher(),
+            activeRoute: .remote
+        )
+
+        // then
+        assertScreenSnapshot(view, named: "menu-remote-long-host")
+    }
+
     @Test func `given the cameras read fails when the menu is shown then the count is omitted`() async {
         // given
-        let repository = FakeSettingsRepository(
-            connection: ConnectionSettings(
-                scheme: .https, host: "frigate.local", port: 8_971,
-                username: "admin", password: "hunter2"
-            ),
-            theme: .dark
-        )
+        let repository = FakeSettingsRepository(connection: snapshotConnection(local: nil), theme: .dark)
         let view = await settingsMenu(
             repository: repository, cameras: .failure(.unreachable), appIcon: FakeAppIconSwitcher()
         )
@@ -80,12 +96,9 @@ struct SettingsSnapshotTests {
     // which shows the seven bullets.
     @Test func `given a saved connection when the server form is shown then it matches the reference`() {
         // given
-        let viewModel = serverSettingsViewModel(FakeSettingsRepository(
-            connection: ConnectionSettings(
-                scheme: .https, host: "frigate.local", port: 8_971,
-                username: "admin", password: "hunter2"
-            )
-        ))
+        let viewModel = serverSettingsViewModel(
+            FakeSettingsRepository(connection: snapshotConnection(local: localAddress))
+        )
         viewModel.onAppear()
 
         // then
@@ -123,16 +136,37 @@ struct SettingsSnapshotTests {
 
 // MARK: - View builders
 
+/// The longest realistic remote host — a Tailscale MagicDNS name, which is what the row has to
+/// fit beside the route tag.
+private func snapshotConnection(local: ServerAddress?) -> ConnectionSettings {
+    ConnectionSettings(
+        remote: ServerAddress(scheme: .https, host: "frigate.tail9c2f1.ts.net", port: 8_971),
+        local: local,
+        username: "admin",
+        password: "hunter2"
+    )
+}
+
+private let localAddress = ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000)
+
 @MainActor
 private func settingsMenu(
     repository: FakeSettingsRepository,
     cameras: Result<[Camera], CamerasError>?,
-    appIcon: FakeAppIconSwitcher
+    appIcon: FakeAppIconSwitcher,
+    activeRoute: ServerRoute = .remote
 ) async -> some View {
+    let connection = repository.loadConnection()
     let viewModel = SettingsViewModel(
         loadTheme: LoadTheme(repository: repository),
         saveTheme: SaveTheme(repository: repository),
         loadConnection: LoadConnection(repository: repository),
+        activeServer: connection.map { connection in
+            switch activeRoute {
+            case .local: connection.localServer ?? connection.remoteServer
+            case .remote: connection.remoteServer
+            }
+        },
         loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: repository),
         saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: repository),
         getCameras: cameras.map { GetCameras(repository: FakeCamerasRepository($0)) },

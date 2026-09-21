@@ -20,19 +20,28 @@ import TimelineDomain
 import TimelinePresentation
 
 /// The composition root: the one place the object graph is wired with explicit initializer
-/// injection, and where the domain `ConnectionSettings` is mapped to the infra `ServerConfig`.
+/// injection. It is built from the **resolved** `ActiveServer` rather than from the saved
+/// `ConnectionSettings`, so nothing below it knows the connection carries two addresses.
 @MainActor
 final class AppComposition {
     private let settingsRepository: any SettingsRepository
     private let httpClient: any HttpClient
     private let downloadClient: any HttpDownloadClient
     private let appIconSwitcher = SystemAppIconSwitcher()
+    private let networkPaths: any NetworkPathObserving = SystemNetworkPathObserver()
     /// One per connection, held here rather than built in `RootView.body`: a transfer must survive
     /// leaving the Exports tab, and a view model rebuilt on every body pass would lose it.
     private var downloadCenters: [String: DownloadCenter] = [:]
     /// How much history the Timeline scrolls over — the same on the tab and on one camera's
     /// detail, so a tile tapped at some instant opens onto the axis it was scrubbed on.
     private let timelineSpanDays = 7
+    /// How long the local address gets to answer before the app settles on the remote one.
+    ///
+    /// A LAN round trip is tens of milliseconds, so this is roughly twenty times what a server
+    /// that *is* there needs — generous enough to survive a sleepy Wi-Fi radio waking up, short
+    /// enough that arriving at a café doesn't visibly delay the first screen. It is only ever
+    /// paid on Wi-Fi with a local address configured; cellular resolves with no wait at all.
+    private let localProbeTimeout = Duration.milliseconds(600)
 
     init() {
         settingsRepository = DefaultSettingsRepository(
@@ -50,19 +59,29 @@ final class AppComposition {
         LoadTheme(repository: settingsRepository).execute()
     }
 
-    /// `connection` is `nil` before a server is configured — the menu then has no Camera Order
-    /// row and nothing to count.
-    func settingsViewModel(for connection: ConnectionSettings?) -> SettingsViewModel {
+    /// Streams the address to talk to now, and a new one whenever the device's network changes.
+    func observeActiveServer() -> ObserveActiveServer {
+        ObserveActiveServer(
+            probe: FrigateServerProbe(httpClient: httpClient),
+            networkPaths: networkPaths,
+            localProbeTimeout: localProbeTimeout
+        )
+    }
+
+    /// `server` is `nil` before one is configured — the menu then has no Camera Order row and
+    /// nothing to count.
+    func settingsViewModel(for server: ActiveServer?) -> SettingsViewModel {
         SettingsViewModel(
             loadTheme: LoadTheme(repository: settingsRepository),
             saveTheme: SaveTheme(repository: settingsRepository),
             loadConnection: LoadConnection(repository: settingsRepository),
+            activeServer: server,
             loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: settingsRepository),
             saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: settingsRepository),
-            getCameras: connection.map { connection in
+            getCameras: server.map { server in
                 GetCameras(
                     repository: FrigateCamerasRepository(
-                        configProvider: configProvider(config: serverConfig(from: connection))
+                        configProvider: configProvider(config: ServerConfig(server))
                     )
                 )
             },
@@ -90,11 +109,11 @@ final class AppComposition {
         )
     }
 
-    func cameraOrderViewModel(for connection: ConnectionSettings) -> CameraOrderViewModel {
+    func cameraOrderViewModel(for server: ActiveServer) -> CameraOrderViewModel {
         CameraOrderViewModel(
             getCameras: GetCameras(
                 repository: FrigateCamerasRepository(
-                    configProvider: configProvider(config: serverConfig(from: connection))
+                    configProvider: configProvider(config: ServerConfig(server))
                 )
             ),
             loadCameraOrder: LoadCameraOrder(repository: settingsRepository),
@@ -102,8 +121,8 @@ final class AppComposition {
         )
     }
 
-    func cameraGridViewModel(for connection: ConnectionSettings) -> CameraGridViewModel {
-        let config = serverConfig(from: connection)
+    func cameraGridViewModel(for server: ActiveServer) -> CameraGridViewModel {
+        let config = ServerConfig(server)
         // One config read shared by the three things on this screen that need a slice of it — the
         // camera list, the group chips and the retention figures — instead of one heavy
         // `/api/config` GET each. It re-reads itself while the screen watches, so the chips and the
@@ -133,16 +152,16 @@ final class AppComposition {
 
     func cameraDetailViewModel(
         for camera: Camera,
-        connection: ConnectionSettings
+        server: ActiveServer
     ) -> CameraDetailViewModel {
         CameraDetailViewModel(
             camera: camera,
-            streamProvider: FrigateCameraStreamProvider(config: serverConfig(from: connection))
+            streamProvider: FrigateCameraStreamProvider(config: ServerConfig(server))
         )
     }
 
-    func eventsListViewModel(for connection: ConnectionSettings) -> EventsListViewModel {
-        let config = serverConfig(from: connection)
+    func eventsListViewModel(for server: ActiveServer) -> EventsListViewModel {
+        let config = ServerConfig(server)
         return EventsListViewModel(
             getEvents: GetEvents(
                 repository: FrigateEventsRepository(config: config, httpClient: httpClient)
@@ -161,9 +180,9 @@ final class AppComposition {
 
     func eventDetailViewModel(
         for event: Event,
-        connection: ConnectionSettings
+        server: ActiveServer
     ) -> EventDetailViewModel {
-        let config = serverConfig(from: connection)
+        let config = ServerConfig(server)
         let repository = FrigateEventsRepository(config: config, httpClient: httpClient)
         return EventDetailViewModel(
             event: event,
@@ -174,8 +193,8 @@ final class AppComposition {
         )
     }
 
-    func exportsListViewModel(for connection: ConnectionSettings) -> ExportsListViewModel {
-        let config = serverConfig(from: connection)
+    func exportsListViewModel(for server: ActiveServer) -> ExportsListViewModel {
+        let config = ServerConfig(server)
         return ExportsListViewModel(
             getExports: GetExports(
                 repository: FrigateExportsRepository(config: config, httpClient: httpClient)
@@ -186,7 +205,7 @@ final class AppComposition {
                 repository: FrigateCamerasRepository(configProvider: configProvider(config: config))
             ),
             thumbnailLoader: FrigateExportThumbnailLoader(config: config, httpClient: httpClient),
-            serverLabel: "\(connection.host):\(connection.port)",
+            serverLabel: "\(server.address.host):\(server.address.port)",
             now: { Date() },
             calendar: .current,
             processingPollInterval: .seconds(15),
@@ -195,13 +214,13 @@ final class AppComposition {
         )
     }
 
-    func downloadCenter(for connection: ConnectionSettings) -> DownloadCenter {
-        let key = identity(of: connection)
+    func downloadCenter(for server: ActiveServer) -> DownloadCenter {
+        let key = identity(of: server)
         if let existing = downloadCenters[key] { return existing }
         let center = DownloadCenter(
             downloadExport: DownloadExport(
                 downloader: FrigateExportDownloader(
-                    config: serverConfig(from: connection),
+                    config: ServerConfig(server),
                     downloadClient: downloadClient
                 )
             ),
@@ -211,15 +230,15 @@ final class AppComposition {
         return center
     }
 
-    func exportPlayerViewModel(for export: Export, connection: ConnectionSettings) -> ExportPlayerViewModel {
+    func exportPlayerViewModel(for export: Export, server: ActiveServer) -> ExportPlayerViewModel {
         ExportPlayerViewModel(
             export: export,
-            playback: FrigateExportPlaybackProvider(config: serverConfig(from: connection))
+            playback: FrigateExportPlaybackProvider(config: ServerConfig(server))
         )
     }
 
-    func timelineScreenViewModel(for connection: ConnectionSettings) -> TimelineScreenViewModel {
-        let config = serverConfig(from: connection)
+    func timelineScreenViewModel(for server: ActiveServer) -> TimelineScreenViewModel {
+        let config = ServerConfig(server)
         return TimelineScreenViewModel(
             observeCameras: observeCameras(configProvider: configProvider(config: config)),
             observeDynamicCameraOrder: ObserveDynamicCameraOrder(repository: settingsRepository),
@@ -231,8 +250,8 @@ final class AppComposition {
         )
     }
 
-    func previewTileViewModel(for camera: Camera, connection: ConnectionSettings) -> PreviewTileViewModel {
-        let config = serverConfig(from: connection)
+    func previewTileViewModel(for camera: Camera, server: ActiveServer) -> PreviewTileViewModel {
+        let config = ServerConfig(server)
         return PreviewTileViewModel(
             camera: camera,
             previews: GetCameraPreviews(
@@ -248,9 +267,9 @@ final class AppComposition {
     func recordingPlayerViewModel(
         for camera: Camera,
         at instant: Date,
-        connection: ConnectionSettings
+        server: ActiveServer
     ) -> RecordingPlayerViewModel {
-        let config = serverConfig(from: connection)
+        let config = ServerConfig(server)
         let recordings = GetCameraRecordings(
             repository: FrigateCameraRecordingsRepository(config: config, httpClient: httpClient)
         )
@@ -289,6 +308,13 @@ final class AppComposition {
         )
     }
 
+    /// Keys the per-server singletons above, and the root's tab tree. It carries the resolved
+    /// **address**, so switching between the local and the remote route starts a fresh set rather
+    /// than reusing transfers bound to an address that is no longer reachable.
+    func identity(of server: ActiveServer) -> String {
+        "\(server.address.scheme.rawValue)://\(server.address.host):\(server.address.port)"
+    }
+
     private func observeCameras(configProvider: FrigateConfigProvider) -> ObserveCameras {
         ObserveCameras(
             getCameras: GetCameras(
@@ -305,26 +331,6 @@ final class AppComposition {
             config: config,
             httpClient: httpClient,
             refreshInterval: .seconds(120)
-        )
-    }
-
-    /// Keys the per-connection singletons above. Pointing the app at a different server starts a
-    /// fresh set rather than inheriting the previous server's transfers.
-    private func identity(of connection: ConnectionSettings) -> String {
-        "\(connection.scheme.rawValue)://\(connection.host):\(connection.port)"
-    }
-
-    private func serverConfig(from connection: ConnectionSettings) -> ServerConfig {
-        let scheme: ServerConfig.Scheme = switch connection.scheme {
-        case .http: .http
-        case .https: .https
-        }
-        return ServerConfig(
-            scheme: scheme,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: connection.password
         )
     }
 }

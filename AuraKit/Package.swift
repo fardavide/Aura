@@ -116,14 +116,19 @@ let package = Package(
             path: "Tests/Common/DesignTests"
         ),
 
+        // CommonFrigate/CommonNetwork joined when the connection gained a second address: choosing
+        // between them means asking a Frigate server whether it answers, which is Data-layer work.
         .target(
             name: "SettingsData",
-            dependencies: ["SettingsDomain", "CamerasEntities", "CommonKeychain"],
+            dependencies: ["SettingsDomain", "CamerasEntities", "CommonFrigate", "CommonKeychain", "CommonNetwork"],
             path: "Sources/Settings/Data"
         ),
         .testTarget(
             name: "SettingsDataTests",
-            dependencies: ["SettingsData", "SettingsDomain", "CamerasEntities", "CommonKeychain", "TestDoubles"],
+            dependencies: [
+                "SettingsData", "SettingsDomain", "CamerasEntities",
+                "CommonFrigate", "CommonKeychain", "CommonNetwork", "TestDoubles",
+            ],
             path: "Tests/Settings/DataTests"
         ),
 

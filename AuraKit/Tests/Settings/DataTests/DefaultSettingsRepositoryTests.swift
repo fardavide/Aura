@@ -12,24 +12,51 @@ struct DefaultSettingsRepositoryTests {
     @Test func `given a saved connection when loading then it round-trips`() {
         // given
         let scenario = Scenario()
-        scenario.sut.saveConnection(
-            ConnectionSettings(scheme: .https, host: "frigate.local", port: 8971, username: "admin", password: "secret")
-        )
+        scenario.sut.saveConnection(connection(
+            local: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000)
+        ))
 
         // when
         let loaded = scenario.sut.loadConnection()
 
         // then
-        #expect(loaded == ConnectionSettings(
-            scheme: .https, host: "frigate.local", port: 8971, username: "admin", password: "secret"
+        #expect(loaded == connection(local: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000)))
+    }
+
+    @Test func `given no local address when loading then only the remote one comes back`() {
+        // given — also the shape of every install that predates the local address
+        let scenario = Scenario()
+        scenario.sut.saveConnection(connection(local: nil))
+
+        // when - then
+        #expect(scenario.sut.loadConnection()?.local == nil)
+        #expect(scenario.sut.loadConnection()?.remote.host == "frigate.ts.net")
+    }
+
+    @Test func `given a saved local address when it is removed then it does not come back`() {
+        // given
+        let scenario = Scenario()
+        scenario.sut.saveConnection(connection(
+            local: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000)
         ))
+
+        // when
+        scenario.sut.saveConnection(connection(local: nil))
+
+        // then
+        #expect(scenario.sut.loadConnection()?.local == nil)
     }
 
     @Test func `given a password when saving then it is kept in the keychain not user defaults`() {
         // given
         let scenario = Scenario()
         scenario.sut.saveConnection(
-            ConnectionSettings(scheme: .http, host: "h", port: 5000, username: nil, password: "secret")
+            ConnectionSettings(
+                remote: ServerAddress(scheme: .http, host: "h", port: 5000),
+                local: nil,
+                username: nil,
+                password: "secret"
+            )
         )
 
         // when — a repository over the same defaults but a fresh keychain
@@ -128,6 +155,15 @@ struct DefaultSettingsRepositoryTests {
         // then
         #expect(scenario.sut.loadTheme() == .dark)
     }
+}
+
+private func connection(local: ServerAddress?) -> ConnectionSettings {
+    ConnectionSettings(
+        remote: ServerAddress(scheme: .https, host: "frigate.ts.net", port: 8_971),
+        local: local,
+        username: "admin",
+        password: "secret"
+    )
 }
 
 private struct Scenario {

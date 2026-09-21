@@ -2130,3 +2130,66 @@ quantised to whole seconds throughout.
   post a notification to a surface that is not on screen. The lifecycle strip carries the state on
   the panel start to finish, and `View in Exports` is live from the moment the request is accepted,
   because the row genuinely exists there as `in_progress` by then.
+
+## Two server addresses, chosen by one short probe (0.7.2)
+The connection carried a single address, so a deployment reached remotely over Tailscale was reached
+that way at home too — every byte round-tripping through the tunnel while the server sat on the same
+LAN. `ConnectionSettings` now holds a **required `remote`** and an **optional `local`** `ServerAddress`
+(one new value type; scheme + host + port), sharing one set of credentials because both reach the same
+Frigate. The rest of the app is untouched by the choice: the composition root is built from a resolved
+**`ActiveServer`**, so no repository, loader or view model knows a second address exists.
+
+- **Prefer local, fall back to remote — and the fallback is never probed.** A probe of the remote
+  address would add a round trip to every launch away from home and buy nothing, because a failure
+  there has no second choice to offer; the screens already report an unreachable server. So there is
+  exactly one probe, and only when it can pay: no local address configured → remote with no wait at
+  all (which is also every install that predates this, and it never even touches the path monitor);
+  no Wi-Fi or wired interface → remote with no wait, since a private address cannot work on cellular
+  and asking would only burn the timeout; otherwise one probe of the local address.
+- **600 ms, enforced by a race rather than by `URLRequest.timeoutInterval`.** A LAN round trip is
+  tens of milliseconds, so the budget is ~20× what a server that *is* there needs — enough for a
+  sleepy Wi-Fi radio, small enough that arriving at a café isn't a visible delay. It cannot be left
+  to the request timeout: that is an **idle** timer, and the case this must be fast in is precisely
+  the one where a foreign network drops packets for a private address in silence, so nothing ever
+  arrives to time out against. `FrigateServerProbe` races the request against a `Task.sleep` and
+  cancels the loser.
+- **The probe requires Frigate specifically, not merely an answer.** On a café's Wi-Fi the home
+  router's own IP is perfectly likely to have *a* web server on it, and switching the whole app onto
+  a stranger's host is a worse failure than falling back. It reads `GET /api/version` (the cheapest
+  endpoint Frigate answers — plain text, no `/api/config` payload) and requires 2xx **and** a short
+  body beginning with a digit; an HTML login page or a captive portal fails that. A reverse proxy
+  that rewrites `/api/version` would false-negative into remote, which is the safe direction.
+- **Two interface-pinned `NWPathMonitor`s, not the default path's interface type.** A VPN is the
+  normal state here rather than an exotic one — Tailscale is the whole reason a remote address
+  exists — and with a tunnel up the default path runs over `utun`, so asking it "are you Wi-Fi?"
+  answers no while the Wi-Fi underneath reaches the LAN perfectly well. A monitor constructed with
+  `requiredInterfaceType:` answers about *that* interface, tunnel or no tunnel. The `.wifi` and
+  `.wiredEthernet` monitors are collapsed into one boolean, first update always emitted (seeding the
+  "emitted" value with `false` would swallow the no-Wi-Fi case and leave the app resolving forever).
+- **Only *changes* are emitted.** `ObserveActiveServer` dedupes, so a flapping interface that
+  resolves the same way rebuilds nothing, and the common case — arriving home, leaving home —
+  rebuilds the tab tree exactly once. `RootView` keys the tree on the resolved address, which is the
+  mechanism that was already there for changing servers.
+- **A "Finding your server…" state, not an optimistic first paint.** Emitting remote immediately and
+  correcting to local a moment later would start every launch at home with a Tailscale round trip
+  and then visibly reload. The root instead shows a brief real state bounded by the probe, and
+  deliberately does **not** blank the current server while re-resolving — otherwise every Settings
+  dismissal would tear down the tab tree, and any playback in it, for the milliseconds a new answer
+  takes.
+- **`ServerConfig(ActiveServer)` moved to `SettingsData`.** The composition root used to own this
+  domain→infra mapping by hand; the probe needs the same one, and two copies is one too many. This
+  is the reason `SettingsData` gained `CommonFrigate` + `CommonNetwork` — choosing between two
+  addresses means asking a Frigate server whether it answers, which is Data-layer work.
+- **`SettingsError` cases name the route** (`invalidHost(.local)`), because two addresses are now
+  editable on one screen and "invalid port" alone leaves the user hunting for the field. The Settings
+  menu row shows the active route as a tag, and only when two addresses are configured — with one,
+  nothing was chosen and a permanent "REMOTE" would read as a setting rather than as a fact.
+- **Known cost, accepted:** a route flip mid-download abandons the transfer. `DownloadCenter` is
+  keyed by the resolved address, so a flip starts a fresh one rather than reusing a downloader bound
+  to an address that just became unreachable — but the in-flight transfer on the old centre becomes
+  invisible instead of reporting its failure. The transfer is genuinely dead either way (the LAN
+  address is gone), and flips are rare; surfacing it needs the centre to outlive the address, which
+  is a larger change than this slice.
+- **Also not done:** nothing re-probes *within* a route. If the local address dies while the app is
+  open on Wi-Fi, every read fails until the network changes or the app is relaunched — falling back
+  on a failed read means retry logic inside `FrigateApiClient`, which is a separate slice.

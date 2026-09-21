@@ -34,7 +34,16 @@ public struct SettingsView: View {
                     NavigationLink {
                         ServerSettingsView(viewModel: makeServerSettingsViewModel())
                     } label: {
-                        SettingsMenuRow(title: "Server", value: serverValue)
+                        SettingsMenuRow(title: "Server", value: serverValue) {
+                            // Names the address in use right now, and only when there are two to
+                            // choose between — the local/remote switch is automatic, so this tag
+                            // is the one place it becomes visible.
+                            if let route = activeRoute {
+                                Text(route.rawValue.uppercased())
+                                    .auroraBadge(.neutral, size: .compact)
+                                    .fixedSize()
+                            }
+                        }
                     }
                 } footer: {
                     if viewModel.serverSummary == .notConfigured {
@@ -136,7 +145,14 @@ public struct SettingsView: View {
     private var serverValue: String {
         switch viewModel.serverSummary {
         case .notConfigured: "Not configured"
-        case let .configured(hostPort): hostPort
+        case let .configured(hostPort, _): hostPort
+        }
+    }
+
+    private var activeRoute: ServerRoute? {
+        switch viewModel.serverSummary {
+        case .notConfigured: nil
+        case let .configured(_, route): route
         }
     }
 }

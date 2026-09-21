@@ -11,6 +11,10 @@ public final class FakeHttpClient: HttpClient, @unchecked Sendable {
     public enum Outcome {
         case response(status: Int, body: Data)
         case failure(any Error)
+        /// Accepts the request and never answers, until the caller's task is cancelled — the
+        /// silence a private address meets on a foreign network, which no `failure` reproduces
+        /// because nothing is ever thrown.
+        case stall
     }
 
     private let routes: [(match: String, outcome: Outcome)]
@@ -65,6 +69,9 @@ public final class FakeHttpClient: HttpClient, @unchecked Sendable {
             return (body, response)
         case let .failure(error):
             throw error
+        case .stall:
+            try await Task.sleep(for: .seconds(60))
+            throw URLError(.timedOut)
         }
     }
 }

@@ -111,6 +111,10 @@ Light runtime snapshot. Storage lives under `service.storage`, keyed by mount pa
 - Recordings volume is the fixed `"/media/frigate/recordings"` (`BASE_DIR = "/media/frigate"`); other
   keys: `/media/frigate/clips`, `/tmp/cache`, `/dev/shm`. A path absent on the host is omitted — treat
   each key as optional. `GET /api/version` returns the same `version` as plain text.
+- **`/api/version` is the reachability probe's target** — the cheapest thing Frigate answers, and
+  the bare version string makes it a *discriminator*: a 2xx whose body is short and starts with a
+  digit is Frigate, while a captive portal or a router's own web UI at the same address is not.
+  Use it whenever the question is "is the server there", never `/api/config`.
 
 ### Events list — `GET /api/events`
 

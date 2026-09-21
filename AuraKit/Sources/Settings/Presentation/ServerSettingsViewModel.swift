@@ -6,9 +6,14 @@ import SettingsDomain
 @Observable
 @MainActor
 public final class ServerSettingsViewModel {
-    public var scheme: ConnectionSettings.Scheme = .http
-    public var host: String = ""
-    public var port: String = "5000"
+    public var remoteScheme: ServerAddress.Scheme = .http
+    public var remoteHost: String = ""
+    public var remotePort: String = "5000"
+    /// An empty host is how the form says "no local address" — the fields stay on screen so
+    /// adding one later is typing, not a hunt for a hidden control.
+    public var localScheme: ServerAddress.Scheme = .http
+    public var localHost: String = ""
+    public var localPort: String = "5000"
     public var username: String = ""
     public var password: String = ""
 
@@ -25,9 +30,14 @@ public final class ServerSettingsViewModel {
 
     public func onAppear() {
         guard let connection = loadConnection.execute() else { return }
-        scheme = connection.scheme
-        host = connection.host
-        port = String(connection.port)
+        remoteScheme = connection.remote.scheme
+        remoteHost = connection.remote.host
+        remotePort = String(connection.remote.port)
+        if let local = connection.local {
+            localScheme = local.scheme
+            localHost = local.host
+            localPort = String(local.port)
+        }
         username = connection.username ?? ""
         password = connection.password ?? ""
     }
@@ -35,14 +45,23 @@ public final class ServerSettingsViewModel {
     public func save() {
         errorMessage = nil
         didSave = false
-        guard let portValue = Int(port) else {
-            errorMessage = "Port must be a number."
+        guard let remotePortValue = Int(remotePort) else {
+            errorMessage = message(for: .invalidPort(.remote))
             return
         }
+        let local: ServerAddress?
+        if localHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            local = nil
+        } else {
+            guard let localPortValue = Int(localPort) else {
+                errorMessage = message(for: .invalidPort(.local))
+                return
+            }
+            local = ServerAddress(scheme: localScheme, host: localHost, port: localPortValue)
+        }
         let settings = ConnectionSettings(
-            scheme: scheme,
-            host: host,
-            port: portValue,
+            remote: ServerAddress(scheme: remoteScheme, host: remoteHost, port: remotePortValue),
+            local: local,
             username: username.isEmpty ? nil : username,
             password: password.isEmpty ? nil : password
         )
@@ -56,8 +75,10 @@ public final class ServerSettingsViewModel {
 
     private func message(for error: SettingsError) -> String {
         switch error {
-        case .invalidHost: "Enter a valid host."
-        case .invalidPort: "Port must be between 1 and 65535."
+        case .invalidHost(.remote): "Enter a valid remote host."
+        case .invalidHost(.local): "Enter a valid local host, or clear it to always use the remote address."
+        case .invalidPort(.remote): "The remote port must be a number between 1 and 65535."
+        case .invalidPort(.local): "The local port must be a number between 1 and 65535."
         // Saving a connection cannot fail this way; the icon picker reports its own failures.
         case .iconChangeFailed: "Something went wrong. Try again."
         }
