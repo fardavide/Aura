@@ -50,6 +50,9 @@ private extension TimelineZoom {
     /// How far apart the labels sit, chosen per density so they stay ~60–110pt apart.
     var rulerStep: TimeInterval {
         switch self {
+        // One point per second here, so a minute between labels is 60 pt — the bottom of the band,
+        // and the coarsest step that still lets the export editor's seconds be read off the ruler.
+        case .minute: 60
         case .hour: 600
         case .day: 1_800
         case .week: 10_800

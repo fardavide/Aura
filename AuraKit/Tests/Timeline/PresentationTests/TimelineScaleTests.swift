@@ -65,26 +65,49 @@ struct TimelineZoomTests {
         #expect(TimelineZoom.nearest(to: 36) == .week)
         #expect(TimelineZoom.nearest(to: 120) == .day)
         #expect(TimelineZoom.nearest(to: 480) == .hour)
+        #expect(TimelineZoom.nearest(to: 3_600) == .minute)
     }
 
     @Test func `given a density between presets when snapping then the geometrically nearer preset wins`() {
-        // then — the day/hour midpoint is √(120·480) = 240; the week/day midpoint is √(36·120) ≈ 65.7
+        // then — the day/hour midpoint is √(120·480) = 240; the week/day midpoint is √(36·120) ≈ 65.7;
+        // the hour/minute midpoint is √(480·3600) ≈ 1314.5
         #expect(TimelineZoom.nearest(to: 239) == .day)
         #expect(TimelineZoom.nearest(to: 241) == .hour)
         #expect(TimelineZoom.nearest(to: 65) == .week)
         #expect(TimelineZoom.nearest(to: 66) == .day)
+        #expect(TimelineZoom.nearest(to: 1_314) == .hour)
+        #expect(TimelineZoom.nearest(to: 1_315) == .minute)
     }
 
     @Test func `given a density outside the presets when clamping then it stays within the zoom range`() {
-        #expect(TimelineZoom.clamped(10_000) == TimelineZoom.hour.pointsPerHour)
+        #expect(TimelineZoom.clamped(10_000) == TimelineZoom.minute.pointsPerHour)
         #expect(TimelineZoom.clamped(1) == TimelineZoom.week.pointsPerHour)
         #expect(TimelineZoom.clamped(200) == 200)
     }
 
     @Test func `given a preset when cycling then next visits every preset and wraps`() {
+        #expect(TimelineZoom.minute.next == .hour)
         #expect(TimelineZoom.hour.next == .day)
         #expect(TimelineZoom.day.next == .week)
-        #expect(TimelineZoom.week.next == .hour)
+        #expect(TimelineZoom.week.next == .minute)
+    }
+
+    /// One point per second, which is what the whole export editor's arithmetic reads off.
+    @Test func `given the minute rung then one point is one second`() {
+        #expect(TimelineZoom.minute.pointsPerHour / 3_600 == 1)
+    }
+
+    /// A 600 s preview still would be 600 pt wide at Minute — a single stretched frame pretending
+    /// to be a filmstrip. It stays an Hour-only affordance.
+    @Test func `given a rung then the filmstrip only shows where a still is a sensible width`() {
+        #expect(TimelineZoom.hour.showsFilmstrip)
+        #expect(!TimelineZoom.minute.showsFilmstrip)
+        #expect(!TimelineZoom.day.showsFilmstrip)
+        #expect(!TimelineZoom.week.showsFilmstrip)
+    }
+
+    @Test func `given the ladder then it runs finest to coarsest`() {
+        #expect(TimelineZoom.allCases == [.minute, .hour, .day, .week])
     }
 }
 

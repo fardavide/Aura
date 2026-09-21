@@ -94,18 +94,16 @@ struct RecordingScrubTrack: View {
     }
 
     /// The design's Hour-zoom filmstrip. Only at that density: a day or week of ten-minute stills
-    /// would be sub-cell-width noise, and coarser grids would re-render every cell on each zoom.
+    /// would be sub-cell-width noise, at Minute a single still would stretch 600pt, and coarser
+    /// grids would re-render every cell on each zoom. `showsFilmstrip` owns which rungs qualify.
     @ViewBuilder private func filmstripBackground(length: CGFloat) -> some View {
-        switch state.zoom {
-        case .hour:
+        if state.zoom.showsFilmstrip {
             RecordingFilmstrip(
                 axis: axis,
                 viewport: viewport(length: length),
                 span: state.span,
                 store: filmstrip
             )
-        case .day, .week:
-            EmptyView()
         }
     }
 
