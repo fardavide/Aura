@@ -25,6 +25,13 @@ public struct RecordingDetailState: Equatable, Sendable {
     /// False for an hour holding no footage at all: there is nothing to start or speed up, though
     /// the skips and the track stay live so the hour can be left.
     public let isPlayable: Bool
+    /// The export range editor, when it is open. `nil` is ordinary playback — and is why the
+    /// entry point, the day-overview bar and the transport can all read one property to decide
+    /// whether they are on screen at all.
+    public let export: ExportEditorState?
+    /// Whether playback is currently fenced to the export selection. Separate from `isPlaying`,
+    /// which stays the honest answer to "is the video moving".
+    public let isPlayingSelection: Bool
 
     public init(
         cameraName: String,
@@ -36,7 +43,9 @@ public struct RecordingDetailState: Equatable, Sendable {
         speed: PlaybackSpeed,
         hasFootage: Bool,
         isLive: Bool,
-        isPlayable: Bool
+        isPlayable: Bool,
+        export: ExportEditorState?,
+        isPlayingSelection: Bool
     ) {
         self.cameraName = cameraName
         self.instant = instant
@@ -48,7 +57,11 @@ public struct RecordingDetailState: Equatable, Sendable {
         self.hasFootage = hasFootage
         self.isLive = isLive
         self.isPlayable = isPlayable
+        self.export = export
+        self.isPlayingSelection = isPlayingSelection
     }
+
+    public var isExporting: Bool { export != nil }
 
     /// The review marker under the playhead, if any — what the hero badge names.
     public var activeMarker: ReviewMarker? {
@@ -87,6 +100,18 @@ public struct RecordingDetailActions {
     public let previousMarker: () -> Void
     public let nextMarker: () -> Void
     public let goLive: () -> Void
+    /// Opens the range editor on the track already on screen, seeded around the playhead.
+    public let beginExport: () -> Void
+    public let cancelExport: () -> Void
+    public let changeSelection: (ExportSelection) -> Void
+    public let resetSelectionToPlayhead: () -> Void
+    public let playSelection: () -> Void
+    public let createExport: () -> Void
+    /// Leaves export mode and hands the finished clip to the Exports tab.
+    public let viewInExports: () -> Void
+    public let playExport: () -> Void
+    /// Dismisses a finished export and returns the panel to ordinary playback.
+    public let finishExport: () -> Void
 
     public init(
         playPause: @escaping () -> Void,
@@ -100,7 +125,16 @@ public struct RecordingDetailActions {
         stepDay: @escaping (Int) -> Void,
         previousMarker: @escaping () -> Void,
         nextMarker: @escaping () -> Void,
-        goLive: @escaping () -> Void
+        goLive: @escaping () -> Void,
+        beginExport: @escaping () -> Void,
+        cancelExport: @escaping () -> Void,
+        changeSelection: @escaping (ExportSelection) -> Void,
+        resetSelectionToPlayhead: @escaping () -> Void,
+        playSelection: @escaping () -> Void,
+        createExport: @escaping () -> Void,
+        viewInExports: @escaping () -> Void,
+        playExport: @escaping () -> Void,
+        finishExport: @escaping () -> Void
     ) {
         self.playPause = playPause
         self.skip = skip
@@ -114,12 +148,23 @@ public struct RecordingDetailActions {
         self.previousMarker = previousMarker
         self.nextMarker = nextMarker
         self.goLive = goLive
+        self.beginExport = beginExport
+        self.cancelExport = cancelExport
+        self.changeSelection = changeSelection
+        self.resetSelectionToPlayhead = resetSelectionToPlayhead
+        self.playSelection = playSelection
+        self.createExport = createExport
+        self.viewInExports = viewInExports
+        self.playExport = playExport
+        self.finishExport = finishExport
     }
 
     /// Every verb silenced — for screenshots and previews, which render the chrome but drive nothing.
     @MainActor public static let inert = RecordingDetailActions(
         playPause: {}, skip: { _ in }, selectSpeed: { _ in }, selectZoom: { _ in },
         beginScrub: {}, scrub: { _ in }, endScrub: {}, seek: { _ in },
-        stepDay: { _ in }, previousMarker: {}, nextMarker: {}, goLive: {}
+        stepDay: { _ in }, previousMarker: {}, nextMarker: {}, goLive: {},
+        beginExport: {}, cancelExport: {}, changeSelection: { _ in }, resetSelectionToPlayhead: {},
+        playSelection: {}, createExport: {}, viewInExports: {}, playExport: {}, finishExport: {}
     )
 }

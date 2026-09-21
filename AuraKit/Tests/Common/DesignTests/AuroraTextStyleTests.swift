@@ -69,5 +69,7 @@ private enum Scenario {
         NumeralExpectation(style: .rowSummary, size: 13, weight: .bold, relativeTo: .footnote, trackingEm: 0),
         NumeralExpectation(style: .rulerLabel, size: 10, weight: .semibold, relativeTo: .caption2, trackingEm: 0),
         NumeralExpectation(style: .axisLabel, size: 9.5, weight: .semibold, relativeTo: .caption2, trackingEm: 0),
+        NumeralExpectation(style: .exportBoundary, size: 17, weight: .bold, relativeTo: .headline, trackingEm: 0),
+        NumeralExpectation(style: .exportDuration, size: 15, weight: .bold, relativeTo: .body, trackingEm: 0),
     ]
 }

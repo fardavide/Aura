@@ -239,12 +239,21 @@ let package = Package(
 
         .target(
             name: "TimelinePresentation",
-            dependencies: ["TimelineDomain", "CamerasDomain", "CamerasEntities", "SettingsDomain", "CommonPlayer", "CommonDesign"],
+            // ExportsDomain for the export-creation use case only — the range selector submits
+            // from this screen. Presentation depends on the use case, never on ExportsData or the
+            // repository behind it (issue #57).
+            dependencies: [
+                "TimelineDomain", "CamerasDomain", "CamerasEntities", "SettingsDomain",
+                "ExportsDomain", "CommonPlayer", "CommonDesign",
+            ],
             path: "Sources/Timeline/Presentation"
         ),
         .testTarget(
             name: "TimelinePresentationTests",
-            dependencies: ["TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities", "SettingsDomain", "CommonDesign", "TestDoubles"],
+            dependencies: [
+                "TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities",
+                "SettingsDomain", "ExportsDomain", "CommonDesign", "TestDoubles",
+            ],
             path: "Tests/Timeline/PresentationTests"
         ),
     ],

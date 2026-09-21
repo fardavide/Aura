@@ -73,13 +73,17 @@ public enum AuroraNumeralStyle: Sendable, CaseIterable {
     case rowSummary          // 13 / bold   — camera grid summary counts
     case rulerLabel          // 10 / semibold — scrub-track ruler
     case axisLabel           // 9.5 / semibold — day-overview axis and histogram ruler (Canvas)
+    case exportBoundary      // 17 / bold   — the export readout's in and out times
+    case exportDuration      // 15 / bold   — the export readout's duration capsule
 
     public var size: CGFloat {
         switch self {
         case .clockTab: 34
         case .clockTabSeconds: 16
         case .clockDetail: 31
+        case .exportBoundary: 17
         case .clockDetailSeconds: 14
+        case .exportDuration: 15
         case .rowSummary: 13
         case .rulerLabel: 10
         case .axisLabel: 9.5
@@ -89,7 +93,7 @@ public enum AuroraNumeralStyle: Sendable, CaseIterable {
     public var weight: Font.Weight {
         switch self {
         case .clockTab, .clockDetail: .heavy
-        case .clockTabSeconds, .clockDetailSeconds, .rowSummary: .bold
+        case .clockTabSeconds, .clockDetailSeconds, .rowSummary, .exportBoundary, .exportDuration: .bold
         case .rulerLabel, .axisLabel: .semibold
         }
     }
@@ -98,6 +102,8 @@ public enum AuroraNumeralStyle: Sendable, CaseIterable {
         switch self {
         case .clockTab, .clockDetail: .largeTitle
         case .clockTabSeconds: .callout
+        case .exportBoundary: .headline
+        case .exportDuration: .body
         case .clockDetailSeconds, .rowSummary: .footnote
         case .rulerLabel, .axisLabel: .caption2
         }
@@ -107,7 +113,7 @@ public enum AuroraNumeralStyle: Sendable, CaseIterable {
     public var trackingEm: CGFloat {
         switch self {
         case .clockTab, .clockTabSeconds, .clockDetail, .clockDetailSeconds: -0.03
-        case .rowSummary, .rulerLabel, .axisLabel: 0
+        case .rowSummary, .rulerLabel, .axisLabel, .exportBoundary, .exportDuration: 0
         }
     }
 }

@@ -344,7 +344,33 @@ not snapshot-tested — they center on video players that can't render in a snap
   builds green, 64 new snapshot baselines.** See `decisions.md` for the duration, path-validation,
   progress-ownership and empty-copy calls, and for what was deliberately left out.
 
+- **Slice 13 — the export range selector (0.7.1).** Issue #57, built to the Claude Design return
+  for #60. Export mode transforms the scrub track already on screen: two handles, the region
+  between them held at full strength while everything outside recedes, a readout of exact start,
+  end and duration, and the transport replaced by Cancel / Play selection / Create Export and then
+  by a lifecycle strip. Seeded at playhead −0:30/+1:00, whole seconds throughout because Frigate
+  truncates export bounds to integers. The range maths — seeding, clamping, non-crossing, the
+  one-second minimum, whole-second quantisation and "does this hold any footage" — is a pure
+  `ExportSelection` in Timeline Domain; creation and its failure classification are `CreateExport`
+  and `ExportsError.isRetryable` in Exports Domain, injected as use cases. **The zoom ladder gained
+  a permanent fourth rung, `Minute` at 3 600 pt/hour** — at Hour the seed is twelve points wide, so
+  nothing else on the screen could be designed until that was fixed; Davide confirmed it before the
+  UI was built, and every `RecordingPlayerSnapshotTests` baseline was re-recorded for it.
+  **862 AuraKit tests green, iOS Simulator build green.** See `decisions.md` for the rung, the
+  outside-the-clip dim, the knobs-outside rule and why a rejection removes its retry control.
+
 ## Next
+- **Verify the range selector against a real Frigate server, and on a device.** Nothing in slice 13
+  has touched a live instance: `POST /api/export/{camera}/start/{s}/end/{e}` is built to the
+  verified v0.17.2 contract but never sent, and the create → processing → ready path has only been
+  exercised against a fake. Issue #57 also requires the control's effect to be manually verified on
+  iOS Simulator/device and macOS before it closes.
+- **The design's seven remaining open questions** (its §10) are unanswered — the rung label
+  (`Minute` vs `Min` by arrangement, currently implemented as drawn), the grab bar, withdrawing the
+  day stepper at AX4, the white-on-gradient contrast of the shipped primary button, the `CLIP MODE`
+  badge on the rail, and whether Play selection should loop.
+- **Press-and-hold precision (issue #58) is not built.** The design specifies it fully and the base
+  release is built so it is a density change rather than a value change, but nothing of it ships.
 - **Finish the Mac's share of the Exports design (0.7.0).** The sidebar
   (`.tabViewStyle(.sidebarAdaptable)`), the separate player window (`openWindow(value:)`), the
   `⌘R` / `⌘S` / `⌘.` key equivalents and the right-click "Show in Timeline" action are all

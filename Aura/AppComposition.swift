@@ -258,6 +258,9 @@ final class AppComposition {
             provider: FrigatePreviewSourceProvider(config: config, httpClient: httpClient)
         )
         let imageLoader = FrigatePreviewImageLoader(config: config, httpClient: httpClient)
+        // The range selector submits from this screen, so it gets the two use cases — never the
+        // repository behind them.
+        let exports = FrigateExportsRepository(config: config, httpClient: httpClient)
         return RecordingPlayerViewModel(
             camera: camera,
             recordings: recordings,
@@ -266,6 +269,8 @@ final class AppComposition {
             getDayTimeline: GetDayTimeline(
                 repository: FrigateCameraDayTimelineRepository(config: config, httpClient: httpClient)
             ),
+            createExport: CreateExport(repository: exports),
+            getExport: GetExport(repository: exports),
             filmstrip: RecordingFilmstripStore(
                 camera: camera.name,
                 previews: previews,

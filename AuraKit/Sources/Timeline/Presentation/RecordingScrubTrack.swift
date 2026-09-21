@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 import CommonDesign
+import TimelineDomain
 
 /// The draggable scrub track with its ruler and the fixed centre playhead.
 ///
@@ -68,12 +69,14 @@ struct RecordingScrubTrack: View {
             axis: axis,
             viewport: viewport(length: length),
             timeline: state.dayTimeline,
-            span: state.span
+            span: state.span,
+            emphasis: emphasis(length: length)
         )
         // Behind the canvas, so the motion, markers and hatching stay legible over the stills.
         .background { filmstripBackground(length: length) }
         .auroraTrackWell(cornerRadius: Self.cornerRadius)
         .overlay { playhead }
+        .overlay { exportOverlay(length: length) }
         .contentShape(Rectangle())
         .gesture(drag(length: length))
         .onChange(of: dragActive) { _, active in
@@ -94,18 +97,16 @@ struct RecordingScrubTrack: View {
     }
 
     /// The design's Hour-zoom filmstrip. Only at that density: a day or week of ten-minute stills
-    /// would be sub-cell-width noise, and coarser grids would re-render every cell on each zoom.
+    /// would be sub-cell-width noise, at Minute a single still would stretch 600pt, and coarser
+    /// grids would re-render every cell on each zoom. `showsFilmstrip` owns which rungs qualify.
     @ViewBuilder private func filmstripBackground(length: CGFloat) -> some View {
-        switch state.zoom {
-        case .hour:
+        if state.zoom.showsFilmstrip {
             RecordingFilmstrip(
                 axis: axis,
                 viewport: viewport(length: length),
                 span: state.span,
                 store: filmstrip
             )
-        case .day, .week:
-            EmptyView()
         }
     }
 
@@ -113,6 +114,33 @@ struct RecordingScrubTrack: View {
     /// panel that never moves, because everything else is measured against it.
     private var playhead: some View {
         AuroraPlayhead(axis: axis)
+    }
+
+    /// Which stretch the track should hold at full strength. `nil` — no dimming at all — whenever
+    /// dimming would mislead rather than focus: outside export mode, below Hour where the clip is
+    /// a few points wide, over a range with no footage in it, and when the clip has scrolled
+    /// entirely off the track, where dimming everything visible would say the wrong thing.
+    private func emphasis(length: CGFloat) -> TimeRange? {
+        guard let export = state.export, export.showsHandles, export.hasRecording else { return nil }
+        let layout = ExportTrackLayout(
+            axis: axis, viewport: viewport(length: length), thickness: thickness, selection: export.selection
+        )
+        let onTrack = layout.selectionOrigin < length && layout.selectionOrigin + layout.selectionLength > 0
+        guard onTrack else { return nil }
+        return TimeRange(start: export.selection.start, end: export.selection.end)
+    }
+
+    @ViewBuilder private func exportOverlay(length: CGFloat) -> some View {
+        if let export = state.export {
+            ExportTrackOverlay(
+                state: export,
+                axis: axis,
+                thickness: thickness,
+                viewport: viewport(length: length),
+                isPlayingSelection: state.isPlayingSelection,
+                onSelectionChange: actions.changeSelection
+            )
+        }
     }
 
     private func drag(length: CGFloat) -> some Gesture {

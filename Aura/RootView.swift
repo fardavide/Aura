@@ -39,7 +39,8 @@ struct RootView: View {
                                 RecordingPlayerView(
                                     viewModel: composition.recordingPlayerViewModel(
                                         for: camera, at: Date(), connection: connection
-                                    )
+                                    ),
+                                    onOpenExports: { selectedTab = .exports }
                                 )
                             }
                         )
@@ -54,7 +55,10 @@ struct RootView: View {
                             makeTileViewModel: { composition.previewTileViewModel(for: $0, connection: connection) },
                             makeRecordingPlayerViewModel: {
                                 composition.recordingPlayerViewModel(for: $0, at: $1, connection: connection)
-                            }
+                            },
+                            // A clip cut on the detail screen lands in the Exports tab, and the
+                            // detail screen hides the tab bar — so the way across is this.
+                            onOpenExports: { selectedTab = .exports }
                         )
                     } label: {
                         Label("Timeline", systemImage: "calendar.day.timeline.left")

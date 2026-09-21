@@ -18,6 +18,9 @@ public struct TimelineScreenView: View {
     @State private var viewModel: TimelineScreenViewModel
     private let makeTileViewModel: (Camera) -> PreviewTileViewModel
     private let makeRecordingPlayerViewModel: (Camera, Date) -> RecordingPlayerViewModel
+    /// Where a clip cut on the detail screen is reached afterwards. The detail screen hides the
+    /// tab bar, so it cannot select the tab itself.
+    private let onOpenExports: () -> Void
 
     @State private var tiles = TileStore()
     @State private var cardHeight: CGFloat = 180
@@ -74,8 +77,10 @@ public struct TimelineScreenView: View {
     public init(
         viewModel: TimelineScreenViewModel,
         makeTileViewModel: @escaping (Camera) -> PreviewTileViewModel,
-        makeRecordingPlayerViewModel: @escaping (Camera, Date) -> RecordingPlayerViewModel
+        makeRecordingPlayerViewModel: @escaping (Camera, Date) -> RecordingPlayerViewModel,
+        onOpenExports: @escaping () -> Void
     ) {
+        self.onOpenExports = onOpenExports
         _viewModel = State(initialValue: viewModel)
         self.makeTileViewModel = makeTileViewModel
         self.makeRecordingPlayerViewModel = makeRecordingPlayerViewModel
@@ -98,7 +103,8 @@ public struct TimelineScreenView: View {
             .auroraHiddenNavigationBar()
             .navigationDestination(item: $openedRecording) { recording in
                 RecordingPlayerView(
-                    viewModel: makeRecordingPlayerViewModel(recording.camera, recording.instant)
+                    viewModel: makeRecordingPlayerViewModel(recording.camera, recording.instant),
+                    onOpenExports: onOpenExports
                 )
             }
         }
