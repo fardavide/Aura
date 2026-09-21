@@ -16,6 +16,10 @@ public enum FrigateEndpoint: Sendable {
     case exports
     /// One export by id — how a clip still being cut is followed to ready.
     case export(id: String)
+    /// Start cutting a clip. ⚠️ **Singular `export`, unlike the two reads above** — Frigate lists
+    /// and fetches under `/api/exports` but writes under `/api/export`, and getting the number
+    /// wrong 404s. Bounds are whole seconds because the handler converts them to integers anyway.
+    case startExport(camera: String, start: Int, end: Int)
 
     public func url(base: URL) -> URL {
         switch self {
@@ -39,6 +43,8 @@ public enum FrigateEndpoint: Sendable {
             makeUrl(base: base, path: "api/exports")
         case .export(let id):
             makeUrl(base: base, path: "api/exports/\(id)")
+        case .startExport(let camera, let start, let end):
+            makeUrl(base: base, path: "api/export/\(camera)/start/\(start)/end/\(end)")
         }
     }
 }
