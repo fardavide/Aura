@@ -15,26 +15,27 @@ public struct ServerSettingsView: View {
     public var body: some View {
         Form {
             Section {
-                Picker("Scheme", selection: $viewModel.scheme) {
-                    ForEach(ConnectionSettings.Scheme.allCases, id: \.self) { scheme in
-                        Text(scheme.rawValue.uppercased()).tag(scheme)
-                    }
-                }
-                TextField("Host", text: $viewModel.host)
-                    .textFieldStyle(.automatic)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    #endif
-                TextField("Port", text: $viewModel.port)
-                    #if os(iOS)
-                    .keyboardType(.numberPad)
-                    #endif
+                addressFields(
+                    scheme: $viewModel.remoteScheme,
+                    host: $viewModel.remoteHost,
+                    port: $viewModel.remotePort
+                )
             } header: {
-                Text("Server")
-                    .auroraText(.sectionHeading)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.auroraTextQuaternary)
+                sectionHeading("Remote address")
+            } footer: {
+                sectionFooter("Reachable from anywhere — over Tailscale, a VPN or a domain name. Used whenever the local address doesn't answer.")
+            }
+            .listRowBackground(Color.auroraSettingsRow)
+            Section {
+                addressFields(
+                    scheme: $viewModel.localScheme,
+                    host: $viewModel.localHost,
+                    port: $viewModel.localPort
+                )
+            } header: {
+                sectionHeading("Local address (optional)")
+            } footer: {
+                sectionFooter("Your server's address on your home network. Aura uses it automatically whenever you're on Wi-Fi and it answers, and falls back to the remote address otherwise. Leave the host empty to always use the remote address.")
             }
             .listRowBackground(Color.auroraSettingsRow)
             Section {
@@ -45,10 +46,9 @@ public struct ServerSettingsView: View {
                     #endif
                 SecureField("Password", text: $viewModel.password)
             } header: {
-                Text("Authentication (optional)")
-                    .auroraText(.sectionHeading)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.auroraTextQuaternary)
+                sectionHeading("Authentication (optional)")
+            } footer: {
+                sectionFooter("The same credentials are used for both addresses — they reach the same server.")
             }
             .listRowBackground(Color.auroraSettingsRow)
             if let errorMessage = viewModel.errorMessage {
@@ -76,5 +76,41 @@ public struct ServerSettingsView: View {
             }
         }
         .onAppear { viewModel.onAppear() }
+    }
+
+    @ViewBuilder
+    private func addressFields(
+        scheme: Binding<ServerAddress.Scheme>,
+        host: Binding<String>,
+        port: Binding<String>
+    ) -> some View {
+        Picker("Scheme", selection: scheme) {
+            ForEach(ServerAddress.Scheme.allCases, id: \.self) { scheme in
+                Text(scheme.rawValue.uppercased()).tag(scheme)
+            }
+        }
+        TextField("Host", text: host)
+            .textFieldStyle(.automatic)
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            #endif
+        TextField("Port", text: port)
+            #if os(iOS)
+            .keyboardType(.numberPad)
+            #endif
+    }
+
+    private func sectionHeading(_ text: String) -> some View {
+        Text(text)
+            .auroraText(.sectionHeading)
+            .textCase(.uppercase)
+            .foregroundStyle(.auroraTextQuaternary)
+    }
+
+    private func sectionFooter(_ text: String) -> some View {
+        Text(text)
+            .auroraText(.caption)
+            .foregroundStyle(.auroraTextQuaternary)
     }
 }

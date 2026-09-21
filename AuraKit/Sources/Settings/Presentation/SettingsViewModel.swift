@@ -9,7 +9,9 @@ import SettingsDomain
 public final class SettingsViewModel {
     public enum ServerSummary: Equatable, Sendable {
         case notConfigured
-        case configured(hostPort: String)
+        /// `route` is `nil` when only one address is configured: there was no choice to make, and
+        /// a permanent "REMOTE" tag would read as a setting rather than as a fact about right now.
+        case configured(hostPort: String, route: ServerRoute?)
     }
 
     public enum CameraCount: Equatable, Sendable {
@@ -43,6 +45,10 @@ public final class SettingsViewModel {
     private let loadTheme: LoadTheme
     private let saveTheme: SaveTheme
     private let loadConnection: LoadConnection
+    /// The address the app is actually talking to, resolved by the root — `nil` before a server is
+    /// configured. The row reports *this* rather than the saved remote address, so the local/remote
+    /// choice is something the user can see rather than infer.
+    private let activeServer: ActiveServer?
     private let loadDynamicCameraOrder: LoadDynamicCameraOrder
     private let saveDynamicCameraOrder: SaveDynamicCameraOrder
     /// `nil` before a connection is configured — the menu has no Camera Order row and nothing
@@ -55,6 +61,7 @@ public final class SettingsViewModel {
         loadTheme: LoadTheme,
         saveTheme: SaveTheme,
         loadConnection: LoadConnection,
+        activeServer: ActiveServer?,
         loadDynamicCameraOrder: LoadDynamicCameraOrder,
         saveDynamicCameraOrder: SaveDynamicCameraOrder,
         getCameras: GetCameras?,
@@ -63,6 +70,7 @@ public final class SettingsViewModel {
         self.loadTheme = loadTheme
         self.saveTheme = saveTheme
         self.loadConnection = loadConnection
+        self.activeServer = activeServer
         self.loadDynamicCameraOrder = loadDynamicCameraOrder
         self.saveDynamicCameraOrder = saveDynamicCameraOrder
         self.getCameras = getCameras
@@ -72,8 +80,11 @@ public final class SettingsViewModel {
     public func onAppear() {
         theme = loadTheme.execute()
         usesDynamicCameraOrder = loadDynamicCameraOrder.execute()
-        serverSummary = if let connection = loadConnection.execute() {
-            .configured(hostPort: "\(connection.host):\(connection.port)")
+        serverSummary = if let connection = loadConnection.execute(), let activeServer {
+            .configured(
+                hostPort: "\(activeServer.address.host):\(activeServer.address.port)",
+                route: connection.local == nil ? nil : activeServer.route
+            )
         } else {
             .notConfigured
         }

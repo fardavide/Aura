@@ -3,6 +3,9 @@ import Foundation
 /// Frigate JSON endpoints the client reads.
 public enum FrigateEndpoint: Sendable {
     case config
+    /// The server version as plain text — the cheapest thing Frigate answers, which is why the
+    /// reachability probe aims at it rather than at the heavy `/api/config`.
+    case version
     /// Runtime stats — the light endpoint carrying `service.storage` (disk free/total).
     case stats
     /// Events list. `after` and `before` (Unix epoch seconds) bound the window server-side — the
@@ -25,6 +28,8 @@ public enum FrigateEndpoint: Sendable {
         switch self {
         case .config:
             makeUrl(base: base, path: "api/config")
+        case .version:
+            makeUrl(base: base, path: "api/version")
         case .stats:
             makeUrl(base: base, path: "api/stats")
         case .events(let limit, let after, let before):

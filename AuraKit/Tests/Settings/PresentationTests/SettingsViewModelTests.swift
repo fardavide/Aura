@@ -42,17 +42,29 @@ struct SettingsViewModelTests {
         #expect(scenario.sut.serverSummary == .notConfigured)
     }
 
-    @Test func `given a saved connection when appearing then the server summary is host and port`() {
-        // given
-        let scenario = Scenario(connection: ConnectionSettings(
-            scheme: .https, host: "frigate.local", port: 8_971, username: "admin", password: "hunter2"
-        ))
+    @Test func `given one address when appearing then the server summary reports no route`() {
+        // given — nothing was chosen, so naming a route would read as a setting rather than a fact
+        let scenario = Scenario(connection: connection(local: nil))
 
         // when
         scenario.sut.onAppear()
 
         // then
-        #expect(scenario.sut.serverSummary == .configured(hostPort: "frigate.local:8971"))
+        #expect(scenario.sut.serverSummary == .configured(hostPort: "frigate.ts.net:8971", route: nil))
+    }
+
+    @Test func `given two addresses when appearing then the server summary is the active one`() {
+        // given
+        let scenario = Scenario(
+            connection: connection(local: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000)),
+            activeRoute: .local
+        )
+
+        // when
+        scenario.sut.onAppear()
+
+        // then
+        #expect(scenario.sut.serverSummary == .configured(hostPort: "192.168.1.50:5000", route: .local))
     }
 
     @Test func `given no server when loading then the camera count stays unknown`() async {
@@ -184,6 +196,15 @@ private func camera(_ name: String) -> Camera {
     Camera(name: CameraName(name), friendlyName: nil, isEnabled: true, streamNames: [])
 }
 
+private func connection(local: ServerAddress?) -> ConnectionSettings {
+    ConnectionSettings(
+        remote: ServerAddress(scheme: .https, host: "frigate.ts.net", port: 8_971),
+        local: local,
+        username: "admin",
+        password: "hunter2"
+    )
+}
+
 @MainActor
 private struct Scenario {
     let settings: FakeSettingsRepository
@@ -193,6 +214,7 @@ private struct Scenario {
     init(
         theme: ThemePreference = .system,
         connection: ConnectionSettings? = nil,
+        activeRoute: ServerRoute = .remote,
         cameras: Result<[Camera], CamerasError>? = nil,
         currentIcon: AppIconPreference? = nil
     ) {
@@ -202,6 +224,12 @@ private struct Scenario {
             loadTheme: LoadTheme(repository: settings),
             saveTheme: SaveTheme(repository: settings),
             loadConnection: LoadConnection(repository: settings),
+            activeServer: connection.map { connection in
+                switch activeRoute {
+                case .local: connection.localServer ?? connection.remoteServer
+                case .remote: connection.remoteServer
+                }
+            },
             loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: settings),
             saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: settings),
             getCameras: self.cameras.map(GetCameras.init),

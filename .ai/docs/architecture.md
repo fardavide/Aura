@@ -34,8 +34,11 @@ source is an implementation detail behind a Domain protocol; the cameras reposit
 ## Composition & DI
 
 No service locator. Every type takes its collaborators through its **initializer**. A single
-**composition root** in the app target wires the graph and maps the domain `ConnectionSettings`
-to the infra `ServerConfig`. Tests construct types directly with fakes and never touch the root.
+**composition root** in the app target wires the graph from the **resolved** `ActiveServer` — the
+one of the connection's two addresses currently in use — so nothing below the root knows a choice
+was made. The domain→infra mapping (`ServerConfig(ActiveServer)`) lives in `SettingsData`, because
+the reachability probe that makes the choice needs the same mapping. Tests construct types directly
+with fakes and never touch the root.
 
 ## App shell
 
@@ -45,7 +48,8 @@ native macOS; iOS-only APIs (PiP, background audio) stay behind a platform wrapp
 
 ## Storage
 
-`UserDefaults` for non-secret connection config + per-device preferences (theme, camera order);
-Keychain for the password. No SwiftData/CloudKit/sync — Frigate is the source of truth;
+`UserDefaults` for non-secret connection config — **two** addresses, the remote one under the
+original single-address keys so older installs keep their server — + per-device preferences (theme,
+camera order); Keychain for the password. No SwiftData/CloudKit/sync — Frigate is the source of truth;
 cameras/events are fetched fresh. Preferences consumed outside the Settings editor are **observed**
 (the repository exposes a stream: current value, then changes), never re-read on appear.

@@ -18,24 +18,52 @@ struct SaveConnectionTests {
         #expect(repository.savedConnection == settings(host: "frigate.local", port: 5000))
     }
 
-    @Test func `given an empty host when saving then it throws invalidHost`() {
+    @Test func `given a local address when saving then both addresses are stored trimmed`() throws {
+        // given
+        let repository = FakeSettingsRepository()
+        let save = SaveConnection(repository: repository)
+
+        // when
+        try save.execute(
+            settings(host: "frigate.ts.net", port: 5000, local: address(host: " 192.168.1.50 ", port: 8_971))
+        )
+
+        // then
+        #expect(repository.savedConnection?.local == address(host: "192.168.1.50", port: 8_971))
+    }
+
+    @Test func `given an empty host when saving then it throws invalidHost for the remote address`() {
         // given
         let save = SaveConnection(repository: FakeSettingsRepository())
 
         // when - then
-        #expect(throws: SettingsError.invalidHost) {
+        #expect(throws: SettingsError.invalidHost(.remote)) {
             try save.execute(settings(host: "   ", port: 5000))
         }
     }
 
-    @Test func `given a port out of range when saving then it throws invalidPort`() {
+    @Test func `given a port out of range when saving then it throws invalidPort for the remote address`() {
         // given
         let save = SaveConnection(repository: FakeSettingsRepository())
 
         // when - then
-        #expect(throws: SettingsError.invalidPort) {
+        #expect(throws: SettingsError.invalidPort(.remote)) {
             try save.execute(settings(host: "frigate.local", port: 70_000))
         }
+    }
+
+    @Test func `given an unusable local address when saving then it throws naming the local address`() {
+        // given
+        let repository = FakeSettingsRepository()
+        let save = SaveConnection(repository: repository)
+
+        // when - then
+        #expect(throws: SettingsError.invalidPort(.local)) {
+            try save.execute(
+                settings(host: "frigate.ts.net", port: 5000, local: address(host: "192.168.1.50", port: 0))
+            )
+        }
+        #expect(repository.savedConnection == nil)
     }
 }
 
@@ -193,6 +221,10 @@ struct AppIconUseCaseTests {
     }
 }
 
-private func settings(host: String, port: Int) -> ConnectionSettings {
-    ConnectionSettings(scheme: .http, host: host, port: port, username: nil, password: nil)
+private func settings(host: String, port: Int, local: ServerAddress? = nil) -> ConnectionSettings {
+    ConnectionSettings(remote: address(host: host, port: port), local: local, username: nil, password: nil)
+}
+
+private func address(host: String, port: Int) -> ServerAddress {
+    ServerAddress(scheme: .http, host: host, port: port)
 }

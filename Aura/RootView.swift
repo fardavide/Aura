@@ -11,11 +11,15 @@ import SettingsPresentation
 import TimelinePresentation
 
 /// Routes between the camera grid (when a connection is configured) and Settings, and applies
-/// the chosen theme. Reloads its config whenever Settings reports a save.
+/// the chosen theme. Reloads its config whenever Settings reports a save, and follows the
+/// resolved server address so joining or leaving the home network re-points the whole app.
 struct RootView: View {
     let composition: AppComposition
 
     @State private var connection: ConnectionSettings?
+    /// The address in use. `nil` only while the very first resolution is in flight — at most one
+    /// short local probe, and not even that when there is no local address to try.
+    @State private var server: ActiveServer?
     @State private var theme: ThemePreference = .system
     @State private var showingSettings = false
     @State private var selectedTab = AppTab.cameras
@@ -25,20 +29,20 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if let connection {
+            if let server {
                 TabView(selection: $selectedTab) {
                     Tab(value: AppTab.cameras) {
                         CameraGridView(
-                            viewModel: composition.cameraGridViewModel(for: connection),
+                            viewModel: composition.cameraGridViewModel(for: server),
                             onOpenSettings: { showingSettings = true },
-                            makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, connection: connection) },
+                            makeDetailViewModel: { composition.cameraDetailViewModel(for: $0, server: server) },
                             // The live stream's Timeline button lands here. `Date()` is read as the
                             // push resolves, so the recordings open at the live edge — the moment
                             // the stream was showing.
                             cameraTimeline: { camera in
                                 RecordingPlayerView(
                                     viewModel: composition.recordingPlayerViewModel(
-                                        for: camera, at: Date(), connection: connection
+                                        for: camera, at: Date(), server: server
                                     ),
                                     onOpenExports: { selectedTab = .exports }
                                 )
@@ -51,10 +55,10 @@ struct RootView: View {
 
                     Tab(value: AppTab.timeline) {
                         TimelineScreenView(
-                            viewModel: composition.timelineScreenViewModel(for: connection),
-                            makeTileViewModel: { composition.previewTileViewModel(for: $0, connection: connection) },
+                            viewModel: composition.timelineScreenViewModel(for: server),
+                            makeTileViewModel: { composition.previewTileViewModel(for: $0, server: server) },
                             makeRecordingPlayerViewModel: {
-                                composition.recordingPlayerViewModel(for: $0, at: $1, connection: connection)
+                                composition.recordingPlayerViewModel(for: $0, at: $1, server: server)
                             },
                             // A clip cut on the detail screen lands in the Exports tab, and the
                             // detail screen hides the tab bar — so the way across is this.
@@ -67,9 +71,9 @@ struct RootView: View {
 
                     Tab(value: AppTab.events) {
                         EventsListView(
-                            viewModel: composition.eventsListViewModel(for: connection),
+                            viewModel: composition.eventsListViewModel(for: server),
                             onOpenSettings: { showingSettings = true },
-                            makeDetailViewModel: { composition.eventDetailViewModel(for: $0, connection: connection) }
+                            makeDetailViewModel: { composition.eventDetailViewModel(for: $0, server: server) }
                         )
                     } label: {
                         Label("Events", systemImage: "bell")
@@ -78,14 +82,14 @@ struct RootView: View {
 
                     Tab(value: AppTab.exports) {
                         ExportsListView(
-                            viewModel: composition.exportsListViewModel(for: connection),
-                            downloads: composition.downloadCenter(for: connection),
+                            viewModel: composition.exportsListViewModel(for: server),
+                            downloads: composition.downloadCenter(for: server),
                             onOpenSettings: { showingSettings = true },
                             // The empty state's only control, and it has to do something the user
                             // can perceive — selecting the tab where clips will be cut.
                             onOpenTimeline: { selectedTab = .timeline },
                             makePlayerViewModel: {
-                                composition.exportPlayerViewModel(for: $0, connection: connection)
+                                composition.exportPlayerViewModel(for: $0, server: server)
                             }
                         )
                     } label: {
@@ -93,9 +97,9 @@ struct RootView: View {
                             .symbolEffect(.bounce, value: iconBounces[.exports])
                     }
                 }
-                .id(identity(of: connection))
+                .id(composition.identity(of: server))
                 .onChange(of: selectedTab) { iconBounces[selectedTab, default: 0] += 1 }
-            } else {
+            } else if connection == nil {
                 SettingsView(
                     viewModel: composition.settingsViewModel(for: nil),
                     makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
@@ -103,15 +107,17 @@ struct RootView: View {
                     makeAppIconViewModel: appIconViewModelFactory,
                     onDone: reload
                 )
+            } else {
+                connectingView
             }
         }
         .preferredColorScheme(theme.colorScheme)
         .sheet(isPresented: $showingSettings, onDismiss: reload) {
             SettingsView(
-                viewModel: composition.settingsViewModel(for: connection),
+                viewModel: composition.settingsViewModel(for: server),
                 makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
-                makeCameraOrderViewModel: connection.map { connection in
-                    { composition.cameraOrderViewModel(for: connection) }
+                makeCameraOrderViewModel: server.map { server in
+                    { composition.cameraOrderViewModel(for: server) }
                 },
                 makeAppIconViewModel: appIconViewModelFactory
             ) {
@@ -125,6 +131,20 @@ struct RootView: View {
             #endif
         }
         .onAppear(perform: reload)
+        .task(id: connection) { await followActiveServer() }
+    }
+
+    /// Shown only while the first address is being chosen, which is a fraction of a second — but
+    /// it is a real state, so it says what it is doing instead of showing a bare spinner.
+    private var connectingView: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("Finding your server…")
+                .auroraText(.caption)
+                .foregroundStyle(.auroraTextSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .auroraBackground()
     }
 
     /// `nil` where the system cannot swap the icon, which is what hides the row on macOS.
@@ -137,9 +157,19 @@ struct RootView: View {
         theme = composition.currentTheme()
     }
 
-    /// Rebuilds the grid (and its view model) when the connection changes.
-    private func identity(of connection: ConnectionSettings) -> String {
-        "\(connection.scheme.rawValue)://\(connection.host):\(connection.port)"
+    /// Re-keyed on the saved connection, so editing the server restarts the resolution; within one
+    /// connection the stream keeps running and re-points the app whenever the network changes.
+    private func followActiveServer() async {
+        guard let connection else {
+            server = nil
+            return
+        }
+        // Deliberately does *not* blank `server` first: re-resolving on every Settings dismissal
+        // would otherwise tear down the whole tab tree — and any playback in it — for the
+        // milliseconds the new answer takes to land.
+        for await resolved in composition.observeActiveServer().execute(for: connection) {
+            server = resolved
+        }
     }
 }
 

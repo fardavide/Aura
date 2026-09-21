@@ -18,27 +18,21 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
         self.keychain = keychain
     }
 
+    /// The remote address keeps the original single-address keys, so an install that predates the
+    /// local address keeps its server and simply reports no local one.
     public func loadConnection() -> ConnectionSettings? {
-        guard
-            let host = defaults.string(forKey: Keys.host),
-            let schemeRaw = defaults.string(forKey: Keys.scheme),
-            let scheme = ConnectionSettings.Scheme(rawValue: schemeRaw)
-        else {
-            return nil
-        }
+        guard let remote = address(at: Keys.remote) else { return nil }
         return ConnectionSettings(
-            scheme: scheme,
-            host: host,
-            port: defaults.integer(forKey: Keys.port),
+            remote: remote,
+            local: address(at: Keys.local),
             username: defaults.string(forKey: Keys.username),
             password: keychain.string(for: Keys.password)
         )
     }
 
     public func saveConnection(_ settings: ConnectionSettings) {
-        defaults.set(settings.scheme.rawValue, forKey: Keys.scheme)
-        defaults.set(settings.host, forKey: Keys.host)
-        defaults.set(settings.port, forKey: Keys.port)
+        write(settings.remote, to: Keys.remote)
+        write(settings.local, to: Keys.local)
         write(settings.username, toDefaultsKey: Keys.username)
         keychain.set(settings.password, for: Keys.password)
     }
@@ -88,6 +82,29 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
         }
     }
 
+    private func address(at keys: Keys.Address) -> ServerAddress? {
+        guard
+            let host = defaults.string(forKey: keys.host),
+            let schemeRaw = defaults.string(forKey: keys.scheme),
+            let scheme = ServerAddress.Scheme(rawValue: schemeRaw)
+        else {
+            return nil
+        }
+        return ServerAddress(scheme: scheme, host: host, port: defaults.integer(forKey: keys.port))
+    }
+
+    /// A `nil` address clears all three keys, so removing the local address can't leave a stale
+    /// host behind for the next load to resurrect.
+    private func write(_ address: ServerAddress?, to keys: Keys.Address) {
+        guard let address else {
+            for key in [keys.scheme, keys.host, keys.port] { defaults.removeObject(forKey: key) }
+            return
+        }
+        defaults.set(address.scheme.rawValue, forKey: keys.scheme)
+        defaults.set(address.host, forKey: keys.host)
+        defaults.set(address.port, forKey: keys.port)
+    }
+
     private func write(_ value: String?, toDefaultsKey key: String) {
         if let value {
             defaults.set(value, forKey: key)
@@ -130,9 +147,18 @@ private final class PreferenceObservers<Value: Sendable>: Sendable {
 }
 
 private enum Keys {
-    static let scheme = "connection.scheme"
-    static let host = "connection.host"
-    static let port = "connection.port"
+    struct Address {
+        let scheme: String
+        let host: String
+        let port: String
+    }
+
+    static let remote = Address(
+        scheme: "connection.scheme", host: "connection.host", port: "connection.port"
+    )
+    static let local = Address(
+        scheme: "connection.local.scheme", host: "connection.local.host", port: "connection.local.port"
+    )
     static let username = "connection.username"
     static let password = "connection.password"
     static let theme = "theme"

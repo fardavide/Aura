@@ -45,6 +45,21 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.2 — 2026-09-21
+- **A second server address for your home network.** Settings › Server now takes two: the remote
+  one you already had (Tailscale, a VPN, a domain name) and an optional local one. At home the app
+  talks straight to your LAN address; away from it, it falls back to the remote one — without you
+  choosing, and without a switch to remember to flip.
+- **The choice is made in milliseconds, not seconds.** On cellular there is nothing to check, so
+  the remote address is used immediately. On Wi-Fi the local address gets a single short request
+  and loses the moment it doesn't answer, so arriving at a café costs a fraction of a second.
+- **Joining or leaving Wi-Fi re-points the app on its own** — walk out of the house and the next
+  screen loads over the remote address.
+- The Server row in Settings says which address is in use right now, so the switch is something
+  you can see rather than infer. It only appears once you have configured two.
+- Nothing changes if you don't want it: leave the local host empty and the app behaves exactly as
+  before, with no extra network checks at all.
+
 ### 0.7.1 — 2026-09-21
 - **Cut a clip straight from a camera's timeline.** The new **Clip** control turns the scrub track
   into a range editor: drag the two handles to set where the clip starts and ends, drag the middle

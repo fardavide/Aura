@@ -27,6 +27,12 @@ struct SettingsMenuRow<Accessory: View>: View {
                 Text(value)
                     .auroraText(.bodyEmphasis)
                     .foregroundStyle(.auroraTextSecondary)
+                    // The server value is a host the user typed, so it has no length bound. It
+                    // truncates in the middle because the ends carry the meaning — which server,
+                    // and on which port — and it is the only flexible thing on the row, so the
+                    // title and any accessory beside it keep their shape.
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
         .accessibilityElement(children: .combine)
