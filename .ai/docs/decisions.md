@@ -2101,7 +2101,13 @@ quantised to whole seconds throughout.
 - **The stepper gets a row to itself the rest of the time.** With four rungs the picker and the
   stepper no longer fit one line on a 393pt phone, and sharing truncated the day to "SUN,…" — the
   one thing that control exists to tell you. A second row costs 12pt of panel and is the only
-  option that keeps both the 44pt chevron targets and the full date.
+  option that keeps both the 44pt chevron targets and the full date. The clock and the zoom picker
+  share the row beneath it.
+- **The rung is labelled `Min` where four words do not fit and `Minute` where they do** — phone and
+  rail abbreviate, the 300pt split column spells it out. The design raised the inconsistency as its
+  own open question rather than hiding it; Davide ruled to keep it as drawn, 2026-09-21. The label
+  varying by available width is the same bargain the zoom control already makes by becoming a
+  cycling chip on the rail.
 - **Dates go through `Text(_:format:)`, never `Date.formatted(_:)`.** The first resolves against
   the **view's** locale and calendar, the second against the **process's**. Where a host overrides
   the environment — every snapshot in this suite does — the two disagree, and the export readout
