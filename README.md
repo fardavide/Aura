@@ -45,6 +45,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.3 — 2026-09-22
+- **Buttons on a white card are visible again in light mode.** Their outline was white on white, so
+  controls like Cancel and Play in the clip editor, the play and download buttons on each export,
+  and the transport under the timeline showed only their icon and read as decoration rather than
+  something you could press. They now have an edge you can see. Dark mode is unchanged.
+- The line separating events in the same hour is visible in light mode too, for the same reason.
+
 ### 0.7.2 — 2026-09-21
 - **A second server address for your home network.** Settings › Server now takes two: the remote
   one you already had (Tailscale, a VPN, a domain name) and an optional local one. At home the app

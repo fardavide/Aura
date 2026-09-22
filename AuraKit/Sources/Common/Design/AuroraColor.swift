@@ -31,6 +31,10 @@ extension ShapeStyle where Self == Color {
     public static var auroraSheetTint: Color { Color("SheetTint", bundle: .module) }
     public static var auroraSheetBorder: Color { Color("SheetBorder", bundle: .module) }
     public static var auroraChipFill: Color { Color("ChipFill", bundle: .module) }
+    /// Ink in light, white in dark — deliberately not a lighter/darker pair of the same hue. The
+    /// fill is white in light mode, which reads over the aurora background and reads as nothing at
+    /// all over an elevated white surface (a card, a sheet, the timeline panel), so on those the
+    /// border is the only thing left to draw the shape with. It cannot also be white.
     public static var auroraChipBorder: Color { Color("ChipBorder", bundle: .module) }
     public static var auroraVideoChipFill: Color { Color("VideoChipFill", bundle: .module) }
     public static var auroraVideoChipBorder: Color { Color("VideoChipBorder", bundle: .module) }

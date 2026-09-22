@@ -369,6 +369,15 @@ not snapshot-tested — they center on video players that can't render in a snap
   address in use. **902 AuraKit tests + the app suite green, iOS Simulator and macOS builds green;
   never run against a real second address** (see Next). See `decisions.md`.
 
+- **Chips are visible on light-mode cards again (0.7.3).** Reported against the clip editor, found
+  on four screens: a chip's fill and its border were both white in light mode, so over an elevated
+  surface — a card, a sheet, the timeline panel — the control collapsed to a bare glyph with no
+  edge. The border is now ink and the fill stayed white, which fixes every site without touching
+  one, keeps the chips over the aurora background looking exactly as they did, and leaves dark mode
+  byte-identical. A contrast assertion in both schemes guards it, because a 1 pt rim is far below
+  the screenshot suite's area tolerance and would have stayed green while depicting the bug; all
+  284 light references were re-recorded deliberately. See `decisions.md`.
+
 ## Next
 - **Verify the two-address switching on the real network (0.7.2).** Every path is unit-tested
   against fakes, but no probe has ever been sent to a live Frigate. Confirm on the running
