@@ -2193,3 +2193,33 @@ Frigate. The rest of the app is untouched by the choice: the composition root is
 - **Also not done:** nothing re-probes *within* a route. If the local address dies while the app is
   open on Wi-Fi, every read fails until the network changes or the app is relaunched — falling back
   on a failed read means retry logic inside `FrigateApiClient`, which is a separate slice.
+
+## A chip's border carries the shape in light mode, so it cannot also be white (0.7.3)
+
+Reported as "the buttons in the clip editor are invisible in light mode". They were — and so was
+every other chip on an elevated surface, on four screens, which is why the fix is a token rather
+than a style.
+
+- **The fill and the border were both white in light mode**, and a chip only ever had one of them
+  doing any work. Over the aurora background that is fine: the white fill is the chip, and the
+  border is invisible ornament nobody misses. Over an *elevated* white surface — a card, a sheet,
+  the timeline panel — the fill has nothing to contrast against either, and the control collapses
+  to a bare glyph with no edge. A button that looks like a decal is the dead-control failure by
+  another route: it works, but nothing on screen says it is pressable.
+- **So the border became ink and the fill stayed white.** One token, no call sites touched, which
+  matters more than it sounds: the alternative was a third `AuroraGlassSurface` case and a manual
+  decision at ~14 call sites about which surface each chip sits on. Every one of those is a chance
+  to classify wrong, and a wrong one is invisible until someone opens that screen in light mode.
+  A token that works on both surfaces has no such decision to get wrong.
+- **The two surfaces now differ deliberately**: over the background a chip is a solid white pill,
+  over a card it is an outlined one. Same control, two appearances — driven by what is behind it,
+  which is the same rule `over: .video` already encodes.
+- **Dark mode is untouched** (still white at 19 %), and a test pins it there: the contrast ratio of
+  the composited border against the surface is asserted in *both* schemes, so a future light-mode
+  adjustment cannot be paid for out of dark.
+- **Caught a second instance for free**: the divider between event rows inside a card is the same
+  token and had been invisible in light mode since it shipped. Nobody had reported it.
+- **Why a colour test and not just the screenshots**: a 1 pt rim is far below the snapshot suite's
+  area tolerance, so every light baseline would have stayed green while depicting the bug. The 284
+  light references were deleted and re-recorded deliberately for that reason, not because the suite
+  asked.
