@@ -378,6 +378,18 @@ not snapshot-tested — they center on video players that can't render in a snap
   the screenshot suite's area tolerance and would have stayed green while depicting the bug; all
   284 light references were re-recorded deliberately. See `decisions.md`.
 
+- **The video card exists only while there is a picture in it (0.7.4).** A TestFlight screenshot
+  showed the Timeline detail's hero as a square-cornered black slab over a gap. Built to
+  `Timeline Detail - Empty States.dc.html` (option 1c): over a gap, while loading and with the
+  server unreachable the rim, glow, letterbox, camera chip and LIVE pill go with the picture in one
+  200 ms crossfade, and a message sits in the rest rect on the aurora — the failed one being the
+  stack Live already draws. `RecordingDetailState` carries a four-case `slot` in place of the
+  footage flag, derived by the view model (a drag's preview picture counts as footage). Timeline
+  tiles clear their well and keep their outline; the hero tile drops rim and glow at the same
+  footprint. Pinned by seven view-model tests; the detail's no-footage/failed and the Timeline
+  tab's placeholder-tile baselines re-recorded. See `decisions.md` for the three open questions
+  decided there, including the stacked card width left as is.
+
 ## Next
 - **Verify the two-address switching on the real network (0.7.2).** Every path is unit-tested
   against fakes, but no probe has ever been sent to a live Frigate. Confirm on the running

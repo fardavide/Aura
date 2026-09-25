@@ -14,25 +14,31 @@ struct PreviewTileView: View {
     let style: PreviewTileStyle
     let alertLabel: String?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Group {
             switch style {
             // The hero takes the shared video-frame rim (the Live card and the Cameras hero use
-            // the same vocabulary), at the mock's heavier 2pt width and its own glow.
+            // the same vocabulary), at the mock's heavier 2pt width and its own glow — while it
+            // has a picture. Rim and glow go with the picture, as on the detail hero; what stays
+            // is the plain outline every tile keeps, at the framed tile's footprint so the grid
+            // doesn't shift when the picture arrives.
             case .hero:
-                tileBase
-                    .auroraFrame(cornerRadius: style.cornerRadius, lineWidth: 2)
-                    .shadow(color: .auroraGradientViolet.opacity(0.35), radius: 24, y: 10)
+                if hasPicture {
+                    tileBase
+                        .auroraFrame(cornerRadius: style.cornerRadius, lineWidth: 2)
+                        .shadow(color: .auroraGradientViolet.opacity(0.35), radius: 24, y: 10)
+                } else {
+                    outlined(cornerRadius: style.cornerRadius - 2)
+                        .padding(2)
+                }
             // Every other tile keeps a plain 1pt border.
             case .compactGrid, .regularGrid:
-                tileBase
-                    .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
-                            .strokeBorder(.auroraChipBorder, lineWidth: 1)
-                    }
+                outlined(cornerRadius: style.cornerRadius)
             }
         }
+        .animation(reduceMotion ? nil : .auroraSlotCrossfade, value: hasPicture)
         // The first load is keyed off the **fixed span start**, so extending the live edge
         // (which moves only span.end) can't cancel an in-flight first load and strand the tile
         // on its spinner. Following the live edge is a separate trigger keyed off span.end — it
@@ -61,16 +67,38 @@ struct PreviewTileView: View {
         }
     }
 
+    /// The plain 1pt tile border — the outline every tile keeps whether or not it has a picture,
+    /// so the grid stays a grid.
+    private func outlined(cornerRadius: CGFloat) -> some View {
+        tileBase
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(.auroraChipBorder, lineWidth: 1)
+            }
+    }
+
     /// The 16:9 canvas comes from the always-flexible color, not from `content`: a fixed-size
-    /// placeholder (spinner, no-footage well) under `aspectRatio` would collapse the whole tile to
-    /// its own height, leaving a thin bar where a camera slot belongs. Chrome is composed inside
+    /// placeholder (spinner, message) under `aspectRatio` would collapse the whole tile to its
+    /// own height, leaving a thin bar where a camera slot belongs. The colour is black only behind
+    /// a picture — the letterbox a player shows before its first frame; with nothing to show the
+    /// tile is transparent and the aurora shows through its outline. Chrome is composed inside
     /// the same overlay as `content`, before any clip or frame, so the scrim and badge are clipped
     /// to the tile's corners and never paint over the hero's gradient rim.
     private var tileBase: some View {
-        Color.black
+        (hasPicture ? Color.black : Color.clear)
             .aspectRatio(16.0 / 9.0, contentMode: .fit)
             .frame(maxWidth: .infinity)
             .overlay { ZStack { content; chrome } }
+    }
+
+    /// Whether a picture is up. The card — the black letterbox, the hero's rim and glow — exists
+    /// only then; a placeholder keeps the outline and lets the aurora through.
+    private var hasPicture: Bool {
+        switch viewModel.display {
+        case .clip, .recording, .frame: true
+        case .loading, .unavailable, .failed: false
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -84,28 +112,24 @@ struct PreviewTileView: View {
                 .resizable()
                 .scaledToFill()
         case .unavailable:
-            ZStack {
-                Color.auroraNoFootage
-                Text("No footage").auroraText(.captionEmphasis).foregroundStyle(.auroraTextSecondary)
-            }
-        case .failed:
-            ZStack {
-                Color.auroraNoFootage
-                VStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle")
-                    Text("Unavailable")
-                }
+            Text("No footage")
                 .auroraText(.captionEmphasis)
                 .foregroundStyle(.auroraTextSecondary)
+        case .failed:
+            VStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle")
+                Text("Unavailable")
             }
+            .auroraText(.captionEmphasis)
+            .foregroundStyle(.auroraTextSecondary)
         }
     }
 
     /// Footage-bearing material gets the full scrim/name/clock/badge headline, forced to the dark
     /// catalog values since it sits on video (decision #11) in both app appearances. The
-    /// "No footage"/"Unavailable" well and the loading spinner take the app's own appearance
-    /// instead — forcing dark chrome there would paint a dark band and white name across the pale
-    /// well in light mode.
+    /// "No footage"/"Unavailable" message and the loading spinner sit on the aurora and take the
+    /// app's own appearance instead — forcing dark chrome there would paint a dark band and a
+    /// white name across a pale background in light mode.
     @ViewBuilder private var chrome: some View {
         switch viewModel.display {
         case .clip, .recording, .frame:

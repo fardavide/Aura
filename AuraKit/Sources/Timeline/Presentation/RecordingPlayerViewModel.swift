@@ -69,7 +69,7 @@ public final class RecordingPlayerViewModel {
             zoom: zoom,
             isPlaying: isPlaying,
             speed: speed,
-            hasFootage: hasFootage,
+            slot: slot,
             isLive: followsLiveEdge,
             isPlayable: isPlayable,
             export: exportEditor,
@@ -98,6 +98,25 @@ public final class RecordingPlayerViewModel {
         switch display {
         case .ready, .live: true
         case .loading, .noFootage, .failed: false
+        }
+    }
+
+    /// What the video slot holds. While a drag owns the playhead the low-resolution preview is the
+    /// picture, whatever the full-resolution stream is doing underneath it; otherwise the loaded
+    /// stream decides — and a loaded hour with nothing recorded under the playhead is a gap, not a
+    /// picture of the next recorded moment.
+    private var slot: RecordingSlot {
+        if isScrubbing {
+            switch scrubPreview.display {
+            case .clip, .recording, .frame: return .footage
+            case .loading, .unavailable, .failed: break
+            }
+        }
+        switch display {
+        case .loading: return .loading
+        case .ready, .live: return hasFootage ? .footage : .noFootage
+        case .noFootage: return .noFootage
+        case .failed: return .failed
         }
     }
 

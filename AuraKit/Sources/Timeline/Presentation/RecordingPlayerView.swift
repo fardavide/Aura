@@ -62,22 +62,13 @@ public struct RecordingPlayerView: View {
 
     @ViewBuilder private var recordingContent: some View {
         switch viewModel.display {
-        case .loading:
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .ready(let player), .live(let player):
             // Letterboxed, not filled: the point of this screen is the whole recorded frame.
             ScrubbingPlayerView(player: player, videoGravity: .resizeAspect)
-        case .noFootage:
-            // The hero overlay says what's missing and when — nothing to add behind it.
+        case .loading, .noFootage, .failed:
+            // Nothing to draw here: the layout hides the card and says what is missing in the
+            // slot's place (`RecordingHeroOverlay`), outside the zoom so the message never scales.
             Color.clear
-        case .failed:
-            ContentUnavailableView(
-                "Can't reach the server",
-                systemImage: "wifi.slash",
-                description: Text("Check your connection settings.")
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

@@ -132,7 +132,7 @@ private func exportDetail(
             zoom: zoom,
             isPlaying: false,
             speed: .oneX,
-            hasFootage: true,
+            slot: .footage,
             isLive: false,
             isPlayable: true,
             export: editor,

@@ -2223,3 +2223,58 @@ than a style.
   area tolerance, so every light baseline would have stayed green while depicting the bug. The 284
   light references were deleted and re-recorded deliberately for that reason, not because the suite
   asked.
+
+## The video card exists only while there is a picture in it (0.7.4)
+
+Reported from a TestFlight screenshot: over a gap the Timeline detail's hero turned into a
+full-width, square-cornered, near-black slab. Four things were wrong at once and one rule
+replaces them — `Timeline Detail - Empty States.dc.html`, option **1c**, chosen by Davide.
+
+- **Why it was a slab.** The hero overlay painted the no-footage well inside the same `ZStack`
+  that forces the dark colour scheme for the chips, so the token's light value never showed and
+  the dark one did in both appearances; the overlay was composed after the zoom frame and never
+  clipped to its shape, so it covered the rim with square corners; the failed state was a stock
+  `ContentUnavailableView` (SF Pro, system grey) with the forced-dark chip floating on a light
+  surface; and the message was tile-sized type in a hero-sized slot.
+- **The rule: the card goes with the picture.** The rim, the glow and the letterbox are drawn only
+  while the slot holds a picture; over a gap, while loading and with the server unreachable the
+  slot is transparent and a message sits in its place, on the aurora, in the app's own appearance.
+  The camera chip, the LIVE pill and the marker badge go with the picture too — the nav title, the
+  panel clock and the panel's Live pill already carry the camera, the instant and the live state.
+  Loading is unframed as well; otherwise the frame would flash on every scrub → load → gap cycle.
+  Two framed alternatives (a glass interior, a hatched well) were drawn and rejected: a framed
+  message right after the picture had filled the screen reads as a rest-size card around nothing.
+- **What the slot holds is a state value, not a view-model display.** `RecordingDetailState` gains
+  a four-case `slot` (loading / footage / no footage / failed) replacing the `hasFootage` flag, so
+  the layout stays a pure function of literal state and every empty state is snapshot-tested
+  without a player. The view model derives it: while a drag owns the playhead, the low-resolution
+  preview being up *is* the picture, whatever the full-resolution stream is doing underneath;
+  otherwise a loaded hour with nothing under the playhead is a gap, not a picture of the next
+  recorded moment.
+- **Hidden, not removed.** The layout fades the picture, letterbox, rim and glow to zero rather
+  than dropping them from the tree, so the zoom container keeps its transform and the picture
+  comes back at the zoom it left at; hit-testing is off while it is hidden so a pinch on nothing
+  cannot silently re-zoom. The message is an overlay in the rest rect, outside the zoom, so it
+  never scales. The rest rect itself is unchanged and nothing else on the screen moves.
+- **One crossfade, both directions.** Picture, rim, glow and chrome out, message in, on one shared
+  200 ms ease-out (`auroraSlotCrossfade`), keyed on the slot value at the slot's own container so
+  both halves are one gesture. Cut under Reduce Motion, matching the live pill's precedent.
+- **The Timeline tiles follow.** A tile with no picture clears the well and keeps its 1 pt outline
+  — the grid needs the outline to stay a grid — so the aurora shows through and the message sits
+  on it; the hero tile drops its rim and glow with the picture but keeps the plain outline at the
+  framed footprint, so the grid does not shift when the picture arrives. The letterbox black is
+  drawn only behind a picture. Type is unchanged.
+- **The failed stack is the one Live draws** for "No live stream" — 44 pt symbol, headline, body —
+  hand-composed here rather than through `ContentUnavailableView`, so the colours are the design's
+  (tertiary symbol and body, primary headline) and both player screens fail the same way.
+- **Open questions decided with the implementation.** No hold-the-frame delay while a finger is
+  down: with preview material loaded the low-resolution picture stays up through a gap during a
+  drag, so the card does not pop; the gap only shows once the drag settles. No retry chip on the
+  failed state: auto-refresh already runs, and the screen hides its transport on failure. The
+  stacked arrangement's rest card is still canvas-wide (Live's is inset 16 pt each side); the
+  design flagged aligning them as worth doing in the same change, and it is left for a decision
+  rather than folded in — it re-records every phone-upright baseline on the screen.
+- **Snapshots re-recorded:** the detail's *no-footage* and *failed* states (the latter now driven
+  by literal state instead of a hand-built view), and every Timeline-tab state whose tiles settle
+  on the placeholder. The `NoFootage` token stays — the Cameras, Events and Exports thumbnails
+  still use it as a still-image well.

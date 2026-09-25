@@ -137,7 +137,7 @@ struct RecordingTransportBar: View {
     /// loaded span. A gap under the playhead does not — you may legitimately cut from the footage
     /// either side of it.
     private var canClip: Bool {
-        !state.dayTimeline.gaps.isEmpty || !state.dayTimeline.motion.isEmpty || state.hasFootage
+        !state.dayTimeline.gaps.isEmpty || !state.dayTimeline.motion.isEmpty || state.slot == .footage
     }
 
     private static let noRecordingsReason = "No recordings on this camera"

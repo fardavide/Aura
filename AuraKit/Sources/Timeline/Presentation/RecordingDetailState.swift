@@ -16,8 +16,8 @@ public struct RecordingDetailState: Equatable, Sendable {
     public let zoom: TimelineZoom
     public let isPlaying: Bool
     public let speed: PlaybackSpeed
-    /// Whether the playhead sits over recorded footage; false inside a gap, where the hero says so.
-    public let hasFootage: Bool
+    /// What the video slot holds — the picture, or the reason there is none.
+    public let slot: RecordingSlot
     /// Whether the playhead is parked at — or following — the newest recorded footage. Owned by
     /// the view model, not derived from the instant: the player parks a couple of seconds behind
     /// the wall clock (segments land late), and that drift must not read as history.
@@ -41,7 +41,7 @@ public struct RecordingDetailState: Equatable, Sendable {
         zoom: TimelineZoom,
         isPlaying: Bool,
         speed: PlaybackSpeed,
-        hasFootage: Bool,
+        slot: RecordingSlot,
         isLive: Bool,
         isPlayable: Bool,
         export: ExportEditorState?,
@@ -54,7 +54,7 @@ public struct RecordingDetailState: Equatable, Sendable {
         self.zoom = zoom
         self.isPlaying = isPlaying
         self.speed = speed
-        self.hasFootage = hasFootage
+        self.slot = slot
         self.isLive = isLive
         self.isPlayable = isPlayable
         self.export = export
@@ -83,6 +83,19 @@ public struct RecordingDetailState: Equatable, Sendable {
     func day(in calendar: Calendar) -> TimeRange {
         TimeRange.day(containing: instant, in: calendar)
     }
+}
+
+/// What the video slot holds. The card — rim, glow, letterbox and the chrome floated over the
+/// picture — exists only for `.footage`; every other case is drawn as a message on the aurora, in
+/// the slot's place, so nothing is left behind to read as a broken card.
+public enum RecordingSlot: Equatable, Sendable {
+    case loading
+    /// A picture is up: the recording, the live stream, or the low-resolution material a drag shows.
+    case footage
+    /// Nothing recorded under the playhead — a gap, an hour holding no footage, or the live edge
+    /// before the newest segment has landed.
+    case noFootage
+    case failed
 }
 
 /// What the layout can ask for. Grouped rather than passed as a dozen loose closures, so the
