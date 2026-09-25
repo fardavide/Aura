@@ -25,6 +25,12 @@ import CommonPlayer
 /// clips hard at its own box, which is both the rest-state card and the outer growth boundary
 /// there (`slot`). The chrome and the panel live outside the zoom and never scale.
 ///
+/// **The card exists only while there is a picture in it.** Over a gap, while loading, or with the
+/// server unreachable, the picture, its letterbox, the rim and the glow all go together — one
+/// crossfade — and `RecordingHeroOverlay` says why in the rest rect, on the aurora. The rest rect
+/// itself never changes, so nothing else on the screen moves, and the zoom transform is kept, so
+/// the picture comes back at the zoom it left at.
+///
 /// Split out from `RecordingPlayerView` so every arrangement can be screenshot-tested over a
 /// placeholder, with literal state and no player — and with `cameraAreaHighlights` on, the
 /// baselines outline the surface and the slot so a panel creeping over the picture is caught here.
@@ -39,6 +45,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @Environment(\.cameraAreaHighlights) private var cameraAreaHighlights
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The live transform `ZoomableContainer` reports, fed to `AuroraZoomChrome` — see
     /// `LiveVideoLayout`'s identical property for why this is `@State`, not a local in `slot()`.
@@ -267,12 +274,15 @@ public struct RecordingDetailLayout<Video: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: Self.videoCornerRadius * chrome.borderOpacity, style: .continuous))
             }
         }
+        .opacity(pictureOpacity)
+        .allowsHitTesting(state.slot == .footage)
         .overlay {
-            AuroraZoomFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, opacity: chrome.borderOpacity)
+            AuroraZoomFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, opacity: chrome.borderOpacity * pictureOpacity)
         }
-        .auroraCardGlow(opacity: chrome.borderOpacity)
+        .auroraCardGlow(opacity: chrome.borderOpacity * pictureOpacity)
         .overlay { RecordingHeroOverlay(state: state) }
         .overlay { slotHighlight }
+        .animation(slotCrossfade, value: state.slot)
     }
 
     /// `stacked` and `split`'s zoomable video area: the picture grows past its own rest-state
@@ -337,12 +347,14 @@ public struct RecordingDetailLayout<Video: View>: View {
                     .offset(y: topInset)
             }
         }
+        .opacity(pictureOpacity)
+        .allowsHitTesting(state.slot == .footage)
         .overlay(alignment: alignment) {
-            AuroraZoomFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, opacity: chrome.borderOpacity)
+            AuroraZoomFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, opacity: chrome.borderOpacity * pictureOpacity)
                 .frame(width: boxSize.width, height: boxSize.height)
                 .offset(y: topInset)
         }
-        .auroraCardGlow(opacity: chrome.borderOpacity)
+        .auroraCardGlow(opacity: chrome.borderOpacity * pictureOpacity)
         .overlay(alignment: alignment) {
             RecordingHeroOverlay(state: state)
                 .frame(width: boxSize.width, height: boxSize.height)
@@ -353,6 +365,18 @@ public struct RecordingDetailLayout<Video: View>: View {
                 .frame(width: boxSize.width, height: boxSize.height)
                 .offset(y: topInset)
         }
+        .animation(slotCrossfade, value: state.slot)
+    }
+
+    /// The card — picture, letterbox, rim and glow — is drawn only while there is a picture in it.
+    /// Hidden, not removed: the zoom container stays in the tree so its transform survives a gap.
+    private var pictureOpacity: Double {
+        state.slot == .footage ? 1 : 0
+    }
+
+    /// One crossfade for the card and the message, both directions; cut under Reduce Motion.
+    private var slotCrossfade: Animation? {
+        reduceMotion ? nil : .auroraSlotCrossfade
     }
 
     private func panel(_ arrangement: RecordingTimelinePanel.Arrangement) -> some View {

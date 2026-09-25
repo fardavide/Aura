@@ -45,6 +45,16 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.4 — 2026-09-25
+- **No more black square over a gap in a recording.** When the playhead on a camera's timeline sits
+  where nothing was recorded — or while the recording is still loading, or the server can't be
+  reached — the video card now goes away with the picture, and a short message sits in its place
+  on the background. Before, a square-cornered black slab covered the card, in light mode too.
+- **The Timeline tab's tiles follow the same rule.** A camera with nothing to show keeps its
+  outline and says so on the background instead of filling with a dark box.
+- **"Can't reach the server" on the recording screen looks like the rest of the app**, matching
+  the live camera screen's own message instead of the system's grey one.
+
 ### 0.7.3 — 2026-09-22
 - **Buttons on a white card are visible again in light mode.** Their outline was white on white, so
   controls like Cancel and Play in the clip editor, the play and download buttons on each export,

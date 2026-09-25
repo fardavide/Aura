@@ -3,43 +3,74 @@ import SwiftUI
 import CommonDesign
 import TimelineDomain
 
-/// The chrome floated over the footage: which camera and exactly when, on the leading side; what
-/// the server flagged at that instant, on the trailing side. Over a stretch with nothing recorded
-/// it replaces the picture with a plain statement rather than leaving the last frame up, which
-/// would read as the wrong moment.
+/// What sits in the video slot besides the picture. Over footage: the chrome — which camera and
+/// exactly when, on the leading side; what the server flagged at that instant, on the trailing
+/// side. With no picture the card is gone (`RecordingDetailLayout` hides the rim, glow and
+/// letterbox with it) and this draws the reason in its place, on the aurora, in the app's own
+/// appearance: a gap, a load in progress, or a server that can't be reached. The chip and the LIVE
+/// pill go with the picture too — the nav title, the panel clock and the panel's Live pill already
+/// carry the camera, the instant and the live state, so nothing is duplicated up here.
 struct RecordingHeroOverlay: View {
     let state: RecordingDetailState
 
     var body: some View {
-        ZStack {
-            if !state.hasFootage {
-                noFootage
-            }
-            VStack {
-                HStack(alignment: .top) {
-                    identity
-                    Spacer(minLength: 12)
-                    badge
-                }
-                Spacer()
-            }
-            .padding(12)
+        switch state.slot {
+        case .footage: chrome
+        case .loading: loading
+        case .noFootage: noFootage
+        case .failed: failed
         }
-        // The hero is a dark surface whatever the app's appearance — the footage behind it is, and
-        // so is the fallback it shows over a gap. Forcing dark here is what keeps this chrome
-        // legible in a light-mode app (decision #11).
+    }
+
+    private var chrome: some View {
+        VStack {
+            HStack(alignment: .top) {
+                identity
+                Spacer(minLength: 12)
+                badge
+            }
+            Spacer()
+        }
+        .padding(12)
+        // Footage is a dark surface whatever the app's appearance, so the chrome over it resolves
+        // against dark to stay legible in a light-mode app (decision #11). Only over footage: the
+        // messages below sit on the aurora and follow the app.
         .environment(\.colorScheme, .dark)
     }
 
+    private var loading: some View {
+        ProgressView()
+            .tint(.auroraGradientViolet)
+    }
+
     private var noFootage: some View {
-        ZStack {
-            Color.auroraNoFootage
-            VStack(spacing: 8) {
-                Image(systemName: "clock.badge.questionmark").imageScale(.large)
-                Text("No footage at this time").auroraText(.captionEmphasis)
-            }
-            .foregroundStyle(.auroraTextMuted)
+        VStack(spacing: 8) {
+            Image(systemName: "clock.badge.questionmark")
+                .font(.system(size: 26))
+                .foregroundStyle(.auroraTextTertiary)
+            Text("No footage at this time")
+                .auroraText(.bodyEmphasis)
+                .foregroundStyle(.auroraTextSecondary)
         }
+    }
+
+    /// The stack the live camera screen draws for "No live stream", so both player screens fail
+    /// the same way.
+    private var failed: some View {
+        VStack(spacing: 5) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 44))
+                .foregroundStyle(.auroraTextTertiary)
+                .padding(.bottom, 6)
+            Text("Can't reach the server")
+                .auroraText(.headline)
+                .foregroundStyle(.auroraTextPrimary)
+            Text("Check your connection settings.")
+                .auroraText(.body)
+                .foregroundStyle(.auroraTextTertiary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 24)
     }
 
     private var identity: some View {

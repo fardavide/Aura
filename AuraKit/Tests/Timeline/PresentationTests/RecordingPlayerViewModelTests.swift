@@ -1031,6 +1031,95 @@ struct RecordingPlayerViewModelTests {
         // then
         #expect(sut.state.isLive)
     }
+
+    // MARK: - The video slot
+
+    @Test func `given nothing loaded yet then the slot is loading`() {
+        // given - when
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+
+        // then
+        #expect(sut.state.slot == .loading)
+    }
+
+    @Test func `given footage when loading then the slot holds the picture`() async {
+        // given
+        let sut = makeViewModel(segments: fullHour(from: 3600))
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.slot == .footage)
+    }
+
+    @Test func `given a live stream at the live edge when loading then the slot holds the picture`() async {
+        // given
+        let source = CameraStreamSource(url: URL(string: "http://host/live.m3u8")!, headers: [:])
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.slot == .footage)
+    }
+
+    @Test func `given a playhead inside a gap when loading then the slot holds no footage`() async {
+        // given — the hour plays, but nothing was recorded under the playhead
+        let sut = makeViewModel(segments: [segment(from: 3600, to: 3900)])
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.slot == .noFootage)
+    }
+
+    @Test func `given a window with no footage when loading then the slot holds no footage`() async {
+        // given
+        let sut = makeViewModel(segments: [])
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.slot == .noFootage)
+    }
+
+    @Test func `given a failing repository when loading then the slot reports the failure`() async {
+        // given
+        let sut = makeViewModel(repository: FakeCameraRecordingsRepository(.failure(.serverUnavailable)))
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.slot == .failed)
+    }
+
+    @Test func `given preview material when scrubbing through a gap then the slot keeps the preview picture`() async {
+        // given — footage only in the first five minutes, but a preview clip covers the whole hour
+        let preview = PreviewClip(
+            camera: camera.name,
+            range: TimeRange(start: at(3600), end: at(7200)),
+            path: "/preview.mp4"
+        )
+        let sut = makeViewModel(
+            segments: [segment(from: 3600, to: 3900)],
+            startingAt: at(3700),
+            previews: FakeCameraPreviewProvider(clips: [preview])
+        )
+        await sut.loadIfNeeded()
+
+        // when — the drag runs into the gap
+        sut.beginScrub()
+        sut.scrub(to: at(6000))
+
+        // then — the low-resolution picture is up, so the card stays
+        #expect(!sut.hasFootage)
+        #expect(sut.state.slot == .footage)
+    }
 }
 
 // MARK: - Helpers

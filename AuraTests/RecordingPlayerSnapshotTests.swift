@@ -51,12 +51,12 @@ struct RecordingPlayerSnapshotTests {
     }
 
     @Test func `given a playhead with nothing recorded then the hero says so`() {
-        // given
+        // given — the card goes with the picture: no rim, no glow, no chip, the message on the aurora
         let view = recordingDetail(
             state: detailState(
                 instant: snapshotSpanStart.addingTimeInterval(20 * 3600),
                 timeline: gappyTimelineFixture(),
-                hasFootage: false,
+                slot: .noFootage,
                 isPlayable: false
             )
         )
@@ -103,16 +103,9 @@ struct RecordingPlayerSnapshotTests {
     }
 
     @Test func `given an unreachable server then the failure card fits the video slot`() {
-        // given — the app-wide failure idiom, squeezed from the full remaining column into the
-        // 16:9 slot now that the picture is pinned to that aspect ratio
-        let view = recordingDetailScreen(state: detailState()) {
-            ContentUnavailableView(
-                "Can't reach the server",
-                systemImage: "wifi.slash",
-                description: Text("Check your connection settings.")
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        // given — the same unframed stack Live draws for "No live stream", centred in the slot;
+        // the placeholder picture behind it is hidden with the rest of the card
+        let view = recordingDetail(state: detailState(slot: .failed, isPlayable: false))
 
         // then
         assertScreenSnapshot(view, named: "detail-failed")
@@ -182,7 +175,7 @@ private func detailState(
     zoom: TimelineZoom = .day,
     isPlaying: Bool = true,
     speed: PlaybackSpeed = .oneX,
-    hasFootage: Bool = true,
+    slot: RecordingSlot = .footage,
     isLive: Bool = false,
     isPlayable: Bool = true,
     export: ExportEditorState? = nil,
@@ -196,7 +189,7 @@ private func detailState(
         zoom: zoom,
         isPlaying: isPlaying,
         speed: speed,
-        hasFootage: hasFootage,
+        slot: slot,
         isLive: isLive,
         isPlayable: isPlayable,
         export: export,
