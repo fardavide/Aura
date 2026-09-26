@@ -45,6 +45,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.6 — 2026-09-27
+- **The Cameras settings gear is the same size as everywhere else.** It was drawn smaller than the
+  gear on Timeline, Events and Exports.
+
 ### 0.7.5 — 2026-09-26
 - **Settings from the Timeline tab.** The Timeline header now carries the same gear as Cameras,
   Events and Exports; on an iPhone on its side it sits atop the scrubber. When the server can't be
