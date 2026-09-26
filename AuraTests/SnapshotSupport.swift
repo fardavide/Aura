@@ -206,6 +206,7 @@ func timelineScreen(
                 days: snapshotDays
             )
         },
+        onOpenSettings: {},
         onOpenExports: {}
     )
 }
