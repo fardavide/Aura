@@ -48,6 +48,7 @@ struct RootView: View {
                                 )
                             }
                         )
+                        .modifier(TabEntrance())
                     } label: {
                         Label("Cameras", systemImage: "video")
                             .symbolEffect(.bounce, value: iconBounces[.cameras])
@@ -60,10 +61,12 @@ struct RootView: View {
                             makeRecordingPlayerViewModel: {
                                 composition.recordingPlayerViewModel(for: $0, at: $1, server: server)
                             },
+                            onOpenSettings: { showingSettings = true },
                             // A clip cut on the detail screen lands in the Exports tab, and the
                             // detail screen hides the tab bar — so the way across is this.
                             onOpenExports: { selectedTab = .exports }
                         )
+                        .modifier(TabEntrance())
                     } label: {
                         Label("Timeline", systemImage: "calendar.day.timeline.left")
                             .symbolEffect(.bounce, value: iconBounces[.timeline])
@@ -75,6 +78,7 @@ struct RootView: View {
                             onOpenSettings: { showingSettings = true },
                             makeDetailViewModel: { composition.eventDetailViewModel(for: $0, server: server) }
                         )
+                        .modifier(TabEntrance())
                     } label: {
                         Label("Events", systemImage: "bell")
                             .symbolEffect(.bounce, value: iconBounces[.events])
@@ -92,6 +96,7 @@ struct RootView: View {
                                 composition.exportPlayerViewModel(for: $0, server: server)
                             }
                         )
+                        .modifier(TabEntrance())
                     } label: {
                         Label("Exports", systemImage: "film.stack")
                             .symbolEffect(.bounce, value: iconBounces[.exports])
@@ -170,6 +175,21 @@ struct RootView: View {
         for await resolved in composition.observeActiveServer().execute(for: connection) {
             server = resolved
         }
+    }
+}
+
+/// `TabView` swaps its pages with no animation of its own, and the outgoing page is gone the frame
+/// the selection changes — so the incoming page is the only half of a switch that can move. It
+/// fades in on every appearance, a first visit and a return alike; pushes inside a tab's own
+/// navigation stack don't disappear the page, so they never re-trigger it.
+private struct TabEntrance: ViewModifier {
+    @State private var isShown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isShown ? 1 : 0)
+            .onAppear { withAnimation(.auroraTabSwitch) { isShown = true } }
+            .onDisappear { isShown = false }
     }
 }
 

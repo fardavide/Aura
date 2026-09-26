@@ -45,6 +45,13 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.5 — 2026-09-26
+- **Settings from the Timeline tab.** The Timeline header now carries the same gear as Cameras,
+  Events and Exports; on an iPhone on its side it sits atop the scrubber. When the server can't be
+  reached, the Timeline now offers Retry and Settings instead of only saying so.
+- **Switching tabs fades instead of cutting.** The tab you pick fades in rather than snapping onto
+  the screen.
+
 ### 0.7.4 — 2026-09-25
 - **No more black square over a gap in a recording.** When the playhead on a camera's timeline sits
   where nothing was recorded — or while the recording is still loading, or the server can't be

@@ -18,6 +18,7 @@ public struct TimelineScreenView: View {
     @State private var viewModel: TimelineScreenViewModel
     private let makeTileViewModel: (Camera) -> PreviewTileViewModel
     private let makeRecordingPlayerViewModel: (Camera, Date) -> RecordingPlayerViewModel
+    private let onOpenSettings: () -> Void
     /// Where a clip cut on the detail screen is reached afterwards. The detail screen hides the
     /// tab bar, so it cannot select the tab itself.
     private let onOpenExports: () -> Void
@@ -26,8 +27,8 @@ public struct TimelineScreenView: View {
     @State private var cardHeight: CGFloat = 180
     @State private var openedRecording: RecordingRoute?
     @Environment(\.scenePhase) private var scenePhase
-    // Pinned outside the grid's ScrollView (regular height only — compact height hides the header
-    // entirely, see `isCompactHeight`'s doc comment), so it needs its own measured height to
+    // Pinned outside the grid's ScrollView (except over the side-by-side grid — see `showsHeader`),
+    // so it needs its own measured height to
     // reserve as top spacing and its own scroll-offset tracking for its glass backing — see
     // `AuroraScrollHeader`'s doc comment for why this is hand-rolled rather than a system toolbar.
     @State private var headerHeight: CGFloat = 0
@@ -49,6 +50,14 @@ public struct TimelineScreenView: View {
         #else
         false
         #endif
+    }
+
+    /// The side-by-side grid needs every point of a compact height, so it drops the header and its
+    /// rail carries the gear instead. Every other state is a centred message with room to spare, and
+    /// keeps the header — and with it the route to Settings.
+    private var showsHeader: Bool {
+        guard isCompactHeight, case .ready = viewModel.state else { return true }
+        return false
     }
 
     /// True when the horizontal size class is compact — iPhone portrait and narrow iPad splits.
@@ -78,12 +87,14 @@ public struct TimelineScreenView: View {
         viewModel: TimelineScreenViewModel,
         makeTileViewModel: @escaping (Camera) -> PreviewTileViewModel,
         makeRecordingPlayerViewModel: @escaping (Camera, Date) -> RecordingPlayerViewModel,
+        onOpenSettings: @escaping () -> Void,
         onOpenExports: @escaping () -> Void
     ) {
         self.onOpenExports = onOpenExports
         _viewModel = State(initialValue: viewModel)
         self.makeTileViewModel = makeTileViewModel
         self.makeRecordingPlayerViewModel = makeRecordingPlayerViewModel
+        self.onOpenSettings = onOpenSettings
     }
 
     public var body: some View {
@@ -95,7 +106,7 @@ public struct TimelineScreenView: View {
                     // background would only paint a postage-stamp patch behind it.
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .auroraBackground()
-                if !isCompactHeight {
+                if showsHeader {
                     header
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                 }
@@ -131,7 +142,21 @@ public struct TimelineScreenView: View {
                 Text("Timeline").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
                 TimelineDayLabel(clock: viewModel.clock)
             }
+        } trailing: {
+            gearButton
         }
+    }
+
+    /// In the header, and atop the rail where compact height hides the header — so every
+    /// orientation keeps a route to Settings, as the sibling tabs do.
+    private var gearButton: some View {
+        Button(action: onOpenSettings) {
+            Image(systemName: "gearshape")
+                .foregroundStyle(.auroraTextPrimary)
+                .auroraChip()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
     }
 
     @ViewBuilder private var content: some View {
@@ -141,11 +166,17 @@ public struct TimelineScreenView: View {
         case .empty:
             ContentUnavailableView("No cameras", systemImage: "video.slash")
         case .failed:
-            ContentUnavailableView(
-                "Can't reach the server",
-                systemImage: "wifi.slash",
-                description: Text("Check your connection settings.")
-            )
+            ContentUnavailableView {
+                Label("Can't reach the server", systemImage: "wifi.slash")
+            } description: {
+                Text("Check your connection settings.")
+            } actions: {
+                Button("Retry") { Task { await viewModel.load() } }
+                    .buttonStyle(.auroraGradient)
+                Button("Settings", action: onOpenSettings)
+                    .buttonStyle(.plain)
+                    .auroraChip()
+            }
         case let .ready(cameras, timeline):
             ready(cameras: cameras, timeline: timeline)
         }
@@ -199,12 +230,16 @@ public struct TimelineScreenView: View {
                 .frame(width: columnWidth)
 
                 // The slim scrubber card takes a fixed strip of width and the full height, flush to
-                // the trailing edge.
-                ScrollableTimelineView(
-                    arrangement: .rail,
-                    span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport
-                ) { time in
-                    viewModel.scrub(to: time)
+                // the trailing edge, under the gear the hidden header would otherwise carry.
+                VStack(alignment: .trailing, spacing: 8) {
+                    // The card bleeds off the trailing edge; the chip doesn't, so it keeps an inset.
+                    gearButton.padding(.trailing, 12)
+                    ScrollableTimelineView(
+                        arrangement: .rail,
+                        span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport
+                    ) { time in
+                        viewModel.scrub(to: time)
+                    }
                 }
                 .frame(width: cardWidth, height: geo.size.height)
             }

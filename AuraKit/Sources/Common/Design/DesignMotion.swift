@@ -21,4 +21,7 @@ extension Animation {
     /// and chrome out and the message in, or the reverse — on the Timeline detail hero and the
     /// Timeline tiles alike. Ease-out like the zoom chrome's border fade, so the two never fight.
     public static let auroraSlotCrossfade: Animation = .easeOut(duration: 0.2)
+
+    /// The one fade a tab page arrives on when the tab bar switches to it.
+    public static let auroraTabSwitch: Animation = .easeOut(duration: 0.2)
 }
