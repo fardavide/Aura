@@ -45,6 +45,11 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.7 — 2026-09-27
+- **Every tab has the same header.** Cameras, Timeline, Events and Exports now share one header:
+  the title, the Settings gear and the spacing sit in exactly the same place on every tab. On an
+  iPhone on its side, Cameras now shows its title too, with its summary chips just below it.
+
 ### 0.7.6 — 2026-09-27
 - **The Cameras settings gear is the same size as everywhere else.** It was drawn smaller than the
   gear on Timeline, Events and Exports.

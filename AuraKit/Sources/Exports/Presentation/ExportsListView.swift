@@ -162,38 +162,21 @@ public struct ExportsListView: View {
     // MARK: Header
 
     private var header: some View {
-        AuroraScrollHeader(isGlass: isHeaderGlass) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(ExportCopy.title)
-                    .auroraText(.screenTitle)
-                    .foregroundStyle(.auroraTextPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                // Suppressed on an empty library: "0 clips · 0 cameras" sitting above a panel that
-                // already says "No exports yet" reads as a broken count rather than an answer.
-                if let summary = viewModel.summary, summary.clipCount > 0 {
-                    Text(ExportCopy.summary(summary))
-                        .auroraText(.captionEmphasis)
-                        .foregroundStyle(.auroraTextSecondary)
-                }
+        AuroraTabHeader(ExportCopy.title, isGlass: isHeaderGlass, onOpenSettings: onOpenSettings) {
+            // Suppressed on an empty library: "0 clips · 0 cameras" sitting above a panel that
+            // already says "No exports yet" reads as a broken count rather than an answer.
+            if let summary = viewModel.summary, summary.clipCount > 0 {
+                Text(ExportCopy.summary(summary))
             }
-        } trailing: {
-            HStack(spacing: 8) {
-                if downloads.transferringCount > 0 {
-                    ExportsDownloadPill(
-                        count: downloads.transferringCount,
-                        fraction: downloads.overallFraction,
-                        scrollToTransfer: {}
-                    )
-                } else if viewModel.isRefreshing {
-                    ExportsUpdatingPill()
-                }
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                        .foregroundStyle(.auroraTextPrimary)
-                        .auroraChip()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
+        } accessory: {
+            if downloads.transferringCount > 0 {
+                ExportsDownloadPill(
+                    count: downloads.transferringCount,
+                    fraction: downloads.overallFraction,
+                    scrollToTransfer: {}
+                )
+            } else if viewModel.isRefreshing {
+                ExportsUpdatingPill()
             }
         }
     }

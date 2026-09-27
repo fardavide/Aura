@@ -11,7 +11,7 @@ public struct EventsListView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     // Pinned outside the ScrollView (below), so it needs its own measured height to reserve as
     // top padding for the scrolling content, and its own scroll-offset tracking to know when to
-    // show its glass backing — see `AuroraScrollHeader`'s doc comment for why this is hand-rolled
+    // show its glass backing — see `AuroraTabHeader`'s doc comment for why this is hand-rolled
     // rather than a system toolbar title.
     @State private var headerHeight: CGFloat = 74
     @State private var isHeaderGlass = false
@@ -61,21 +61,10 @@ public struct EventsListView: View {
     }
 
     private var header: some View {
-        AuroraScrollHeader(isGlass: isHeaderGlass) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Events").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
-                if let subtitle = viewModel.summaryText(maximumLabels: maximumSubtitleLabels) {
-                    Text(subtitle).auroraText(.captionEmphasis).foregroundStyle(.auroraTextSecondary)
-                }
+        AuroraTabHeader("Events", isGlass: isHeaderGlass, onOpenSettings: onOpenSettings) {
+            if let subtitle = viewModel.summaryText(maximumLabels: maximumSubtitleLabels) {
+                Text(subtitle)
             }
-        } trailing: {
-            Button(action: onOpenSettings) {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(.auroraTextPrimary)
-                    .auroraChip()
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
         }
     }
 

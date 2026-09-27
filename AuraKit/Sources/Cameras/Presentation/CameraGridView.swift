@@ -16,7 +16,7 @@ public struct CameraGridView<CameraTimeline: View>: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     // Pinned outside the wall's ScrollView, so it needs its own measured height to reserve as top
     // spacing and its own scroll-offset tracking to know when to show its glass backing — see
-    // `AuroraScrollHeader`'s doc comment for why this is hand-rolled rather than a system toolbar.
+    // `AuroraTabHeader`'s doc comment for why this is hand-rolled rather than a system toolbar.
     @State private var headerHeight: CGFloat = 0
     @State private var isHeaderGlass = false
 
@@ -67,7 +67,7 @@ public struct CameraGridView<CameraTimeline: View>: View {
         ZStack(alignment: .top) {
             VStack(alignment: .leading, spacing: verticalSizeClass == .compact ? 8 : 12) {
                 Color.clear.frame(height: headerHeight)
-                if verticalSizeClass != .compact && viewModel.hasSummaryChips {
+                if viewModel.hasSummaryChips {
                     summaryChips(leadingPadding: contentPadding)
                 }
                 groupChipsRow
@@ -79,21 +79,7 @@ public struct CameraGridView<CameraTimeline: View>: View {
     }
 
     private var header: some View {
-        AuroraScrollHeader(isGlass: isHeaderGlass, horizontalPadding: contentPadding) {
-            if verticalSizeClass == .compact {
-                // The tab bar already names the tab, and a title row + two chip rows would eat too
-                // much of a ~390pt-tall window — one row does the header's whole job here.
-                if viewModel.hasSummaryChips {
-                    summaryChips(leadingPadding: 0)
-                } else {
-                    Spacer()
-                }
-            } else {
-                Text("Cameras").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
-            }
-        } trailing: {
-            gearButton
-        }
+        AuroraTabHeader("Cameras", isGlass: isHeaderGlass, onOpenSettings: onOpenSettings)
     }
 
     private func summaryChips(leadingPadding: CGFloat) -> some View {
@@ -108,15 +94,6 @@ public struct CameraGridView<CameraTimeline: View>: View {
         )
     }
 
-    private var gearButton: some View {
-        Button(action: onOpenSettings) {
-            Image(systemName: "gearshape")
-                .foregroundStyle(.auroraTextPrimary)
-                .auroraChip()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
-    }
 
     @ViewBuilder private var groupChipsRow: some View {
         if !viewModel.groups.isEmpty {

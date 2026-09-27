@@ -30,7 +30,7 @@ public struct TimelineScreenView: View {
     // Pinned outside the grid's ScrollView (except over the side-by-side grid — see `showsHeader`),
     // so it needs its own measured height to
     // reserve as top spacing and its own scroll-offset tracking for its glass backing — see
-    // `AuroraScrollHeader`'s doc comment for why this is hand-rolled rather than a system toolbar.
+    // `AuroraTabHeader`'s doc comment for why this is hand-rolled rather than a system toolbar.
     @State private var headerHeight: CGFloat = 0
     @State private var isHeaderGlass = false
 
@@ -137,26 +137,9 @@ public struct TimelineScreenView: View {
     }
 
     private var header: some View {
-        AuroraScrollHeader(isGlass: isHeaderGlass) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Timeline").auroraText(.screenTitle).foregroundStyle(.auroraTextPrimary)
-                TimelineDayLabel(clock: viewModel.clock)
-            }
-        } trailing: {
-            gearButton
+        AuroraTabHeader("Timeline", isGlass: isHeaderGlass, onOpenSettings: onOpenSettings) {
+            TimelineDayLabel(clock: viewModel.clock)
         }
-    }
-
-    /// In the header, and atop the rail where compact height hides the header — so every
-    /// orientation keeps a route to Settings, as the sibling tabs do.
-    private var gearButton: some View {
-        Button(action: onOpenSettings) {
-            Image(systemName: "gearshape")
-                .foregroundStyle(.auroraTextPrimary)
-                .auroraChip()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
     }
 
     @ViewBuilder private var content: some View {
@@ -233,7 +216,7 @@ public struct TimelineScreenView: View {
                 // the trailing edge, under the gear the hidden header would otherwise carry.
                 VStack(alignment: .trailing, spacing: 8) {
                     // The card bleeds off the trailing edge; the chip doesn't, so it keeps an inset.
-                    gearButton.padding(.trailing, 12)
+                    AuroraSettingsButton(action: onOpenSettings).padding(.trailing, 12)
                     ScrollableTimelineView(
                         arrangement: .rail,
                         span: viewModel.span, timeline: timeline, clock: viewModel.clock, transport: viewModel.transport
