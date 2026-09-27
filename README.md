@@ -45,6 +45,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.7.8 — 2026-09-27
+- **The "downloading" pill on Exports takes you to the download.** Tapping it scrolls the list to
+  the clip that's downloading. Before, it looked tappable but did nothing.
+
 ### 0.7.7 — 2026-09-27
 - **Every tab has the same header.** Cameras, Timeline, Events and Exports now share one header:
   the title, the Settings gear and the spacing sit in exactly the same place on every tab. On an
