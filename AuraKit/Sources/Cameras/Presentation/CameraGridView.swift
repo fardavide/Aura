@@ -111,7 +111,6 @@ public struct CameraGridView<CameraTimeline: View>: View {
     private var gearButton: some View {
         Button(action: onOpenSettings) {
             Image(systemName: "gearshape")
-                .auroraText(.chip)
                 .foregroundStyle(.auroraTextPrimary)
                 .auroraChip()
         }
