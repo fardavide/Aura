@@ -55,6 +55,16 @@ The URL builder is isolated in `CommonFrigate` so switching is a one-liner. The 
 cross-platform wrapper (AVPlayerViewController iOS / AVPlayerView macOS); auth reaches the
 `AVURLAsset` via `AVURLAssetHTTPHeaderFieldsKey`. First stream name is used; a picker comes later.
 
+## One shared tab toolbar
+Every tab's header is the same shared design component: title, optional subtitle, the tab's own
+accessories, then the Settings gear — with one side inset. Screens supply only text and
+accessories; they can't restyle the gear or change the inset. Before this, the header bar was
+shared but each screen hand-built its own gear and could override the inset, and the tabs drifted
+(Cameras' gear ended up smaller and 4pt off). Cameras now shows its title in iPhone landscape like
+the other tabs, with its summary chips below it as in portrait, rather than swapping the title for
+the chips. Where a layout hides the header (the Timeline's landscape scrubber rail), the same shared
+gear appears on its own.
+
 ## Events: navigation + camera reuse
 The app is a **TabView** (Cameras | Events); Settings opens from a gear in each tab. `EventsDomain`
 reuses `CameraName` from `CamerasDomain` (a pure domain→domain dependency) rather than a raw String
