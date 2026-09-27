@@ -27,6 +27,9 @@ public struct ExportsListView: View {
     @State private var isHeaderGlass = false
     @State private var pendingSave: FileDestinationRequest?
     @State private var saving: ExportId?
+    /// Bumped by each tap on the header's download pill. The pill sits outside the list's scroll
+    /// reader, so a tap is handed across as a changed value rather than a call.
+    @State private var transferScrollRequests = 0
 
     public init(
         viewModel: ExportsListViewModel,
@@ -151,6 +154,10 @@ public struct ExportsListView: View {
                     guard let target else { return }
                     withAnimation { scroll.scrollTo(target, anchor: .center) }
                 }
+                .onChange(of: transferScrollRequests) {
+                    guard let scrollTarget else { return }
+                    withAnimation { scroll.scrollTo(scrollTarget, anchor: .center) }
+                }
             }
             header
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
@@ -173,7 +180,7 @@ public struct ExportsListView: View {
                 ExportsDownloadPill(
                     count: downloads.transferringCount,
                     fraction: downloads.overallFraction,
-                    scrollToTransfer: {}
+                    scrollToTransfer: { transferScrollRequests += 1 }
                 )
             } else if viewModel.isRefreshing {
                 ExportsUpdatingPill()
