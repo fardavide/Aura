@@ -6,6 +6,47 @@ import TestDoubles
 
 struct SaveConnectionTests {
 
+    @Test func `given a local live configuration without a local API address when saving then it is rejected`() {
+        // given
+        let repository = FakeSettingsRepository()
+        let save = SaveConnection(repository: repository)
+        let connection = ConnectionSettings(
+            remote: address(host: "frigate.example.net", port: 8971),
+            local: nil,
+            remoteLive: nil,
+            localLive: LiveConnectionSettings(scheme: .http, port: 1984),
+            username: nil,
+            password: nil
+        )
+
+        // when - then
+        #expect(throws: SettingsError.localLiveRequiresLocalAddress) {
+            try save.execute(connection)
+        }
+        #expect(repository.savedConnection == nil)
+    }
+
+    @Test(arguments: [ServerRoute.remote, .local])
+    func `given an invalid live port when saving then the route is rejected`(route: ServerRoute) {
+        // given
+        let repository = FakeSettingsRepository()
+        let save = SaveConnection(repository: repository)
+        let connection = ConnectionSettings(
+            remote: address(host: "frigate.example.net", port: 8971),
+            local: address(host: "192.168.1.50", port: 5000),
+            remoteLive: route == .remote ? LiveConnectionSettings(scheme: .https, port: 0) : nil,
+            localLive: route == .local ? LiveConnectionSettings(scheme: .http, port: 70_000) : nil,
+            username: nil,
+            password: nil
+        )
+
+        // when - then
+        #expect(throws: SettingsError.invalidLivePort(route)) {
+            try save.execute(connection)
+        }
+        #expect(repository.savedConnection == nil)
+    }
+
     @Test func `given valid settings when saving then the repository stores the trimmed connection`() throws {
         // given
         let repository = FakeSettingsRepository()
@@ -222,7 +263,14 @@ struct AppIconUseCaseTests {
 }
 
 private func settings(host: String, port: Int, local: ServerAddress? = nil) -> ConnectionSettings {
-    ConnectionSettings(remote: address(host: host, port: port), local: local, username: nil, password: nil)
+    ConnectionSettings(
+        remote: address(host: host, port: port),
+        local: local,
+        remoteLive: nil,
+        localLive: nil,
+        username: nil,
+        password: nil
+    )
 }
 
 private func address(host: String, port: Int) -> ServerAddress {

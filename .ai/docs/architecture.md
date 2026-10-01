@@ -36,7 +36,11 @@ source is an implementation detail behind a Domain protocol; the cameras reposit
 No service locator. Every type takes its collaborators through its **initializer**. A single
 **composition root** in the app target wires the graph from the **resolved** `ActiveServer` — the
 one of the connection's two addresses currently in use — so nothing below the root knows a choice
-was made. The domain→infra mapping (`ServerConfig(ActiveServer)`) lives in `SettingsData`, because
+was made. Its optional live scheme and port are selected with the same route; live-source
+construction always reuses that API address's host. Frigate's API config and credentials remain
+separate; a direct live endpoint never inherits them. The root's screen identity includes the live URL so editing its transport
+recreates an existing player without changing the API-bound download identity.
+The domain→infra mapping (`ServerConfig(ActiveServer)`) lives in `SettingsData`, because
 the reachability probe that makes the choice needs the same mapping. Tests construct types directly
 with fakes and never touch the root.
 
@@ -48,8 +52,9 @@ native macOS; iOS-only APIs (PiP, background audio) stay behind a platform wrapp
 
 ## Storage
 
-`UserDefaults` for non-secret connection config — **two** addresses, the remote one under the
-original single-address keys so older installs keep their server — + per-device preferences (theme,
+`UserDefaults` for non-secret connection config — two API addresses plus optional per-route live
+scheme/port settings, with the remote API under the original single-address keys so older installs keep their
+server and historical live proxy — + per-device preferences (theme,
 camera order); Keychain for the password. No SwiftData/CloudKit/sync — Frigate is the source of truth;
 cameras/events are fetched fresh. Preferences consumed outside the Settings editor are **observed**
 (the repository exposes a stream: current value, then changes), never re-read on appear.

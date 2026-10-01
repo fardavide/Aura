@@ -1,11 +1,14 @@
 # Frigate integration
 
-What we learned wiring Aura to Frigate 0.17. Exact API contracts live in the `/frigate-rest` and
+What we learned wiring Aura to Frigate 0.17/0.18. Exact API contracts live in the `/frigate-rest` and
 `/frigate-live` skills; this is the model and the *verified findings*.
 
 ## Connection model
 Remote access is via Tailscale, so the app treats Frigate as a plain HTTP endpoint: host, port
-(default 5000), http/https, optional auth. Settings captures exactly this.
+(default 5000), http/https, optional auth. The API connection has a required remote address and
+optional local address; a short local Frigate probe selects the active route. Live playback may
+use its own scheme and port for each route, always on that route's existing host. A remote fallback
+never borrows the local live port. API ports and credentials continue to serve all non-live media and reads.
 
 ## Auth — reality vs the brief
 Frigate 0.17's *native* auth is **JWT** (port 8971: `POST /api/login` → cookie/Bearer); port 5000
@@ -14,13 +17,45 @@ optionally behind a reverse proxy that adds Basic. Aura builds Basic and sends i
 media requests; Frigate JWT is a future extension (the auth-header construction is the one seam to
 change).
 
-## Live stream (verified against go2rtc source + Frigate nginx, 0.16/0.17)
+## Live stream (Frigate 0.18)
 AVPlayer needs HLS. The working URL is go2rtc's HLS endpoint:
-`http://<host>:1984/api/stream.m3u8?src=<stream_name>`. Frigate does **not** expose a dedicated
-live-HLS path; the only route through Frigate's auth is the *undocumented*
-`/api/go2rtc/api/stream.m3u8?...` proxy. `src` names come from each camera's `live.streams` in
+`http://<host>:1984/api/stream.m3u8?src=<stream_name>`. The older *undocumented*
+`/api/go2rtc/api/stream.m3u8?...` Frigate proxy worked in 0.16/0.17, but **0.18.0 removed its
+general nginx location**. The [upstream 0.18.0 configuration](https://github.com/blakeblackshear/frigate/blob/v0.18.0/docker/main/rootfs/usr/local/nginx/conf/nginx.conf)
+retains particular WebRTC routes, not a live-HLS proxy. The user's running 0.18.0 server also
+returns **404** at the historical HLS proxy; previews still work because they use the API.
+
+Configure an optional **live scheme and port under each API address**. Live playback always
+shares that API address's host: go2rtc on the same server requires no third IP. An empty live
+port retains the historical proxy for older installations; 0.18 needs compatible direct
+go2rtc transport (usually HTTP on port 1984). Do not change the general API port. Frigate credentials
+are sent only to the API/historical proxy, never to the separate live endpoint automatically.
+Authentication on a separate go2rtc endpoint is outside this change.
+
+`src` names come from each camera's `live.streams` in
 `/api/config`. **Confirm the actual `src` + reachability against the running instance before
 shipping live video.** Caveats and the AVFoundation tradeoff: `/frigate-live`.
+
+### Playback evidence (2026-10-01)
+
+On `minisforum-m1`, the user established H.264 video and AAC audio for `front_garden_1`,
+`back_garden_1`, and `garage_1`, and fetched/decoded HLS with FFmpeg. A native macOS AVPlayer
+probe against the configured direct go2rtc endpoint then decoded **20, 20 and 21 frames**
+respectively, all **2688×1520**, with playback advancing **2.00, 2.01 and 2.07 seconds**. No
+credentials were sent. This verifies actual AVFoundation video playback, beyond fetching a
+playlist or reaching `readyToPlay`. Physical iPhone/iPad playback, remote-network availability,
+and Picture-in-Picture remain unverified by that probe.
+
+The final probe used Aura's actual live-player model and kept its video output attached through
+pause/resume, matching the mounted video layer. **All nine checks passed**: initial playback,
+fresh-item Retry, and pause/resume for each stream, with 20–21 decoded 2688×1520 frames and
+more than two seconds of advancing playback per check. Aura reached its playing state;
+mute survived Retry. A deliberately missing stream reached Aura's failed state in **0.16 s**.
+
+This caught an observer issue before delivery: AVFoundation's status callbacks fired, but the
+enum change payload was nil on this Mac. Reading the observed status property before the main-actor
+hop restored both playing and failed states. A native observer regression now covers the wiring;
+tests that called the state handler directly had missed it.
 
 ## REST surface used
 `/api/config` (cameras + `enabled` flag + stream names; also `camera_groups` and `record`

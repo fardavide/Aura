@@ -95,6 +95,7 @@ private let version = Data("0.17.2\n".utf8)
 private let server = ActiveServer(
     route: .local,
     address: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000),
+    live: nil,
     username: "admin",
     password: "hunter2"
 )

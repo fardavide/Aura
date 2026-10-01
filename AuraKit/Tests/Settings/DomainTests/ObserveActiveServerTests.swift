@@ -5,6 +5,49 @@ import TestDoubles
 
 struct ObserveActiveServerTests {
 
+    @Test func `given live transport for both routes when local resolves then only local live transport is selected`() async {
+        // given
+        let scenario = Scenario(isLocalReachable: true)
+        let settings = ConnectionSettings(
+            remote: remoteAddress,
+            local: localAddress,
+            remoteLive: LiveConnectionSettings(scheme: .https, port: 8443),
+            localLive: LiveConnectionSettings(scheme: .http, port: 1984),
+            username: "admin", password: "hunter2"
+        )
+        var iterator = scenario.sut.execute(for: settings).makeAsyncIterator()
+
+        // when
+        let resolved = await iterator.next()
+
+        // then
+        #expect(resolved?.live == LiveConnectionSettings(scheme: .http, port: 1984))
+        #expect(resolved?.address == localAddress)
+    }
+
+    @Test(arguments: [true, false])
+    func `given local live transport when remote resolves then it never reuses the local live port`(hasRemoteLiveAddress: Bool) async {
+        // given
+        let scenario = Scenario(isLocalReachable: false)
+        let remoteLive = hasRemoteLiveAddress
+            ? LiveConnectionSettings(scheme: .https, port: 8443) : nil
+        let settings = ConnectionSettings(
+            remote: remoteAddress, local: localAddress,
+            remoteLive: remoteLive,
+            localLive: LiveConnectionSettings(scheme: .http, port: 1984),
+            username: "admin", password: "hunter2"
+        )
+        var iterator = scenario.sut.execute(for: settings).makeAsyncIterator()
+
+        // when
+        let resolved = await iterator.next()
+
+        // then
+        #expect(resolved?.route == .remote)
+        #expect(resolved?.live == remoteLive)
+        #expect(resolved?.address == remoteAddress)
+    }
+
     @Test func `given no local address when observing then the remote server is used without probing`() async {
         // given
         let scenario = Scenario(isLocalReachable: true)
@@ -105,14 +148,17 @@ private let remoteAddress = ServerAddress(scheme: .https, host: "frigate.ts.net"
 private let localAddress = ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000)
 
 private let remoteServer = ActiveServer(
-    route: .remote, address: remoteAddress, username: "admin", password: "hunter2"
+    route: .remote, address: remoteAddress, live: nil, username: "admin", password: "hunter2"
 )
 private let localServer = ActiveServer(
-    route: .local, address: localAddress, username: "admin", password: "hunter2"
+    route: .local, address: localAddress, live: nil, username: "admin", password: "hunter2"
 )
 
 private func connection(local: ServerAddress? = localAddress) -> ConnectionSettings {
-    ConnectionSettings(remote: remoteAddress, local: local, username: "admin", password: "hunter2")
+    ConnectionSettings(
+        remote: remoteAddress, local: local, remoteLive: nil, localLive: nil,
+        username: "admin", password: "hunter2"
+    )
 }
 
 private struct Scenario {

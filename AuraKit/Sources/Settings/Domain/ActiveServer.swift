@@ -10,12 +10,20 @@ public enum ServerRoute: String, Equatable, Sendable, CaseIterable {
 public struct ActiveServer: Equatable, Sendable {
     public let route: ServerRoute
     public let address: ServerAddress
+    public let live: LiveConnectionSettings?
     public let username: String?
     public let password: String?
 
-    public init(route: ServerRoute, address: ServerAddress, username: String?, password: String?) {
+    public init(
+        route: ServerRoute,
+        address: ServerAddress,
+        live: LiveConnectionSettings?,
+        username: String?,
+        password: String?
+    ) {
         self.route = route
         self.address = address
+        self.live = live
         self.username = username
         self.password = password
     }

@@ -14,6 +14,10 @@ public final class ServerSettingsViewModel {
     public var localScheme: ServerAddress.Scheme = .http
     public var localHost: String = ""
     public var localPort: String = "5000"
+    public var remoteLiveScheme: ServerAddress.Scheme = .http
+    public var remoteLivePort: String = ""
+    public var localLiveScheme: ServerAddress.Scheme = .http
+    public var localLivePort: String = ""
     public var username: String = ""
     public var password: String = ""
 
@@ -38,6 +42,14 @@ public final class ServerSettingsViewModel {
             localHost = local.host
             localPort = String(local.port)
         }
+        if let remoteLive = connection.remoteLive {
+            remoteLiveScheme = remoteLive.scheme
+            remoteLivePort = String(remoteLive.port)
+        }
+        if let localLive = connection.localLive {
+            localLiveScheme = localLive.scheme
+            localLivePort = String(localLive.port)
+        }
         username = connection.username ?? ""
         password = connection.password ?? ""
     }
@@ -59,18 +71,35 @@ public final class ServerSettingsViewModel {
             }
             local = ServerAddress(scheme: localScheme, host: localHost, port: localPortValue)
         }
-        let settings = ConnectionSettings(
-            remote: ServerAddress(scheme: remoteScheme, host: remoteHost, port: remotePortValue),
-            local: local,
-            username: username.isEmpty ? nil : username,
-            password: password.isEmpty ? nil : password
-        )
         do {
+            let settings = ConnectionSettings(
+                remote: ServerAddress(scheme: remoteScheme, host: remoteHost, port: remotePortValue),
+                local: local,
+                remoteLive: try liveSettings(
+                    scheme: remoteLiveScheme, port: remoteLivePort, route: .remote
+                ),
+                localLive: try liveSettings(
+                    scheme: localLiveScheme, port: localLivePort, route: .local
+                ),
+                username: username.isEmpty ? nil : username,
+                password: password.isEmpty ? nil : password
+            )
             try saveConnection.execute(settings)
             didSave = true
         } catch {
             errorMessage = message(for: error)
         }
+    }
+
+    private func liveSettings(
+        scheme: ServerAddress.Scheme,
+        port: String,
+        route: ServerRoute
+    ) throws(SettingsError) -> LiveConnectionSettings? {
+        let port = port.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !port.isEmpty else { return nil }
+        guard let portValue = Int(port) else { throw .invalidLivePort(route) }
+        return LiveConnectionSettings(scheme: scheme, port: portValue)
     }
 
     private func message(for error: SettingsError) -> String {
@@ -79,6 +108,9 @@ public final class ServerSettingsViewModel {
         case .invalidHost(.local): "Enter a valid local host, or clear it to always use the remote address."
         case .invalidPort(.remote): "The remote port must be a number between 1 and 65535."
         case .invalidPort(.local): "The local port must be a number between 1 and 65535."
+        case .invalidLivePort(.remote): "The remote live stream port must be a number between 1 and 65535."
+        case .invalidLivePort(.local): "The local live stream port must be a number between 1 and 65535."
+        case .localLiveRequiresLocalAddress: "Enter a local server address before adding a local live port."
         // Saving a connection cannot fail this way; the icon picker reports its own failures.
         case .iconChangeFailed: "Something went wrong. Try again."
         }

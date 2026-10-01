@@ -18,6 +18,17 @@ import TimelinePresentation
 @MainActor
 struct RecordingPlayerSnapshotTests {
 
+    @Test func `given live playback fails then the error and retry fit the video slot`() {
+        // given
+        let view = recordingDetailScreen(
+            state: detailState(instant: snapshotNow, isPlaying: false, slot: .failed, isLive: true, isPlayable: false),
+            retryLive: {}
+        ) { Color.black }
+
+        // then
+        assertScreenSnapshot(view, named: "detail-live-failed")
+    }
+
     @Test func `given a playing recording when the screen is shown then the timeline panel reads`() {
         // given
         let view = recordingDetail(state: detailState())
@@ -132,13 +143,14 @@ private func recordingDetail(state: RecordingDetailState) -> some View {
 /// compact height (as production does) keeps `.rail`'s baselines exactly as they were.
 @MainActor
 func recordingDetailScreen<Video: View>(
-    state: RecordingDetailState, @ViewBuilder video: () -> Video
+    state: RecordingDetailState, retryLive: (() -> Void)? = nil, @ViewBuilder video: () -> Video
 ) -> some View {
-    RecordingDetailScreen(state: state, video: video())
+    RecordingDetailScreen(state: state, retryLive: retryLive, video: video())
 }
 
 struct RecordingDetailScreen<Video: View>: View {
     let state: RecordingDetailState
+    let retryLive: (() -> Void)?
     let video: Video
 
     #if os(iOS)
@@ -147,7 +159,7 @@ struct RecordingDetailScreen<Video: View>: View {
 
     var body: some View {
         NavigationStack {
-            RecordingDetailLayout(state: state, actions: .inert, filmstrip: emptyFilmstrip()) { video }
+            RecordingDetailLayout(state: state, actions: .inert, filmstrip: emptyFilmstrip(), retryLive: retryLive) { video }
                 .navigationTitle(state.cameraName)
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)

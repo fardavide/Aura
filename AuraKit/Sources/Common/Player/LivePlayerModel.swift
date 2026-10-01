@@ -22,6 +22,14 @@ import SwiftUI
 @MainActor
 @Observable
 public final class LivePlayerModel {
+    public enum State: Equatable, Sendable {
+        case loading
+        case playing
+        case paused
+        case failed
+    }
+
+    public private(set) var state: State = .loading
     public private(set) var isPlaying: Bool
     public private(set) var isMuted: Bool
     public private(set) var isPictureInPictureActive: Bool
@@ -30,8 +38,14 @@ public final class LivePlayerModel {
     @ObservationIgnored public private(set) lazy var player: AVPlayer = makeAuthedPlayer(url: url, headers: headers)
     @ObservationIgnored private let url: URL
     @ObservationIgnored private let headers: [String: String]
+    @ObservationIgnored private let waitForPlayback: @MainActor (Duration) async throws -> Void
+    @ObservationIgnored private(set) var playbackDeadline: Task<Void, Never>?
+    @ObservationIgnored private var playbackObservation: NSKeyValueObservation?
+    @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
     @ObservationIgnored private var didStart = false
     @ObservationIgnored private var didEnterBackground = false
+    @ObservationIgnored private var isAudioInterrupted = false
+    @ObservationIgnored private var isPictureInPictureStarting = false
     // Set whenever the current item can no longer show live video (its window rolled off while the
     // app was away). Cleared by rebuilding the item, which is deferred until the picture is ours to
     // resume — the user may be paused, or Picture-in-Picture may still own it.
@@ -45,14 +59,20 @@ public final class LivePlayerModel {
     // Written once during setup, read once in the nonisolated `deinit`; the escape hatch lets deinit
     // unregister the non-Sendable observer token.
     @ObservationIgnored private nonisolated(unsafe) var interruptionObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private nonisolated(unsafe) var failureObserver: (any NSObjectProtocol)?
 
     public var isPictureInPictureSupported: Bool {
         AVPictureInPictureController.isPictureInPictureSupported()
     }
 
-    public init(url: URL, headers: [String: String]) {
+    public convenience init(url: URL, headers: [String: String]) {
+        self.init(url: url, headers: headers, waitForPlayback: { try await Task.sleep(for: $0) })
+    }
+
+    init(url: URL, headers: [String: String], waitForPlayback: @escaping @MainActor (Duration) async throws -> Void) {
         self.url = url
         self.headers = headers
+        self.waitForPlayback = waitForPlayback
         isPlaying = true
         isMuted = false
         isPictureInPictureActive = false
@@ -60,8 +80,12 @@ public final class LivePlayerModel {
     }
 
     deinit {
+        playbackDeadline?.cancel()
         if let interruptionObserver {
             NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        if let failureObserver {
+            NotificationCenter.default.removeObserver(failureObserver)
         }
     }
 
@@ -70,8 +94,44 @@ public final class LivePlayerModel {
     public func start() {
         guard !didStart else { return }
         didStart = true
+        if player.currentItem == nil {
+            player.replaceCurrentItem(with: makeAuthedPlayerItem(url: url, headers: headers))
+        }
+        needsFreshLiveItem = false
+        state = .loading
+        isPlaying = true
+        observeItemFailure()
         player.play()
+        beginPlaybackDeadline()
         observeInterruptions()
+    }
+
+    public func stop() {
+        guard didStart, !isPictureInPictureActive, !isPictureInPictureStarting,
+              pictureInPictureController?.isPictureInPictureActive != true,
+              pictureInPictureController?.isPictureInPictureSuspended != true else { return }
+        didStart = false
+        didEnterBackground = false
+        isAudioInterrupted = false
+        playbackDeadline?.cancel()
+        playbackDeadline = nil
+        playbackObservation?.invalidate()
+        playbackObservation = nil
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
+        if let failureObserver {
+            NotificationCenter.default.removeObserver(failureObserver)
+            self.failureObserver = nil
+        }
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        isPlaying = false
+        state = .paused
+        needsFreshLiveItem = true
     }
 
     /// Recovers the stream when the app comes back from the background. The system stops feeding a
@@ -86,6 +146,8 @@ public final class LivePlayerModel {
         switch phase {
         case .background:
             didEnterBackground = true
+            playbackDeadline?.cancel()
+            playbackDeadline = nil
         case .inactive:
             break
         case .active:
@@ -123,11 +185,16 @@ public final class LivePlayerModel {
     public func togglePlayPause() {
         isPlaying.toggle()
         if !isPlaying {
+            playbackDeadline?.cancel()
+            playbackDeadline = nil
+            state = .paused
             player.pause()
         } else if needsFreshLiveItem {
             resumeAtLiveEdge()
         } else {
+            state = .loading
             player.play()
+            beginPlaybackDeadline()
         }
     }
 
@@ -136,16 +203,67 @@ public final class LivePlayerModel {
         isMuted = player.isMuted
     }
 
+    public func retry() {
+        guard didStart else { return }
+        resumeAtLiveEdge()
+    }
+
     public func togglePictureInPicture() {
         guard let controller = pictureInPictureController else { return }
         if controller.isPictureInPictureActive {
             controller.stopPictureInPicture()
         } else {
+            setPictureInPictureStarting()
             controller.startPictureInPicture()
         }
     }
 
-    fileprivate func setPictureInPictureActive(_ active: Bool) {
+    func handlePlaybackStatus(_ status: AVPlayer.TimeControlStatus, for item: AVPlayerItem) {
+        guard didStart, isPlaying, player.currentItem === item else { return }
+        switch status {
+        case .playing:
+            playbackDeadline?.cancel()
+            playbackDeadline = nil
+            state = .playing
+        case .paused, .waitingToPlayAtSpecifiedRate:
+            guard !didEnterBackground, !isAudioInterrupted else { return }
+            if state != .loading { state = .loading }
+            if playbackDeadline == nil { beginPlaybackDeadline() }
+        @unknown default:
+            break
+        }
+    }
+
+    func handleItemStatus(_ status: AVPlayerItem.Status, for item: AVPlayerItem) {
+        guard didStart, player.currentItem === item else { return }
+        switch status {
+        case .failed: failPlayback()
+        case .unknown, .readyToPlay: break
+        @unknown default: break
+        }
+    }
+
+    func handleAudioInterruption(_ phase: AudioInterruption) {
+        guard didStart else { return }
+        switch phase {
+        case .began:
+            isAudioInterrupted = true
+            needsFreshLiveItem = true
+            playbackDeadline?.cancel()
+            playbackDeadline = nil
+        case .ended:
+            isAudioInterrupted = false
+            if isPlaying { resumeAtLiveEdge() }
+        }
+    }
+
+    func setPictureInPictureStarting() {
+        isPictureInPictureStarting = true
+        PictureInPictureRetainer.retain(self)
+    }
+
+    func setPictureInPictureActive(_ active: Bool) {
+        isPictureInPictureStarting = false
         isPictureInPictureActive = active
         if active {
             PictureInPictureRetainer.retain(self)
@@ -169,10 +287,15 @@ public final class LivePlayerModel {
             object: AVAudioSession.sharedInstance(),
             queue: .main
         ) { [weak self] notification in
-            let ended = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
-                .flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .ended
-            guard ended else { return }
-            MainActor.assumeIsolated { self?.resumeAtLiveEdge() }
+            guard let phase = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
+                .flatMap(AVAudioSession.InterruptionType.init(rawValue:)) else { return }
+            MainActor.assumeIsolated {
+                switch phase {
+                case .began: self?.handleAudioInterruption(.began)
+                case .ended: self?.handleAudioInterruption(.ended)
+                @unknown default: break
+                }
+            }
         }
         #endif
     }
@@ -189,13 +312,74 @@ public final class LivePlayerModel {
     }
 
     private func resumeAtLiveEdge() {
+        guard didStart else { return }
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
         needsFreshLiveItem = false
+        playbackDeadline?.cancel()
+        playbackDeadline = nil
         player.replaceCurrentItem(with: makeAuthedPlayerItem(url: url, headers: headers))
+        state = .loading
+        observeItemFailure()
         player.play()
         isPlaying = true
+        beginPlaybackDeadline()
+    }
+
+    private func observeItemFailure() {
+        if let failureObserver {
+            NotificationCenter.default.removeObserver(failureObserver)
+        }
+        guard let item = player.currentItem else { return }
+        itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            let status = item.status
+            Task { @MainActor in self?.handleItemStatus(status, for: item) }
+        }
+        playbackObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self, weak item] player, _ in
+            let status = player.timeControlStatus
+            Task { @MainActor in
+                guard let item else { return }
+                self?.handlePlaybackStatus(status, for: item)
+            }
+        }
+        failureObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.failedToPlayToEndTimeNotification,
+            object: item,
+            queue: .main
+        ) { [weak self, weak item] _ in
+            MainActor.assumeIsolated {
+                guard let self, let item, self.player.currentItem === item else { return }
+                self.failPlayback()
+            }
+        }
+    }
+
+    private func beginPlaybackDeadline() {
+        guard !didEnterBackground, !isAudioInterrupted else { return }
+        playbackDeadline = Task { [weak self, waitForPlayback] in
+            do {
+                try await waitForPlayback(.seconds(15))
+            } catch {
+                guard !Task.isCancelled else { return }
+            }
+            guard !Task.isCancelled, let self, self.didStart, self.isPlaying, self.state == .loading else { return }
+            self.failPlayback()
+        }
+    }
+
+    private func failPlayback() {
+        playbackDeadline?.cancel()
+        playbackDeadline = nil
+        player.pause()
+        isPlaying = false
+        state = .failed
+        needsFreshLiveItem = true
+    }
+
+    enum AudioInterruption {
+        case began
+        case ended
     }
 }
 
@@ -208,6 +392,11 @@ private final class PictureInPictureCoordinator: NSObject, AVPictureInPictureCon
     init(model: LivePlayerModel) {
         self.model = model
         super.init()
+    }
+
+    func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        let model = self.model
+        MainActor.assumeIsolated { model?.setPictureInPictureStarting() }
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {

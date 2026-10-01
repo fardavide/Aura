@@ -1,5 +1,7 @@
 import SwiftUI
 
+import CommonDesign
+
 /// The live camera view: an autoplaying stream with pinch-zoom/pan and Picture-in-Picture. Composes
 /// the shared `LiveVideoLayout` (video in the zoom, controls fixed outside it) with the live
 /// `LivePlayerModel`. In `.fill` (compact height) the controls auto-hide after a few seconds of no
@@ -46,11 +48,32 @@ public struct LiveVideoView: View {
         ) {
             LivePlayerView(model: model)
         }
+        .opacity(model.state == .failed ? 0 : 1)
+        .allowsHitTesting(model.state != .failed)
+        .accessibilityHidden(model.state == .failed)
+        .overlay {
+            switch model.state {
+            case .failed:
+                LivePlaybackFailureView(retry: model.retry)
+                    .auroraBackground()
+            case .loading:
+                ProgressView("Connecting to live stream")
+                    .tint(.auroraGradientViolet)
+                    .auroraText(.body)
+                    .foregroundStyle(.auroraTextPrimary)
+                    .allowsHitTesting(false)
+            case .playing, .paused:
+                EmptyView()
+            }
+        }
         .onAppear {
             model.start()
             scheduleAutoHide()
         }
-        .onDisappear { autoHide?.cancel() }
+        .onDisappear {
+            autoHide?.cancel()
+            model.stop()
+        }
         // The stream goes stale while the app is away and `onAppear` doesn't re-fire on the way
         // back, so nothing else would restart it.
         .onChange(of: scenePhase) { _, phase in model.handleScenePhase(phase) }

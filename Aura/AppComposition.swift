@@ -156,7 +156,9 @@ final class AppComposition {
     ) -> CameraDetailViewModel {
         CameraDetailViewModel(
             camera: camera,
-            streamProvider: FrigateCameraStreamProvider(config: ServerConfig(server))
+            streamProvider: FrigateCameraStreamProvider(
+                config: ServerConfig(server), go2rtcBaseUrl: server.liveBaseUrl
+            )
         )
     }
 
@@ -301,7 +303,9 @@ final class AppComposition {
                 recordings: recordings,
                 imageLoader: imageLoader
             ),
-            liveSource: FrigateCameraStreamProvider(config: config).streamSource(for: camera),
+            liveSource: FrigateCameraStreamProvider(
+                config: config, go2rtcBaseUrl: server.liveBaseUrl
+            ).streamSource(for: camera),
             now: { Date() },
             startingAt: instant,
             days: timelineSpanDays

@@ -38,6 +38,7 @@ public struct RecordingDetailLayout<Video: View>: View {
     private let state: RecordingDetailState
     private let actions: RecordingDetailActions
     private let filmstrip: RecordingFilmstripStore
+    private let retryLive: (() -> Void)?
     private let video: Video
 
     #if os(iOS)
@@ -65,11 +66,13 @@ public struct RecordingDetailLayout<Video: View>: View {
         state: RecordingDetailState,
         actions: RecordingDetailActions,
         filmstrip: RecordingFilmstripStore,
+        retryLive: (() -> Void)? = nil,
         @ViewBuilder video: () -> Video
     ) {
         self.state = state
         self.actions = actions
         self.filmstrip = filmstrip
+        self.retryLive = retryLive
         self.video = video()
     }
 
@@ -280,7 +283,7 @@ public struct RecordingDetailLayout<Video: View>: View {
             AuroraZoomFrame(cornerRadius: Self.videoCornerRadius, lineWidth: Self.videoRimWidth, opacity: chrome.borderOpacity * pictureOpacity)
         }
         .auroraCardGlow(opacity: chrome.borderOpacity * pictureOpacity)
-        .overlay { RecordingHeroOverlay(state: state) }
+        .overlay { RecordingHeroOverlay(state: state, retryLive: retryLive) }
         .overlay { slotHighlight }
         .animation(slotCrossfade, value: state.slot)
     }
@@ -356,7 +359,7 @@ public struct RecordingDetailLayout<Video: View>: View {
         }
         .auroraCardGlow(opacity: chrome.borderOpacity * pictureOpacity)
         .overlay(alignment: alignment) {
-            RecordingHeroOverlay(state: state)
+            RecordingHeroOverlay(state: state, retryLive: retryLive)
                 .frame(width: boxSize.width, height: boxSize.height)
                 .offset(y: topInset)
         }

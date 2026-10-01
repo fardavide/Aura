@@ -390,6 +390,19 @@ not snapshot-tested — they center on video players that can't render in a snap
   tab's placeholder-tile baselines re-recorded. See `decisions.md` for the three open questions
   decided there, including the stacked card width left as is.
 
+- **Frigate 0.18 live playback compatibility.** Live video can use go2rtc directly, with an optional
+  scheme and port on each existing server address. It shares the host selected by the current
+  local/remote policy; no third address and no Frigate credentials are sent to direct go2rtc.
+  Blank live ports preserve the older Frigate proxy. Camera and Timeline live players expose
+  native failures and a 15-second loading/stall deadline, with a working Retry action. Against the
+  running 0.18 server, the production native AVPlayer model decoded 20–21 full-resolution frames
+  over more than two seconds from each of the three primary streams on initial play, retry, and
+  pause/resume; an invalid source failed visibly in about 0.16 seconds. See `frigate-integration.md`
+  for the verification scope. Host package tests, the full simulator package suite, both platform
+  builds and all 79 app tests on each platform passed; related screenshot references were inspected.
+  Physical iOS playback, PiP, audio interruptions and real-network
+  local/remote transitions remain unverified for this change.
+
 ## Next
 - **Verify the two-address switching on the real network (0.7.2).** Every path is unit-tested
   against fakes, but no probe has ever been sent to a live Frigate. Confirm on the running

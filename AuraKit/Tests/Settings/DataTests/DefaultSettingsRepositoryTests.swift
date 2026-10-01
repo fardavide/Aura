@@ -9,6 +9,64 @@ import TestDoubles
 
 struct DefaultSettingsRepositoryTests {
 
+    @Test func `given live ports on both routes when saving and loading then they round trip without extra hosts`() {
+        // given
+        let scenario = Scenario()
+        let settings = ConnectionSettings(
+            remote: ServerAddress(scheme: .https, host: "frigate.example.net", port: 8971),
+            local: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000),
+            remoteLive: LiveConnectionSettings(scheme: .https, port: 8443),
+            localLive: LiveConnectionSettings(scheme: .http, port: 1984),
+            username: "operator",
+            password: "secret"
+        )
+
+        // when
+        scenario.sut.saveConnection(settings)
+
+        // then
+        #expect(scenario.sut.loadConnection() == settings)
+    }
+
+    @Test func `given saved live configurations when they are removed then neither returns`() {
+        // given
+        let scenario = Scenario()
+        scenario.sut.saveConnection(ConnectionSettings(
+            remote: ServerAddress(scheme: .https, host: "frigate.example.net", port: 8971),
+            local: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000),
+            remoteLive: LiveConnectionSettings(scheme: .https, port: 8443),
+            localLive: LiveConnectionSettings(scheme: .http, port: 1984),
+            username: "operator",
+            password: "secret"
+        ))
+
+        // when
+        scenario.sut.saveConnection(connection(local: nil))
+
+        // then
+        #expect(scenario.sut.loadConnection() == connection(local: nil))
+    }
+
+    @Test func `given distinct live configurations when saving and loading then the connection round-trips`() {
+        // given
+        let scenario = Scenario()
+        let settings = ConnectionSettings(
+            remote: ServerAddress(scheme: .https, host: "frigate.example.net", port: 8_971),
+            local: ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000),
+            remoteLive: LiveConnectionSettings(scheme: .https, port: 8443),
+            localLive: LiveConnectionSettings(scheme: .http, port: 1984),
+            username: "operator",
+            password: "stream-secret"
+        )
+
+        // when
+        scenario.sut.saveConnection(settings)
+        let loaded = scenario.sut.loadConnection()
+
+        // then
+        #expect(loaded == settings)
+    }
+
     @Test func `given a saved connection when loading then it round-trips`() {
         // given
         let scenario = Scenario()
@@ -54,6 +112,8 @@ struct DefaultSettingsRepositoryTests {
             ConnectionSettings(
                 remote: ServerAddress(scheme: .http, host: "h", port: 5000),
                 local: nil,
+                remoteLive: nil,
+                localLive: nil,
                 username: nil,
                 password: "secret"
             )
@@ -161,6 +221,8 @@ private func connection(local: ServerAddress?) -> ConnectionSettings {
     ConnectionSettings(
         remote: ServerAddress(scheme: .https, host: "frigate.ts.net", port: 8_971),
         local: local,
+        remoteLive: nil,
+        localLive: nil,
         username: "admin",
         password: "secret"
     )
