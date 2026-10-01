@@ -2324,3 +2324,12 @@ image mismatches. The HTML diff report alone then contains no evidence of the ca
 Failed runs now also retain the Xcode result bundle so crash reports, timeouts, and test
 activities can be inspected. The image report remains the first artifact for visual
 mismatches; screenshot cases, reference images, and comparison tolerances are unchanged.
+
+## Concurrent thumbnail requests require a Sendable test fake (2026-10-02)
+
+The retained screenshot crash report located a SIGSEGV in the export thumbnail fake's
+array append. Export cards request thumbnails concurrently; the fake claimed unchecked
+Sendable conformance while appending to an unsynchronized array. No test inspected that
+tracking. The fake now holds immutable canned bytes with compiler-checked Sendable
+conformance. A regression sends 10,000 concurrent requests and checks that every request
+completes with the configured bytes; it reproduced signal 11 before the change.
