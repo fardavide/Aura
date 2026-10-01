@@ -32,6 +32,10 @@ go2rtc transport (usually HTTP on port 1984). Do not change the general API port
 are sent only to the API/historical proxy, never to the separate live endpoint automatically.
 Authentication on a separate go2rtc endpoint is outside this change.
 
+New setups prefill HTTP/1984; saved transports and legacy proxy selections are retained.
+Local and remote ports remain separate because remote forwarding can map to another port.
+On 2026-10-02 the user confirmed playback worked in the updated app after setting 1984.
+
 `src` names come from each camera's `live.streams` in
 `/api/config`. **Confirm the actual `src` + reachability against the running instance before
 shipping live video.** Caveats and the AVFoundation tradeoff: `/frigate-live`.

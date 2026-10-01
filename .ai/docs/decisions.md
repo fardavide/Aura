@@ -2317,6 +2317,17 @@ The native Mac probe decoded all three configured primary streams with advancing
 time. Physical iPhone/iPad playback, remote-network reachability, and PiP remain distinct
 verification items; successful HTTP/FFmpeg playback alone does not establish them.
 
+## New live settings start with the go2rtc default (2026-10-02)
+
+New server setups prefill HTTP port 1984 for live video, including a local address added
+later. Saved custom transports and existing proxy choices keep their settings; clearing
+a live port still selects the older Frigate proxy. With no local host, the form discards
+the unused local live fields, just as it discards the local API port.
+
+Local and remote ports remain independently editable because a remote proxy or port
+mapping can expose the same service on a different port. The user confirmed that setting
+the live port to 1984 restored playback in the updated app.
+
 ## Screenshot CI retains runtime diagnostics (2026-10-01)
 
 The screenshot job can exit unexpectedly while tests are still running and produce no

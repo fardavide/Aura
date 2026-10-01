@@ -121,18 +121,18 @@ struct SettingsSnapshotTests {
         assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-host")
     }
 
-    @Test func `given a local live stream without a local server when saving then the error is visible`() {
+    @Test func `given an invalid remote live port when saving then the error is visible`() {
         // given
         let viewModel = serverSettingsViewModel(FakeSettingsRepository())
         viewModel.remoteHost = "frigate.tail9c2f1.ts.net"
-        viewModel.localLivePort = "1984"
+        viewModel.remoteLivePort = "invalid"
 
         // when
         viewModel.save()
 
         // then
         assertScreenSnapshot(
-            NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-live-address"
+            NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-live-port"
         )
     }
 

@@ -25,7 +25,7 @@ public struct ServerSettingsView: View {
             } header: {
                 sectionHeading("Remote address")
             } footer: {
-                sectionFooter("Reachable from anywhere — over Tailscale, a VPN or a domain name. Used whenever the local address doesn't answer. For Frigate 0.18 live video, set the live port (commonly 1984); it uses this same host. Leave it empty to use the Frigate proxy on older servers.")
+                sectionFooter("Reachable from anywhere — over Tailscale, a VPN or a domain name. Used whenever the local address doesn't answer. Live video uses this host with its own scheme and port, defaulting to HTTP on port 1984 for new setups. Clear the live port to use the Frigate proxy on older servers.")
             }
             .listRowBackground(Color.auroraSettingsRow)
             Section {
@@ -39,7 +39,7 @@ public struct ServerSettingsView: View {
             } header: {
                 sectionHeading("Local address (optional)")
             } footer: {
-                sectionFooter("Your server's address on your home network. Aura prefers it when it answers. Leave the host empty to always use the remote address. The optional live port uses this same local host; leave it empty to use the Frigate proxy.")
+                sectionFooter("Your server's address on your home network. Aura prefers it when it answers. Leave the host empty to always use the remote address. Live video uses this local host, defaulting to HTTP on port 1984 for new addresses. Its port can differ from the remote one. Clear the live port to use the Frigate proxy.")
             }
             .listRowBackground(Color.auroraSettingsRow)
             Section {
