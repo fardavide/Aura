@@ -2316,3 +2316,11 @@ earlier assumption that live can always reuse the Frigate API base URL.
 The native Mac probe decoded all three configured primary streams with advancing player
 time. Physical iPhone/iPad playback, remote-network reachability, and PiP remain distinct
 verification items; successful HTTP/FFmpeg playback alone does not establish them.
+
+## Screenshot CI retains runtime diagnostics (2026-10-01)
+
+The screenshot job can exit unexpectedly while tests are still running and produce no
+image mismatches. The HTML diff report alone then contains no evidence of the cause.
+Failed runs now also retain the Xcode result bundle so crash reports, timeouts, and test
+activities can be inspected. The image report remains the first artifact for visual
+mismatches; screenshot cases, reference images, and comparison tolerances are unchanged.
