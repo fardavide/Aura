@@ -18,24 +18,28 @@ public struct ServerSettingsView: View {
                 addressFields(
                     scheme: $viewModel.remoteScheme,
                     host: $viewModel.remoteHost,
-                    port: $viewModel.remotePort
+                    port: $viewModel.remotePort,
+                    liveScheme: $viewModel.remoteLiveScheme,
+                    livePort: $viewModel.remoteLivePort
                 )
             } header: {
                 sectionHeading("Remote address")
             } footer: {
-                sectionFooter("Reachable from anywhere — over Tailscale, a VPN or a domain name. Used whenever the local address doesn't answer.")
+                sectionFooter("Reachable from anywhere — over Tailscale, a VPN or a domain name. Used whenever the local address doesn't answer. For Frigate 0.18 live video, set the live port (commonly 1984); it uses this same host. Leave it empty to use the Frigate proxy on older servers.")
             }
             .listRowBackground(Color.auroraSettingsRow)
             Section {
                 addressFields(
                     scheme: $viewModel.localScheme,
                     host: $viewModel.localHost,
-                    port: $viewModel.localPort
+                    port: $viewModel.localPort,
+                    liveScheme: $viewModel.localLiveScheme,
+                    livePort: $viewModel.localLivePort
                 )
             } header: {
                 sectionHeading("Local address (optional)")
             } footer: {
-                sectionFooter("Your server's address on your home network. Aura uses it automatically whenever you're on Wi-Fi and it answers, and falls back to the remote address otherwise. Leave the host empty to always use the remote address.")
+                sectionFooter("Your server's address on your home network. Aura prefers it when it answers. Leave the host empty to always use the remote address. The optional live port uses this same local host; leave it empty to use the Frigate proxy.")
             }
             .listRowBackground(Color.auroraSettingsRow)
             Section {
@@ -48,24 +52,26 @@ public struct ServerSettingsView: View {
             } header: {
                 sectionHeading("Authentication (optional)")
             } footer: {
-                sectionFooter("The same credentials are used for both addresses — they reach the same server.")
+                sectionFooter("These credentials apply to both Frigate API addresses and their live proxy. Direct live playback never receives them.")
             }
             .listRowBackground(Color.auroraSettingsRow)
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage).auroraText(.caption).foregroundStyle(.auroraLive)
-            }
         }
         .formStyle(.grouped)
         .auroraText(.body)
         .scrollContentBackground(.hidden)
         .background(.auroraSettingsSheet)
         .safeAreaInset(edge: .bottom) {
-            Button("Save") {
-                viewModel.save()
-                if viewModel.didSave { dismiss() }
+            VStack(spacing: 12) {
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage).auroraText(.caption).foregroundStyle(.auroraLive)
+                }
+                Button("Save") {
+                    viewModel.save()
+                    if viewModel.didSave { dismiss() }
+                }
+                .buttonStyle(.auroraGradient(glow: true))
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.auroraGradient(glow: true))
-            .frame(maxWidth: .infinity)
             .padding(16)
         }
         .navigationTitle("Server")
@@ -82,7 +88,9 @@ public struct ServerSettingsView: View {
     private func addressFields(
         scheme: Binding<ServerAddress.Scheme>,
         host: Binding<String>,
-        port: Binding<String>
+        port: Binding<String>,
+        liveScheme: Binding<ServerAddress.Scheme>,
+        livePort: Binding<String>
     ) -> some View {
         Picker("Scheme", selection: scheme) {
             ForEach(ServerAddress.Scheme.allCases, id: \.self) { scheme in
@@ -96,6 +104,15 @@ public struct ServerSettingsView: View {
             .autocorrectionDisabled()
             #endif
         TextField("Port", text: port)
+            #if os(iOS)
+            .keyboardType(.numberPad)
+            #endif
+        Picker("Live scheme", selection: liveScheme) {
+            ForEach(ServerAddress.Scheme.allCases, id: \.self) { scheme in
+                Text(scheme.rawValue.uppercased()).tag(scheme)
+            }
+        }
+        TextField("Live port (optional)", text: livePort)
             #if os(iOS)
             .keyboardType(.numberPad)
             #endif

@@ -116,6 +116,11 @@ because the shared target can't see the protocol.
 
 (See the global `test-doubles` skill for the fake conventions.)
 
+Async image loaders can receive concurrent requests from SwiftUI tile tasks. Prefer immutable
+canned data and compiler-checked `Sendable`; do not add unused mutable invocation tracking.
+If a test needs tracking or mutable responses, synchronize that state rather than relying on
+`@unchecked Sendable`.
+
 ## Assert on distinct, meaningful values
 
 Use values that fail loudly if the wrong thing flows through — not defaults/placeholders.
@@ -179,4 +184,5 @@ never `Package.swift`, so the app stays dependency-free).
   `AuraTests/__SnapshotFailures__/<Suite>/<name>.png` (gitignored) — same relative path as its
   `__Snapshots__/` baseline, so you can diff the two directly. `SnapshotSupport` pins this via
   `SNAPSHOT_ARTIFACTS`. On CI the failure job turns this folder into a browsable HTML diff report
-  (`.github/scripts/snapshot-report.py`) uploaded as the `snapshot-diffs` artifact — no `.xcresult`.
+  (`.github/scripts/snapshot-report.py`) uploaded as the `snapshot-diffs` artifact. Failed runs also
+  retain the `.xcresult` bundle as `snapshot-results` for crashes and other runtime failures.

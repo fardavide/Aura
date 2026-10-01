@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 
@@ -81,7 +82,7 @@ struct RecordingPlayerViewModelTests {
     @Test func `given a live stream when loading at the live edge then it plays live`() async {
         // given
         let source = CameraStreamSource(
-            url: URL(string: "http://host/live.m3u8")!,
+            url: URL(fileURLWithPath: "/unused-live-stream.m3u8"),
             headers: ["Authorization": "token"]
         )
         let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
@@ -98,7 +99,7 @@ struct RecordingPlayerViewModelTests {
         // given
         let clock = Clock(now)
         let source = CameraStreamSource(
-            url: URL(string: "http://host/live.m3u8")!,
+            url: URL(fileURLWithPath: "/unused-live-stream.m3u8"),
             headers: [:]
         )
         let sut = makeViewModel(
@@ -825,7 +826,7 @@ struct RecordingPlayerViewModelTests {
     @Test func `given a live stream when going live then it replaces the recording`() async {
         // given
         let source = CameraStreamSource(
-            url: URL(string: "http://host/live.m3u8")!,
+            url: URL(fileURLWithPath: "/unused-live-stream.m3u8"),
             headers: [:]
         )
         let sut = makeViewModel(
@@ -846,7 +847,7 @@ struct RecordingPlayerViewModelTests {
     @Test func `given the live stream when seeking into history then it restores the recording`() async {
         // given
         let source = CameraStreamSource(
-            url: URL(string: "http://host/live.m3u8")!,
+            url: URL(fileURLWithPath: "/unused-live-stream.m3u8"),
             headers: [:]
         )
         let sut = makeViewModel(
@@ -855,6 +856,10 @@ struct RecordingPlayerViewModelTests {
             liveSource: source
         )
         await sut.loadIfNeeded()
+        guard case .live(let livePlayer) = sut.display else {
+            Issue.record("Expected live playback")
+            return
+        }
 
         // when
         await sut.seek(to: at(7250))
@@ -862,12 +867,13 @@ struct RecordingPlayerViewModelTests {
         // then
         #expect(isReady(sut.display))
         #expect(!sut.state.isLive)
+        #expect(livePlayer.currentItem == nil)
     }
 
     @Test func `given the live stream when skipping back then it restores the recording`() async {
         // given
         let source = CameraStreamSource(
-            url: URL(string: "http://host/live.m3u8")!,
+            url: URL(fileURLWithPath: "/unused-live-stream.m3u8"),
             headers: [:]
         )
         let sut = makeViewModel(
@@ -1034,6 +1040,176 @@ struct RecordingPlayerViewModelTests {
 
     // MARK: - The video slot
 
+    @Test(arguments: [true, false])
+    func `given changed live play intent when returning to history then the recording preserves it`(
+        wasPlaying: Bool
+    ) async {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let sut = makeViewModel(segments: footage(from: 3600, to: 7300), startingAt: at(5000), liveSource: source)
+        await sut.loadIfNeeded()
+        if !wasPlaying { sut.togglePlayPause() }
+        await sut.goLive()
+        sut.togglePlayPause()
+
+        // when
+        await sut.seek(to: at(7250))
+
+        // then
+        #expect(isReady(sut.display))
+        #expect(sut.isPlaying == !wasPlaying)
+    }
+
+    @Test func `given a live stream failing during metadata load when the API refreshes then the failure remains`() async {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let repository = FakeCameraRecordingsRepository(.success([]))
+        let clock = Clock(now)
+        let sut = makeViewModel(repository: repository, startingAt: now, clock: clock, liveSource: source)
+        repository.onSegments = { [weak sut] _ in
+            await MainActor.run {
+                guard let sut, case .live(let player) = sut.display, let item = player.currentItem else {
+                    Issue.record("Expected a live item before recording metadata loads")
+                    return
+                }
+                NotificationCenter.default.post(name: AVPlayerItem.failedToPlayToEndTimeNotification, object: item)
+            }
+        }
+        await sut.loadIfNeeded()
+        #expect(sut.state.slot == .failed)
+        clock.instant = at(7330)
+
+        // when
+        await sut.refreshOverlays()
+
+        // then
+        #expect(sut.state.slot == .failed)
+        #expect(!sut.isPlaying)
+        #expect(!sut.state.isPlayable)
+    }
+
+    @Test func `given live playback when the app returns from background then the detail refreshes its live item`() async throws {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+        await sut.loadIfNeeded()
+        guard case .live(let player) = sut.display else {
+            Issue.record("Expected live playback")
+            return
+        }
+        let original = try #require(player.currentItem)
+
+        // when
+        sut.handleScenePhase(.background)
+        sut.handleScenePhase(.active)
+
+        // then
+        #expect(player.currentItem !== original)
+        #expect(sut.state.slot == .loading)
+        #expect(sut.isPlaying)
+    }
+
+    @Test func `given live playback when the screen closes and reopens then a fresh live item resumes`() async throws {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+        await sut.loadIfNeeded()
+        guard case .live(let player) = sut.display else {
+            Issue.record("Expected live playback")
+            return
+        }
+        let original = try #require(player.currentItem)
+
+        // when
+        sut.stopLivePlayback()
+        let released = player.currentItem == nil
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(released)
+        #expect(player.currentItem != nil)
+        #expect(player.currentItem !== original)
+        #expect(sut.state.slot == .loading)
+        #expect(sut.isPlaying)
+    }
+
+    @Test func `given live playback when scrubbing begins then the live item is released`() async {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+        await sut.loadIfNeeded()
+        guard case .live(let player) = sut.display else {
+            Issue.record("Expected live playback")
+            return
+        }
+
+        // when
+        sut.beginScrub()
+
+        // then
+        #expect(player.currentItem == nil)
+        #expect(!sut.isPlaying)
+    }
+
+    @Test func `given failed live playback when retrying through go live then a fresh item starts loading`() async throws {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+        await sut.loadIfNeeded()
+        guard case .live(let player) = sut.display else {
+            Issue.record("Expected live playback")
+            return
+        }
+        let failed = try #require(player.currentItem)
+        NotificationCenter.default.post(name: AVPlayerItem.failedToPlayToEndTimeNotification, object: failed)
+
+        // when
+        await sut.goLive()
+
+        // then
+        #expect(player.currentItem !== failed)
+        #expect(sut.state.slot == .loading)
+        #expect(sut.isPlaying)
+        #expect(sut.state.isPlayable)
+    }
+
+    @Test func `given live playback when paused and resumed then the owner follows both actions`() async {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+        await sut.loadIfNeeded()
+
+        // when
+        sut.togglePlayPause()
+        let wasPaused = !sut.isPlaying
+        sut.togglePlayPause()
+
+        // then
+        #expect(wasPaused)
+        #expect(sut.isPlaying)
+        #expect(sut.state.slot == .loading)
+    }
+
+    @Test func `given live playback when its item fails then the detail reports a stopped unavailable stream`() async throws {
+        // given
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
+        let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
+        await sut.loadIfNeeded()
+        guard case .live(let player) = sut.display else {
+            Issue.record("Expected live playback")
+            return
+        }
+        let item = try #require(player.currentItem)
+
+        // when
+        NotificationCenter.default.post(name: AVPlayerItem.failedToPlayToEndTimeNotification, object: item)
+
+        // then
+        #expect(sut.state.slot == .failed)
+        #expect(!sut.state.isPlaying)
+        #expect(!sut.state.isPlayable)
+    }
+
     @Test func `given nothing loaded yet then the slot is loading`() {
         // given - when
         let sut = makeViewModel(segments: fullHour(from: 3600))
@@ -1053,16 +1229,16 @@ struct RecordingPlayerViewModelTests {
         #expect(sut.state.slot == .footage)
     }
 
-    @Test func `given a live stream at the live edge when loading then the slot holds the picture`() async {
+    @Test func `given a live stream at the live edge when loading then the slot waits for playback`() async {
         // given
-        let source = CameraStreamSource(url: URL(string: "http://host/live.m3u8")!, headers: [:])
+        let source = CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:])
         let sut = makeViewModel(segments: [], startingAt: now, liveSource: source)
 
         // when
         await sut.loadIfNeeded()
 
         // then
-        #expect(sut.state.slot == .footage)
+        #expect(sut.state.slot == .loading)
     }
 
     @Test func `given a playhead inside a gap when loading then the slot holds no footage`() async {

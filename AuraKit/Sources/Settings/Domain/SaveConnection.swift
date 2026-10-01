@@ -10,6 +10,9 @@ public struct SaveConnection: Sendable {
     }
 
     public func execute(_ settings: ConnectionSettings) throws(SettingsError) {
+        guard settings.local != nil || settings.localLive == nil else {
+            throw .localLiveRequiresLocalAddress
+        }
         let remote = try validated(settings.remote, on: .remote)
         let local: ServerAddress?
         if let configured = settings.local {
@@ -21,6 +24,8 @@ public struct SaveConnection: Sendable {
             ConnectionSettings(
                 remote: remote,
                 local: local,
+                remoteLive: try validatedLive(settings.remoteLive, on: .remote),
+                localLive: try validatedLive(settings.localLive, on: .local),
                 username: settings.username,
                 password: settings.password
             )
@@ -32,5 +37,14 @@ public struct SaveConnection: Sendable {
         guard !host.isEmpty else { throw .invalidHost(route) }
         guard (1...65_535).contains(address.port) else { throw .invalidPort(route) }
         return ServerAddress(scheme: address.scheme, host: host, port: address.port)
+    }
+
+    private func validatedLive(
+        _ live: LiveConnectionSettings?,
+        on route: ServerRoute
+    ) throws(SettingsError) -> LiveConnectionSettings? {
+        guard let live else { return nil }
+        guard (1...65_535).contains(live.port) else { throw .invalidLivePort(route) }
+        return live
     }
 }

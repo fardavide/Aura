@@ -10,6 +10,7 @@ public struct RecordingPlayerView: View {
     // every re-evaluation, and the `.task`s below bind only on appearance — a plain `let` would
     // leave the displayed model waiting on a load that ran against a discarded one.
     @State private var viewModel: RecordingPlayerViewModel
+    @Environment(\.scenePhase) private var scenePhase
     /// How a finished clip is reached from here. The tab bar is hidden on this screen, so there is
     /// no badge to light up — the way across has to be a control the panel owns.
     private let onOpenExports: () -> Void
@@ -24,7 +25,9 @@ public struct RecordingPlayerView: View {
     }
 
     public var body: some View {
-        RecordingDetailLayout(state: viewModel.state, actions: actions, filmstrip: viewModel.filmstrip) {
+        RecordingDetailLayout(
+            state: viewModel.state, actions: actions, filmstrip: viewModel.filmstrip, retryLive: retryLive
+        ) {
             content
         }
         .navigationTitle(viewModel.camera.friendlyName ?? viewModel.camera.name.value)
@@ -37,6 +40,8 @@ public struct RecordingPlayerView: View {
         #endif
         .task { await viewModel.loadIfNeeded() }
         .task { await viewModel.autoRefresh() }
+        .onDisappear { viewModel.stopLivePlayback() }
+        .onChange(of: scenePhase) { _, phase in viewModel.handleScenePhase(phase) }
     }
 
     @ViewBuilder private var content: some View {
@@ -70,6 +75,11 @@ public struct RecordingPlayerView: View {
             // slot's place (`RecordingHeroOverlay`), outside the zoom so the message never scales.
             Color.clear
         }
+    }
+
+    private var retryLive: (() -> Void)? {
+        guard case .live = viewModel.display, viewModel.state.slot == .failed else { return nil }
+        return { Task { await viewModel.goLive() } }
     }
 
     private var actions: RecordingDetailActions {

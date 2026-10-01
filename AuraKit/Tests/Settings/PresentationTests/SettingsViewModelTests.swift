@@ -200,6 +200,8 @@ private func connection(local: ServerAddress?) -> ConnectionSettings {
     ConnectionSettings(
         remote: ServerAddress(scheme: .https, host: "frigate.ts.net", port: 8_971),
         local: local,
+        remoteLive: nil,
+        localLive: nil,
         username: "admin",
         password: "hunter2"
     )

@@ -92,13 +92,13 @@ jobs:
             -scheme Aura \
             -only-testing:AuraTests \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -resultBundlePath SnapshotResults.xcresult \
             -clonedSourcePackagesDirPath SourcePackages
       # On a mismatch the suite writes each freshly-rendered screen to AuraTests/__SnapshotFailures__/
       # (SnapshotSupport.swift pins SNAPSHOT_ARTIFACTS there). Pair each with its committed baseline and
       # emit a small self-contained HTML report — expected vs actual side by side plus an in-browser
-      # difference blend — so a red is reviewable by eye. This replaces uploading the whole ~60 MB
-      # .xcresult (hundreds of opaque files); the fix stays the same: inspect, then re-record baselines
-      # locally — never on CI.
+      # difference blend — so a mismatch is reviewable by eye. Re-record baselines locally, never
+      # on CI. Runtime failures also retain the result bundle below because they may produce no PNG.
       - name: Build snapshot diff report
         if: failure()
         run: |
@@ -112,5 +112,14 @@ jobs:
         with:
           name: snapshot-diffs
           path: snapshot-report
+          retention-days: 7
+          if-no-files-found: warn
+      # Runtime exits can leave no PNG diffs; preserve the crash and timeout diagnostics too.
+      - name: Upload snapshot runtime diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-results
+          path: SnapshotResults.xcresult
           retention-days: 7
           if-no-files-found: warn

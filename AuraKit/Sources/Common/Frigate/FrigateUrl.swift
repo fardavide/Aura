@@ -142,6 +142,17 @@ public enum FrigateLiveUrl {
     }
 }
 
+/// Direct go2rtc HLS. This endpoint is configured separately from Frigate's API.
+public enum Go2rtcLiveUrl {
+    public static func stream(base: URL, src: String) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/stream.m3u8",
+            queryItems: [URLQueryItem(name: "src", value: src)]
+        )
+    }
+}
+
 /// Builders for the day-timeline overlays. `after`/`before` are Unix epoch seconds — the Data
 /// layer converts its `Date`s at the boundary.
 ///

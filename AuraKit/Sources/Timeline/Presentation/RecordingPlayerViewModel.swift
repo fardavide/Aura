@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Observation
+import SwiftUI
 
 import CamerasDomain
 import CamerasEntities
@@ -41,7 +42,7 @@ public final class RecordingPlayerViewModel {
     /// owns the playhead so the hero follows without seeking the full-resolution recording.
     public let scrubPreview: PreviewTileViewModel
     public private(set) var display: Display = .loading
-    public private(set) var isPlaying = false
+    public var isPlaying: Bool { livePlayback?.isPlaying ?? isRecordingPlaying }
     public private(set) var speed: PlaybackSpeed = .oneX
     /// The wall-clock instant under the playhead — what the readout shows, and what a window swap
     /// re-seeks to on the other side.
@@ -96,7 +97,8 @@ public final class RecordingPlayerViewModel {
     /// though the skips and the track stay live so it can be left.
     private var isPlayable: Bool {
         switch display {
-        case .ready, .live: true
+        case .ready: true
+        case .live: livePlayback?.state != .failed && livePlayback != nil
         case .loading, .noFootage, .failed: false
         }
     }
@@ -114,7 +116,14 @@ public final class RecordingPlayerViewModel {
         }
         switch display {
         case .loading: return .loading
-        case .ready, .live: return hasFootage ? .footage : .noFootage
+        case .ready: return hasFootage ? .footage : .noFootage
+        case .live:
+            guard let livePlayback else { return .loading }
+            switch livePlayback.state {
+            case .loading: return .loading
+            case .playing, .paused: return .footage
+            case .failed: return .failed
+            }
         case .noFootage: return .noFootage
         case .failed: return .failed
         }
@@ -164,6 +173,8 @@ public final class RecordingPlayerViewModel {
     /// Stamps each window load so one that lands after a newer request — a second skip, or a seek
     /// the user made while it was in flight — is dropped instead of yanking the playhead back.
     private var loadGeneration = 0
+    private var isRecordingPlaying = false
+    private var livePlayback: LivePlayerModel?
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: (any NSObjectProtocol)?
@@ -303,8 +314,12 @@ public final class RecordingPlayerViewModel {
 
     /// Loads on first appearance only, so returning to the screen doesn't restart the recording.
     public func loadIfNeeded() async {
+        if case .live = display {
+            livePlayback?.start()
+            return
+        }
         guard case .loading = display else { return }
-        isPlaying = true
+        isRecordingPlaying = true
         if followsLiveEdge, let liveSource {
             showLive(liveSource)
         }
@@ -313,6 +328,14 @@ public final class RecordingPlayerViewModel {
         await load(window: window, seeking: .instant(instant))
         _ = await overlays
         _ = await preview
+    }
+
+    public func stopLivePlayback() {
+        livePlayback?.stop()
+    }
+
+    public func handleScenePhase(_ phase: ScenePhase) {
+        livePlayback?.handleScenePhase(phase)
     }
 
     /// Extends the span to the present and re-reads **only the stretch since the last read**,
@@ -446,6 +469,10 @@ public final class RecordingPlayerViewModel {
         case .loading, .noFootage, .failed: break
         }
         setPlaying(false)
+        if livePlayback != nil {
+            detachPlayer()
+            isRecordingPlaying = false
+        }
         scrubPreview.scrub(to: instant)
     }
 
@@ -492,6 +519,10 @@ public final class RecordingPlayerViewModel {
     }
 
     public func goLive() async {
+        if let livePlayback, livePlayback.state == .failed {
+            livePlayback.retry()
+            return
+        }
         await seek(to: span.end)
         // The wall clock runs ahead of the newest recorded frame — segments land seconds late —
         // so the edge itself usually has no footage. Park a hair inside the newest clip instead,
@@ -548,7 +579,7 @@ public final class RecordingPlayerViewModel {
             // left running would keep streaming — and keep moving the playhead — unstoppably.
             detachPlayer()
             display = .failed
-            isPlaying = false
+            isRecordingPlaying = false
             return false
         }
         guard generation == loadGeneration else { return false }
@@ -563,7 +594,7 @@ public final class RecordingPlayerViewModel {
         guard timeline.playableDuration > 0 else {
             apply(instant: resolve(target))
             display = .noFootage
-            isPlaying = false
+            isRecordingPlaying = false
             return true
         }
         let player = makeAuthedPlayer(url: playback.source.url, headers: playback.source.headers)
@@ -638,18 +669,26 @@ public final class RecordingPlayerViewModel {
     /// Drives the rate rather than `play()`/`pause()` so resuming picks the chosen speed back up
     /// in one step instead of briefly running at 1×.
     private func setPlaying(_ playing: Bool) {
-        isPlaying = playing
+        if let livePlayback {
+            guard livePlayback.isPlaying != playing else { return }
+            livePlayback.togglePlayPause()
+            return
+        }
+        isRecordingPlaying = playing
         player?.rate = playing ? speed.rate : 0
     }
 
     private func showLive(_ source: CameraStreamSource) {
         let shouldPlay = isPlaying
         detachPlayer()
-        let player = makeAuthedPlayer(url: source.url, headers: source.headers)
+        let livePlayback = LivePlayerModel(url: source.url, headers: source.headers)
+        self.livePlayback = livePlayback
+        livePlayback.start()
+        if !shouldPlay { livePlayback.togglePlayPause() }
+        let player = livePlayback.player
         self.player = player
         display = .live(player)
         hasFootage = true
-        player.rate = shouldPlay ? PlaybackSpeed.oneX.rate : 0
     }
 
     private func attach(_ player: AVPlayer, playing playedWindow: TimeRange) {
@@ -681,6 +720,11 @@ public final class RecordingPlayerViewModel {
     }
 
     private func detachPlayer() {
+        if let livePlayback {
+            isRecordingPlaying = livePlayback.isPlaying
+            livePlayback.stop()
+        }
+        livePlayback = nil
         if let player, let timeObserver {
             player.removeTimeObserver(timeObserver)
         }

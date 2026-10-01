@@ -97,7 +97,11 @@ struct SettingsSnapshotTests {
     @Test func `given a saved connection when the server form is shown then it matches the reference`() {
         // given
         let viewModel = serverSettingsViewModel(
-            FakeSettingsRepository(connection: snapshotConnection(local: localAddress))
+            FakeSettingsRepository(connection: snapshotConnection(
+                local: localAddress,
+                remoteLive: LiveConnectionSettings(scheme: .https, port: 8443),
+                localLive: LiveConnectionSettings(scheme: .http, port: 1984)
+            ))
         )
         viewModel.onAppear()
 
@@ -115,6 +119,21 @@ struct SettingsSnapshotTests {
 
         // then
         assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-host")
+    }
+
+    @Test func `given a local live stream without a local server when saving then the error is visible`() {
+        // given
+        let viewModel = serverSettingsViewModel(FakeSettingsRepository())
+        viewModel.remoteHost = "frigate.tail9c2f1.ts.net"
+        viewModel.localLivePort = "1984"
+
+        // when
+        viewModel.save()
+
+        // then
+        assertScreenSnapshot(
+            NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-live-address"
+        )
     }
 
     @Test func `given four cameras when the order screen is shown then it matches the reference`() async {
@@ -138,10 +157,16 @@ struct SettingsSnapshotTests {
 
 /// The longest realistic remote host — a Tailscale MagicDNS name, which is what the row has to
 /// fit beside the route tag.
-private func snapshotConnection(local: ServerAddress?) -> ConnectionSettings {
+private func snapshotConnection(
+    local: ServerAddress?,
+    remoteLive: LiveConnectionSettings? = nil,
+    localLive: LiveConnectionSettings? = nil
+) -> ConnectionSettings {
     ConnectionSettings(
         remote: ServerAddress(scheme: .https, host: "frigate.tail9c2f1.ts.net", port: 8_971),
         local: local,
+        remoteLive: remoteLive,
+        localLive: localLive,
         username: "admin",
         password: "hunter2"
     )

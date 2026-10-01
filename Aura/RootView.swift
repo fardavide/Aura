@@ -6,6 +6,7 @@ import CommonDesign
 import EventsDomain
 import EventsPresentation
 import ExportsPresentation
+import SettingsData
 import SettingsDomain
 import SettingsPresentation
 import TimelinePresentation
@@ -102,7 +103,7 @@ struct RootView: View {
                             .symbolEffect(.bounce, value: iconBounces[.exports])
                     }
                 }
-                .id(composition.identity(of: server))
+                .id([composition.identity(of: server), server.liveBaseUrl?.absoluteString ?? ""])
                 .onChange(of: selectedTab) { iconBounces[selectedTab, default: 0] += 1 }
             } else if connection == nil {
                 SettingsView(

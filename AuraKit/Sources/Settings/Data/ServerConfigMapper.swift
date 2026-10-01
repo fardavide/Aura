@@ -1,3 +1,5 @@
+import Foundation
+
 import CommonFrigate
 import SettingsDomain
 
@@ -18,5 +20,19 @@ public extension ServerConfig {
             username: server.username,
             password: server.password
         )
+    }
+}
+
+public extension ActiveServer {
+    /// Live transport shares the host of the API route already selected by Aura.
+    var liveBaseUrl: URL? {
+        guard let live else { return nil }
+        let scheme: ServerConfig.Scheme = switch live.scheme {
+        case .http: .http
+        case .https: .https
+        }
+        return ServerConfig(
+            scheme: scheme, host: address.host, port: live.port, username: nil, password: nil
+        ).baseUrl
     }
 }

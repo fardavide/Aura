@@ -2288,3 +2288,48 @@ replaces them — `Timeline Detail - Empty States.dc.html`, option **1c**, chose
   by literal state instead of a hand-built view), and every Timeline-tab state whose tiles settle
   on the placeholder. The `NoFootage` token stays — the Cameras, Events and Exports thumbnails
   still use it as a still-image well.
+
+## Frigate 0.18 live playback shares the selected host with separate transport (2026-10-01)
+
+Frigate 0.18.0 removed the general nginx go2rtc proxy used by Aura's historical live-HLS
+URL. The running deployment returns 404 there while API previews continue to work;
+direct go2rtc HLS is reachable and plays in native macOS AVPlayer. This supersedes the
+earlier assumption that live can always reuse the Frigate API base URL.
+
+- The saved connection retains its required remote and optional local **API** addresses,
+  and adds an optional **live scheme and port** for each route. The existing local Frigate probe
+  chooses the route; the live URL always uses the host of that selected API address. There is
+  no third IP address or independently configured live host.
+- Configured live transport uses direct go2rtc HLS with **empty headers**. Frigate credentials
+  are never copied to it, even on the same hostname. Separate live authentication needs its
+  own explicit design. Preview/event/config/recording connections keep their API address.
+- Empty live ports retain the historical proxy for older servers and existing installs.
+  Live transport is explicit, no cross-route live fallback occurs, and no server configuration
+  is changed. Frigate's API port is never rewritten.
+- Editing live transport recreates the screen's player even if the API address is unchanged;
+  API-bound download identity remains unchanged. Non-secret live scheme/port settings use separate
+  preference keys; the original API keys and Keychain password keep their meaning.
+- Live loading and prolonged stalls are bounded; media failure becomes a visible message
+  and a Retry action that replaces the stale item. Failure UI stays outside the zoom, and
+  the original video host stays mounted so Retry preserves its PiP layer binding.
+
+The native Mac probe decoded all three configured primary streams with advancing player
+time. Physical iPhone/iPad playback, remote-network reachability, and PiP remain distinct
+verification items; successful HTTP/FFmpeg playback alone does not establish them.
+
+## Screenshot CI retains runtime diagnostics (2026-10-01)
+
+The screenshot job can exit unexpectedly while tests are still running and produce no
+image mismatches. The HTML diff report alone then contains no evidence of the cause.
+Failed runs now also retain the Xcode result bundle so crash reports, timeouts, and test
+activities can be inspected. The image report remains the first artifact for visual
+mismatches; screenshot cases, reference images, and comparison tolerances are unchanged.
+
+## Concurrent thumbnail requests require a Sendable test fake (2026-10-02)
+
+The retained screenshot crash report located a SIGSEGV in the export thumbnail fake's
+array append. Export cards request thumbnails concurrently; the fake claimed unchecked
+Sendable conformance while appending to an unsynchronized array. No test inspected that
+tracking. The fake now holds immutable canned bytes with compiler-checked Sendable
+conformance. A regression sends 10,000 concurrent requests and checks that every request
+completes with the configured bytes; it reproduced signal 11 before the change.

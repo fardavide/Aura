@@ -4,6 +4,7 @@ import Testing
 import CamerasDomain
 import CamerasEntities
 import CamerasPresentation
+import CommonDesign
 import CommonPlayer
 import TestDoubles
 
@@ -16,6 +17,21 @@ import TestDoubles
 /// `CameraDetailView` in its `.unavailable` branch, which is equally deterministic.
 @MainActor
 struct CameraDetailSnapshotTests {
+
+    @Test func `given a playback failure when the live screen is shown then the error and retry match the reference`() {
+        // given
+        let view = NavigationStack {
+            LivePlaybackFailureView(retry: {})
+                .auroraBackground()
+                .navigationTitle("Driveway")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+        }
+
+        // then
+        assertScreenSnapshot(view, named: "playback-failed")
+    }
 
     @Test func `given a playing stream when the card layout is shown then the video is framed and the controls float below`() {
         // given

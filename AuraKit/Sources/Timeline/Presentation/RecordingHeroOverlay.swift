@@ -1,6 +1,7 @@
 import SwiftUI
 
 import CommonDesign
+import CommonPlayer
 import TimelineDomain
 
 /// What sits in the video slot besides the picture. Over footage: the chrome — which camera and
@@ -12,13 +13,19 @@ import TimelineDomain
 /// carry the camera, the instant and the live state, so nothing is duplicated up here.
 struct RecordingHeroOverlay: View {
     let state: RecordingDetailState
+    let retryLive: (() -> Void)?
 
     var body: some View {
         switch state.slot {
         case .footage: chrome
         case .loading: loading
         case .noFootage: noFootage
-        case .failed: failed
+        case .failed:
+            if let retryLive {
+                LivePlaybackFailureView(retry: retryLive)
+            } else {
+                failed
+            }
         }
     }
 

@@ -25,6 +25,8 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
         return ConnectionSettings(
             remote: remote,
             local: address(at: Keys.local),
+            remoteLive: liveSettings(at: Keys.remoteLive),
+            localLive: liveSettings(at: Keys.localLive),
             username: defaults.string(forKey: Keys.username),
             password: keychain.string(for: Keys.password)
         )
@@ -33,6 +35,8 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
     public func saveConnection(_ settings: ConnectionSettings) {
         write(settings.remote, to: Keys.remote)
         write(settings.local, to: Keys.local)
+        write(settings.remoteLive, to: Keys.remoteLive)
+        write(settings.localLive, to: Keys.localLive)
         write(settings.username, toDefaultsKey: Keys.username)
         keychain.set(settings.password, for: Keys.password)
     }
@@ -112,6 +116,25 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
             defaults.removeObject(forKey: key)
         }
     }
+
+    private func liveSettings(at keys: Keys.Live) -> LiveConnectionSettings? {
+        guard
+            let schemeRaw = defaults.string(forKey: keys.scheme),
+            let scheme = ServerAddress.Scheme(rawValue: schemeRaw),
+            defaults.object(forKey: keys.port) != nil
+        else { return nil }
+        return LiveConnectionSettings(scheme: scheme, port: defaults.integer(forKey: keys.port))
+    }
+
+    private func write(_ live: LiveConnectionSettings?, to keys: Keys.Live) {
+        guard let live else {
+            defaults.removeObject(forKey: keys.scheme)
+            defaults.removeObject(forKey: keys.port)
+            return
+        }
+        defaults.set(live.scheme.rawValue, forKey: keys.scheme)
+        defaults.set(live.port, forKey: keys.port)
+    }
 }
 
 /// A reference type so every copy of the repository value shares the one observer set, per
@@ -147,6 +170,11 @@ private final class PreferenceObservers<Value: Sendable>: Sendable {
 }
 
 private enum Keys {
+    struct Live {
+        let scheme: String
+        let port: String
+    }
+
     struct Address {
         let scheme: String
         let host: String
@@ -158,6 +186,14 @@ private enum Keys {
     )
     static let local = Address(
         scheme: "connection.local.scheme", host: "connection.local.host", port: "connection.local.port"
+    )
+    static let remoteLive = Live(
+        scheme: "connection.remoteLive.scheme",
+        port: "connection.remoteLive.port"
+    )
+    static let localLive = Live(
+        scheme: "connection.localLive.scheme",
+        port: "connection.localLive.port"
     )
     static let username = "connection.username"
     static let password = "connection.password"

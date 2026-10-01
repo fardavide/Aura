@@ -4,6 +4,8 @@
 public enum SettingsError: Error, Equatable, Sendable {
     case invalidHost(ServerRoute)
     case invalidPort(ServerRoute)
+    case invalidLivePort(ServerRoute)
+    case localLiveRequiresLocalAddress
     /// The system refused to switch the Home Screen icon, or the platform has no icon to switch.
     case iconChangeFailed
 }
