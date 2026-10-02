@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      baseline_candidate:
+        description: Collect an unevaluated initial-baseline candidate for review
+        type: boolean
+        default: false
+      application_reference:
+        description: Frozen successful main commit SHA for initial candidate source verification
+        type: string
+        required: true
 
 # A newer push to the same ref cancels an in-flight run (saves the 10x-billed macOS minutes).
 concurrency:
@@ -13,6 +22,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  coverage-tooling-tests:
+    name: Coverage tooling tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create isolated tooling environment
+        run: python3 -m venv .venv-coverage
+      - name: Install pinned tooling test dependencies
+        run: .venv-coverage/bin/pip install -r .github/scripts/requirements-coverage.txt
+      - name: Validate coverage rejection and execution contracts
+        run: make coverage-tests PYTHON=.venv-coverage/bin/python
+
   # Deterministic TDD suite — the AuraKit SPM package's unit tests. Runs on the macOS host
   # via `swift test` (no simulator), matching the documented local workflow (.ai/docs/status.md).
   unit-tests:
@@ -22,9 +44,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
+      - name: Identify coverage collection
+        run: make coverage-context
       - name: Run package tests
-        working-directory: AuraKit
-        run: swift test
+        run: make coverage-package
+      - name: Upload package coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-package
+          path: build/coverage-inputs/package
+          if-no-files-found: error
+          retention-days: 30
+      - name: Preserve package diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-diagnostics
+          path: |
+            build/coverage-diagnostics
+            build/coverage-inputs/package/tests.log
+          if-no-files-found: warn
+          retention-days: 7
 
   # Compile-check the app on BOTH platforms — Aura is multiplatform, so a change can build on
   # one and break the other. Separate jobs (separate runners) also sidestep the macOS per-user
@@ -42,58 +82,81 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
-      # Build unsigned — a compile-check needs no signed binary, and the runner has no signing
-      # identity (the native macOS build otherwise fails resolving a "Mac Development" cert; the
-      # iOS Simulator build never signs, so these settings are a harmless no-op there).
-      - name: Build
-        run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -quiet CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+      - name: Cache SwiftPM source packages
+        if: matrix.platform.name == 'iOS'
+        uses: actions/cache@v4
+        with:
+          path: SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+      - name: Identify coverage collection
+        if: matrix.platform.name == 'iOS'
+        run: make coverage-context
+      - name: Build instrumented iOS test products
+        if: matrix.platform.name == 'iOS'
+        run: make coverage-ios-build
+      - name: Archive iOS test products
+        if: matrix.platform.name == 'iOS'
+        run: make coverage-products
+      - name: Upload iOS test products
+        if: matrix.platform.name == 'iOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-products
+          path: |
+            build/ios-products.tar.gz
+            build/ios-products.json
+            build/coverage-context.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Verify macOS compilation
+        if: matrix.platform.name == 'macOS'
+        run: xcodebuild build -scheme Aura -destination 'generic/platform=macOS' -quiet CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -jobs 4
+      - name: Preserve build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics-${{ matrix.platform.name }}
+          path: build/coverage-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
 
   # Liquid-Glass screenshot tests (app-hosted AuraTests target, iOS-only). Isolated on purpose:
   # the reference PNGs are recorded locally and their rendering is environment-sensitive
   # (precision 0.98 area budget / perceptualPrecision 0.87 = ΔE 13 — see decisions.md) — keeping them in their own job means a snapshot
   # diff never masks a real unit/build failure. If the runner's rendering drifts past tolerance,
   # re-record baselines locally (see /build-test) and commit. This job GATES the PR.
-  snapshot-tests:
-    name: Snapshot tests (iOS)
+  snapshot-shards:
+    name: iOS snapshots (${{ matrix.shard }})
     runs-on: macos-26
+    needs: build
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
-      # snapshot-testing pulls swift-syntax (a heavy macro dependency); cache the resolved
-      # source clones keyed on the committed pins. The app/unit jobs need no cache — AuraKit
-      # has zero external dependencies; only AuraTests links snapshot-testing.
-      - name: Cache SwiftPM source packages
-        uses: actions/cache@v4
+      - name: Download instrumented products
+        uses: actions/download-artifact@v4
         with:
-          path: SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('Aura.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
-      - name: Resolve packages
-        run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages
-      # Fail early with a readable message if the expected simulator is missing on this image
-      # release (iOS 26 devices have had transient per-release gaps on the hosted runner).
-      - name: Verify an iOS 26 iPhone 17 simulator is available
-        run: |
-          runtimes="$(xcrun simctl list runtimes available)"
-          devices="$(xcrun simctl list devices available)"
-          grep -E 'iPhone|iPad' <<< "$devices" || true
-          if ! grep -q 'iOS 26' <<< "$runtimes"; then
-            echo "::error::No iOS 26 simulator runtime available on this runner image"
-            exit 1
-          fi
-          if ! grep -q 'iPhone 17' <<< "$devices"; then
-            echo "::error::iPhone 17 simulator not available on this runner image"
-            exit 1
-          fi
+          name: ios-test-products
+          path: build
+      - name: Identify coverage collection
+        run: make coverage-context
+      - name: Validate and restore instrumented products
+        run: make coverage-products-restore
       - name: Run snapshot tests
-        run: |
-          xcodebuild test \
-            -scheme Aura \
-            -only-testing:AuraTests \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
-            -resultBundlePath SnapshotResults.xcresult \
-            -clonedSourcePackagesDirPath SourcePackages
+        run: make coverage-ios SHARD=${{ matrix.shard }}
+      - name: Preserve snapshot coverage and receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ios-${{ matrix.shard }}
+          path: build/coverage-inputs/ios-${{ matrix.shard }}
+          if-no-files-found: warn
+          retention-days: 30
       # On a mismatch the suite writes each freshly-rendered screen to AuraTests/__SnapshotFailures__/
       # (SnapshotSupport.swift pins SNAPSHOT_ARTIFACTS there). Pair each with its committed baseline and
       # emit a small self-contained HTML report — expected vs actual side by side plus an in-browser
@@ -110,7 +173,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: snapshot-diffs
+          name: snapshot-diffs-${{ matrix.shard }}
           path: snapshot-report
           retention-days: 7
           if-no-files-found: warn
@@ -119,7 +182,130 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: snapshot-results
-          path: SnapshotResults.xcresult
+          name: snapshot-results-${{ matrix.shard }}
+          path: build/coverage-diagnostics/ios-${{ matrix.shard }}.xcresult
           retention-days: 7
           if-no-files-found: warn
+
+  snapshot-tests:
+    name: Snapshot tests (iOS)
+    runs-on: ubuntu-latest
+    needs: snapshot-shards
+    if: always()
+    timeout-minutes: 10
+    steps:
+      - name: Require successful shard executions
+        run: |
+          if [ '${{ needs.snapshot-shards.result }}' != 'success' ]; then
+            echo '::error::Snapshot shard execution did not succeed'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-ios-0
+          path: build/coverage-inputs/ios-0
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-ios-1
+          path: build/coverage-inputs/ios-1
+      - name: Verify every snapshot case completed exactly once
+        run: python3 .github/scripts/coverage_collect.py verify-ios --inputs build/coverage-inputs --context build/coverage-context.json
+
+  coverage:
+    name: Coverage
+    runs-on: macos-26
+    needs: [unit-tests, build, snapshot-tests]
+    if: always()
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require successful test and compile verdicts
+        run: |
+          if [ '${{ needs.unit-tests.result }}' != 'success' ] || [ '${{ needs.build.result }}' != 'success' ] || [ '${{ needs.snapshot-tests.result }}' != 'success' ]; then
+            echo '::error::Required tests or platform compilation did not succeed'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/select-xcode
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-package
+          path: build/coverage-inputs/package
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-ios-0
+          path: build/coverage-inputs/ios-0
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-ios-1
+          path: build/coverage-inputs/ios-1
+      - name: Identify coverage collection
+        run: make coverage-context
+      - name: Fetch the approved comparison baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: make coverage-baseline-fetch
+      - name: Validate raw inputs, aggregate and enforce ratchets
+        run: make coverage-report
+      - name: Preserve coverage report and raw exports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: build/coverage
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish successful main comparison baseline
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-baseline
+          path: build/coverage/report.json
+          if-no-files-found: error
+          retention-days: 90
+
+  coverage-candidate:
+    name: Coverage candidate
+    runs-on: macos-26
+    needs: [unit-tests, build, snapshot-tests]
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.baseline_candidate
+    timeout-minutes: 15
+    steps:
+      - name: Require successful test and compile verdicts
+        run: |
+          if [ '${{ needs.unit-tests.result }}' != 'success' ] || [ '${{ needs.build.result }}' != 'success' ] || [ '${{ needs.snapshot-tests.result }}' != 'success' ]; then
+            echo '::error::Required tests or platform compilation did not succeed'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: ./.github/actions/select-xcode
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-package
+          path: build/coverage-inputs/package
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-ios-0
+          path: build/coverage-inputs/ios-0
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-ios-1
+          path: build/coverage-inputs/ios-1
+      - name: Identify coverage collection
+        run: make coverage-context
+      - name: Validate inputs and produce an unevaluated candidate
+        env:
+          AURA_COVERAGE_APPLICATION_REFERENCE: ${{ inputs.application_reference }}
+        run: make coverage-candidate
+      - name: Preserve the candidate for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-candidate-report
+          path: build/coverage/candidate.json
+          if-no-files-found: error
+          retention-days: 30

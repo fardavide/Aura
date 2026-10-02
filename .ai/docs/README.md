@@ -10,6 +10,7 @@ Distinct from `.claude/skills/` (actionable, trigger-activated *rules*) — thes
 | [decisions.md](decisions.md) | Why — the key decisions and their rationale (ADR-style) |
 | [frigate-integration.md](frigate-integration.md) | What we learned about Frigate — connection model, verified go2rtc stream path, auth reality |
 | [status.md](status.md) | Where we are — slice progress, roadmap, and runtime config still needed |
+| [coverage-validation.md](coverage-validation.md) | Collect-once scopes, raw-artifact validation, local command, initial seed and acceptance evidence |
 
 ## For agents
 

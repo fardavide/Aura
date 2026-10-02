@@ -6,6 +6,11 @@ xcuserdata/
 *.xcuserstate
 build/
 DerivedData/
+SourcePackages/
+.venv-coverage/
+.coverage-baseline/
+*.profraw
+*.profdata
 
 # Snapshot test failure artifacts (freshly-rendered mismatches, written per failing run)
 AuraTests/__SnapshotFailures__/

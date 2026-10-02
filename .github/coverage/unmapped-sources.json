@@ -1,0 +1,505 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "path": "AuraKit/Sources/Cameras/Data/ConfigDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "b4faca844830577a7b6c72ccfff77578fc487a7f3fbce375a60965fb8885feb5"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Data/EventLabelDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "15572dd29bb18a7a1997efcc32622fc981253ab421fcb8ac79d8953ae43330b8"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Data/RecordConfigDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "029ddc2787dd84df62d867bdfe4dba203e4948f204bdb70b5bb277155e7a4355"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Data/ReviewItemDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "628d27cca998e7e549454b2ce8917d79c62ee571fc8a74454e000e628a892a24"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Data/StatsDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "c9361205cd61097fb3ffdfd0e262ad18eb21c54260acc094fd31e3d4794b5f75"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/CameraActivityRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "dbdf221ba74f69ad7da0f262207631565d454fce1b5b07c898ea439e2b813dd8"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/CameraGroupsRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "8c3fe070d20ab42ae61aa4c047fca93106da78ce0a21f29fc0fa0cc903560e8e"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/CameraImageLoading.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "a9be6888ff9fdce6b6b07162e4af57bbf1d1c516ffaa953f8c20336ad842d1e7"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/CameraStreamProviding.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "c25cfe0c9dc68221e64156c9dd8d1fc98fb755b49d64cebaa014c2edbb420373"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/CamerasError.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "a631d1a9c6353bf11d9f5322dcec2a695fb4a22f28b6feec01b85478f3896c85"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/CamerasRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "0607e5d853d92c93dce7f5c2a9cadeb1fcb08c22f49b1a71e3e6ce82abdf3fe3"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/RecordingStorageRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "8a207d66cdbfea206d8544ee3306a73706c7012c0e1ded8be6036f789dc4d9ce"
+    },
+    {
+      "path": "AuraKit/Sources/Cameras/Domain/TodayEventsRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "9dc565286d69f46c9f76b1ac4c1e5ae4a4d8262b3e3566e118acc3481cb94e41"
+    },
+    {
+      "path": "AuraKit/Sources/Common/Design/AuroraGradient.swift",
+      "reason": "Stored static gradient initializers; the verified toolchain emits no file-attributed LLVM executable regions.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "a2035f415cf0e70ec15670d0a1a9a0522ec0510119b9d8db922575fd9759b7a0"
+    },
+    {
+      "path": "AuraKit/Sources/Common/Design/DesignMotion.swift",
+      "reason": "Enum, generated Entry accessor and stored static animation initializers; the verified toolchain emits no file-attributed LLVM executable regions.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "eca67f06a8098a81933998ccc42f8769c1464569974ed7951c011673f6d44d55"
+    },
+    {
+      "path": "AuraKit/Sources/Common/Keychain/KeychainStore.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "167c2f6dc5879238af9f4edf39e27d751b1366edf1a09bcf9d063a85e3236b48"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Data/EventDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "750b51605f53715350ecbba41eabfdf614e5aa3c2df0a939ec3b5b4117887b44"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Data/EventReviewDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "db256bdec8b5529007f424a2bab993d47d1d4911a43344408298fb10949830ea"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Domain/DetectionVerdict.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "1f8b4b51764ccba63a70d9883ae5cce77be5cfb69f67b64e4b876272c1ec5db2"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Domain/EventClipLoading.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "7599957a122f4071ad57a147c622aa55f75d001165d8096bad1fc35446f069ba"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Domain/EventSeverity.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "62a14fd2ebbcac923d76f15bff20480c3e26ebf4f3dd26ae5de79a4ea4060d9a"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Domain/EventSnapshotLoading.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "798b361ffe4673c6ff8a97b0eb681d96f14f89e86328c0696b34cba60aaabd88"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Domain/EventThumbnailLoading.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "adaa45d98b27fec44fedc60c31ab1fedd0cd569792721c9421862c34952eca6d"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Domain/EventsError.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "b9fe8b1ccdb3984b9cac6bacce859af34740416742132221de4169ff90e40a41"
+    },
+    {
+      "path": "AuraKit/Sources/Events/Domain/EventsRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "a46b414b63f58b06fcc238cd8d873d00326751aa99bc4dc02f274b8ea93cf524"
+    },
+    {
+      "path": "AuraKit/Sources/Exports/Data/ExportCreationDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "1e75dbf7c6827323c9c67d9582400534830069b4fff6fb06b13abbf719e7d87c"
+    },
+    {
+      "path": "AuraKit/Sources/Exports/Data/ExportDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "d7b53b0970b073e206c3ffa1b7d1f58604c403a0ce7debe0ed8ada258c1e8879"
+    },
+    {
+      "path": "AuraKit/Sources/Exports/Domain/ExportPlaybackProviding.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "3554ef954a01a10971b2cc6cab9172689d16a953ef8ecd24d0b3935a0bc03678"
+    },
+    {
+      "path": "AuraKit/Sources/Exports/Domain/ExportThumbnailLoading.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "a2d103b6e4dcfa98121bbdcebd9657659751c613996e59a131dd02dcb69050fc"
+    },
+    {
+      "path": "AuraKit/Sources/Exports/Domain/ExportsRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "03b28d4840a8b13c71cccb292f25f169e0c3d29bd2cdf5a36ce727b3ed34929b"
+    },
+    {
+      "path": "AuraKit/Sources/Settings/Domain/AppIconPreference.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "396dfbf84d99603a8afdfadc3fe712e03b607fd351a189615018c8b840940b4c"
+    },
+    {
+      "path": "AuraKit/Sources/Settings/Domain/AppIconSwitcher.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "2876798bc5e2522daee424620423cfcee45fc905881a6827fc8affdcc762a5b7"
+    },
+    {
+      "path": "AuraKit/Sources/Settings/Domain/NetworkPathObserving.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "7c8d0306a88f763d05271b3441be471b774d49a7c05aa5f60c86d2d628229df5"
+    },
+    {
+      "path": "AuraKit/Sources/Settings/Domain/ServerReachabilityProbing.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "d1d2887ea3785b6c8c9bfcf9f54406a8d914f2ad8bb9b094b48d95f0716e6e15"
+    },
+    {
+      "path": "AuraKit/Sources/Settings/Domain/SettingsError.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "8d4156a8a25fd5fd251796dd1c4b694b6cdf76bb6182b946557d57eb2c4d0847"
+    },
+    {
+      "path": "AuraKit/Sources/Settings/Domain/SettingsRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "1afc348579db1e6e008e3fdf3d3fa9051eeafddf93c75cd792e61ec92aab28ee"
+    },
+    {
+      "path": "AuraKit/Sources/Settings/Domain/ThemePreference.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "07a46bd323ebb83794468b11750929e8ea30260e420e9f9947e9a69432027229"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Data/MotionActivityDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "0da4a8017e40e21363c299f576443926d19bcdd3a6064e4e752da40645b0b155"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Data/PreviewClipDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "b28de8bbd08205c5532ea4c2c06e035592855d596f50728aa1be1163490c0ed6"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Data/RecordingGapDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "0dd1c87c5105e668012467164f879d55d1af2a021fc57ade4636e66ee52acd9f"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Data/RecordingSegmentDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "931ae2c9449bd24594e9b83728e5594d5784c11f3ab13d9c9105e0bea949a4dd"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Data/ReviewMarkerDto.swift",
+      "reason": "Stored-property DTOs, CodingKeys and synthesized Codable conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "3ea82852c944afa68a9e8f5beb059a84e631335e2488758ee91b5fe7b49ce4fd"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Domain/CameraDayTimelineRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "4c2181bb873a3cd8d599899e59a655346f9865460a31ddfc1009d6ac8a4c2ba6"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Domain/CameraPreviewProviding.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "e5e347689327aac3ba7c124e7a24af181f3df0567b2c0f34cb9748cca2f3e4ba"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Domain/CameraRecordingsRepository.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "1e9207fdf743dbbe9b8485e1ad905f63d8253c18b6b8a79844ae3b12eb570c5e"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Domain/PreviewImageLoading.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "8cdf4739ffeb5519c1b985805e74137b1723b318d26b2edc3b4fafa01993ad0f"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Domain/TimelineError.swift",
+      "reason": "Enum cases, raw values and synthesized conformances only; no handwritten executable bodies.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "fefca525b18d51c4250fdcebc77e09056eca74a1c5f92f8c7e3b11a9068feeca"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Presentation/CameraAreaHighlights.swift",
+      "reason": "Generated Entry accessor and stored static color initializers; the verified toolchain emits no file-attributed LLVM executable regions.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "1a8f2742ca1bcc742bd6c1e964d51a9b529ac2ba15d9a9865b01cbfb33829947"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Presentation/FilmstripThumbnailGenerating.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "223928062fb0ea2c55233df0261104bf8d3b24b2651a2cef3be74404ac72a177"
+    },
+    {
+      "path": "AuraKit/Sources/Timeline/Presentation/PreviewScrubber.swift",
+      "reason": "Protocol requirements only; no handwritten implementations.",
+      "scopes": [
+        "aura-production-host-first-union-v1",
+        "aura-production-ios-v1",
+        "aurakit-production-host-v1"
+      ],
+      "sha256": "d801efd7697390f46031037658717394b176aa628b050219efb0fcbad355a4fc"
+    }
+  ]
+}

@@ -3,6 +3,19 @@
 Key choices and why (ADR-style, newest last). Several were settled with the user during design —
 **check here before re-litigating.**
 
+## Coverage execution trial: collect once, aggregate validated raw inputs
+
+The approved adaptation follows [Granita's merged structure](https://github.com/fardavide/granita/pull/120)
+using Aura's host AuraKit tests, existing iOS-only snapshots, and both platform compile gates.
+Build instrumented iOS products once and distribute whole suites across isolated runners while
+keeping each process serial. Coverage validates receipts, identities, source/mapping inventory
+and integrity before merging unfiltered raw profiles, exporting and enforcing six exact ratchets.
+Total retains fixed package-first mapping precedence; its scope explicitly describes that convention,
+and the independent iOS gate measures all iOS mappings. This does not introduce macOS rendering.
+An initial numerical seed and required-check activation still require review; no baseline or repository
+setting has been fabricated. See [coverage validation](coverage-validation.md) for the contract and
+initialization procedure. Reusable skill changes wait for successful Aura validation and confirmation.
+
 ## Multiplatform (iOS + macOS), not iOS-only
 The scaffold is a Multiplatform target and the user wants the native macOS build kept. Don't
 re-narrow `SUPPORTED_PLATFORMS`. iOS-only APIs go behind a platform wrapper.
