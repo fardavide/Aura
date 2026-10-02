@@ -45,6 +45,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.8.1 — 2026-10-02
+- **New server setups start with the streaming port filled in.** Live video defaults to HTTP
+  on port 1984. Local and remote ports remain separately editable, and saved settings stay as they are.
+
 ### 0.8.0 — 2026-10-01
 - **Live cameras work with Frigate 0.18.** Each server address can use a separate live scheme and
   port on the same host. Previews, events and recordings keep using the existing API connection.

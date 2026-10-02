@@ -7,6 +7,22 @@ import TestDoubles
 @MainActor
 struct ServerSettingsViewModelTests {
 
+    @Test func `given a new setup with only a remote host when saving then direct live streaming uses the default port`() {
+        // given
+        let repository = FakeSettingsRepository()
+        let sut = makeViewModel(repository)
+        sut.onAppear()
+        sut.remoteHost = "frigate.example.net"
+
+        // when
+        sut.save()
+
+        // then
+        #expect(repository.savedConnection?.remoteLive == LiveConnectionSettings(scheme: .http, port: 1984))
+        #expect(repository.savedConnection?.localLive == nil)
+        #expect(sut.didSave)
+    }
+
     @Test(arguments: [ServerRoute.remote, .local])
     func `given a nonnumeric live port when saving then the live stream route is named`(route: ServerRoute) {
         // given
@@ -57,7 +73,7 @@ struct ServerSettingsViewModelTests {
         #expect(repository.savedConnection?.password == "secret")
     }
 
-    @Test func `given a local live stream without a local server when saving then the form explains the missing address`() {
+    @Test func `given a local live port without a local server when saving then the unused live settings are dropped`() {
         // given
         let repository = FakeSettingsRepository()
         let sut = makeViewModel(repository)
@@ -68,9 +84,9 @@ struct ServerSettingsViewModelTests {
         sut.save()
 
         // then
-        #expect(sut.errorMessage == "Enter a local server address before adding a local live port.")
-        #expect(repository.savedConnection == nil)
-        #expect(!sut.didSave)
+        #expect(sut.errorMessage == nil)
+        #expect(repository.savedConnection?.localLive == nil)
+        #expect(sut.didSave)
     }
 
     @Test func `given live ports when saving then both routes retain their API settings and credentials`() {
@@ -148,6 +164,8 @@ struct ServerSettingsViewModelTests {
         #expect(sut.localScheme == .http)
         #expect(sut.localHost == "192.168.1.50")
         #expect(sut.localPort == "5000")
+        #expect(sut.remoteLivePort.isEmpty)
+        #expect(sut.localLivePort.isEmpty)
         #expect(sut.username == "admin")
         #expect(sut.password == "pw")
     }
@@ -186,7 +204,7 @@ struct ServerSettingsViewModelTests {
         #expect(repository.savedConnection == ConnectionSettings(
             remote: ServerAddress(scheme: .http, host: "frigate.ts.net", port: 5000),
             local: nil,
-            remoteLive: nil,
+            remoteLive: LiveConnectionSettings(scheme: .http, port: 1984),
             localLive: nil,
             username: nil,
             password: nil
@@ -210,6 +228,7 @@ struct ServerSettingsViewModelTests {
 
         // then
         #expect(repository.savedConnection?.local == ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000))
+        #expect(repository.savedConnection?.localLive == LiveConnectionSettings(scheme: .http, port: 1984))
     }
 
     @Test func `given a cleared local host when saving then the local address is dropped`() {

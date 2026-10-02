@@ -1,5 +1,9 @@
 # Status & roadmap
 
+New server setups now prefill HTTP/1984 for live streaming on both routes. Saved
+settings remain unchanged, and each port remains editable independently. The user
+confirmed that entering 1984 restored playback after updating to 0.8.0.
+
 ## Done
 - **Slice 1 — data foundation.** `AuraKit` package; Cameras Domain/Data; Common Network/Frigate;
   Frigate camera list + authed image loader; decoding + repository tests. Wired into `Aura.xcodeproj`.

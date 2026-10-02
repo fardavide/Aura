@@ -15,9 +15,9 @@ public final class ServerSettingsViewModel {
     public var localHost: String = ""
     public var localPort: String = "5000"
     public var remoteLiveScheme: ServerAddress.Scheme = .http
-    public var remoteLivePort: String = ""
+    public var remoteLivePort: String = "1984"
     public var localLiveScheme: ServerAddress.Scheme = .http
-    public var localLivePort: String = ""
+    public var localLivePort: String = "1984"
     public var username: String = ""
     public var password: String = ""
 
@@ -45,10 +45,14 @@ public final class ServerSettingsViewModel {
         if let remoteLive = connection.remoteLive {
             remoteLiveScheme = remoteLive.scheme
             remoteLivePort = String(remoteLive.port)
+        } else {
+            remoteLivePort = ""
         }
         if let localLive = connection.localLive {
             localLiveScheme = localLive.scheme
             localLivePort = String(localLive.port)
+        } else if connection.local != nil {
+            localLivePort = ""
         }
         username = connection.username ?? ""
         password = connection.password ?? ""
@@ -78,7 +82,7 @@ public final class ServerSettingsViewModel {
                 remoteLive: try liveSettings(
                     scheme: remoteLiveScheme, port: remoteLivePort, route: .remote
                 ),
-                localLive: try liveSettings(
+                localLive: local == nil ? nil : try liveSettings(
                     scheme: localLiveScheme, port: localLivePort, route: .local
                 ),
                 username: username.isEmpty ? nil : username,
