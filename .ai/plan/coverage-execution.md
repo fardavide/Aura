@@ -349,6 +349,25 @@ six gates against the explicit local acceptance reference, demonstrating the eva
   cache/product transport and coverage artifact transfer separately; include validation-only cost.
 - Exact proposed publication text before publishing, and separate approval for merging.
 
+### First CI portability corrections
+
+Branch commit `9e9440e9f1336f70dd9bb1adf722450e484317a1` was dispatched in
+[run 36990855600](https://github.com/fardavide/Aura/actions/runs/36990855600), using frozen
+application reference `3fa3b066bacd503bdda83bc703f94e52d744c92b`. Package tests and macOS compilation
+passed. Ubuntu Python 3.12 rejected two test-class annotations during collection; postponed
+annotations correct that portability issue without changing their tests. iOS compilation finished,
+then source validation rejected the false path `TestDoubles/Fake/AppIconSwitcher.swift`.
+Xcode's common source prefix can end inside a filename: concatenation reconstructs the actual
+`TestDoubles/FakeAppIconSwitcher.swift`. The installed Xcode `xcodebuild.xctestrun(5)` manual
+documents this text-prefix contract. A regression reproduces the native CI prefix, and validation
+of the retained local Xcode plan accepts all 339 source inputs and 293 production files.
+
+A real shallow-clone regression verifies retrieval of the exact frozen reference after follow-up
+commits, while preserving collection HEAD, refs and working-tree state. Candidate preflight now
+fetches only a missing reference SHA and verifies protected application inputs before downloading
+coverage artifacts. Local tooling verification passes 451 tests, with three native experiments
+deselected; the initial failed run is acceptance cost, not a successful performance measurement.
+
 ## Reusable rules pending Aura validation
 
 Keep global kickstart and related skills unchanged until Davide confirms this adaptation works.

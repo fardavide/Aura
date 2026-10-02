@@ -7,6 +7,7 @@ import subprocess
 import pytest
 
 import coverage_products
+from coverage_inventory import decode_json
 
 
 class TestApplicationReference:
@@ -111,6 +112,83 @@ class TestApplicationReference:
         assert proof.collection_revision == scenario.collection_revision
         assert proof.revision == scenario.reference_revision
         assert proof.verified_files == scenario.protected_files
+
+    def test_given_shallow_checkout_missing_frozen_reference_when_cli_fetches_reference_then_proof_preserves_collection_commit_and_checkout(
+        self: TestApplicationReference,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        # given
+        scenario = self.Scenario(tmp_path / "remote")
+        (scenario.root / ".ai/plan/coverage-review.md").write_text("follow-up coverage review\n")
+        git = (
+            "git", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+            "-c", "user.email=coverage-proof@example.invalid", "-c", "user.name=CoverageProof",
+        )
+        for arguments in (
+            ("add", ".ai/plan/coverage-review.md"),
+            ("commit", "-m", "Follow-up instrumentation review"),
+        ):
+            subprocess.run((*git, *arguments), capture_output=True, check=True, cwd=scenario.root, text=True)
+        collection_revision = subprocess.run(
+            ("git", "rev-parse", "HEAD"), capture_output=True, check=True, cwd=scenario.root, text=True,
+        ).stdout.strip()
+        shallow_root = tmp_path / "shallow"
+        subprocess.run(
+            ("git", "-c", "core.hooksPath=/dev/null", "clone", "--depth", "2", scenario.root.as_uri(), str(shallow_root)),
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+        missing_reference = subprocess.run(
+            ("git", "cat-file", "-e", f"{scenario.reference_revision}^{{commit}}"),
+            capture_output=True,
+            cwd=shallow_root,
+        )
+        assert missing_reference.returncode != 0
+        original_refs = subprocess.run(
+            ("git", "show-ref"), capture_output=True, check=True, cwd=shallow_root,
+        ).stdout
+        original_status = subprocess.run(
+            ("git", "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+            capture_output=True,
+            check=True,
+            cwd=shallow_root,
+        ).stdout
+
+        # when
+        exit_code = coverage_products.main(
+            ("verify-reference", "--revision", scenario.reference_revision, "--fetch-missing"),
+            root=shallow_root,
+        )
+
+        # then
+        assert exit_code == 0
+        proof = decode_json(capsys.readouterr().out)
+        assert isinstance(proof, dict)
+        assert proof.get("schema") == 1
+        assert proof.get("collection_revision") == collection_revision
+        assert proof.get("revision") == scenario.reference_revision
+        assert proof.get("collection_revision") != proof.get("revision")
+        assert proof.get("verified_files") == list(scenario.protected_files)
+        subprocess.run(
+            ("git", "cat-file", "-e", f"{scenario.reference_revision}^{{commit}}"),
+            capture_output=True,
+            check=True,
+            cwd=shallow_root,
+        )
+        assert subprocess.run(
+            ("git", "rev-parse", "HEAD"), capture_output=True, check=True, cwd=shallow_root, text=True,
+        ).stdout.strip() == collection_revision
+        assert subprocess.run(
+            ("git", "show-ref"), capture_output=True, check=True, cwd=shallow_root,
+        ).stdout == original_refs
+        assert subprocess.run(
+            ("git", "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+            capture_output=True,
+            check=True,
+            cwd=shallow_root,
+        ).stdout == original_status
 
     def test_given_top_level_application_directory_symlink_when_reference_is_verified_then_outside_source_alias_is_rejected(
         self: TestApplicationReference,

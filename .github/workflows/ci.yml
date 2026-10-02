@@ -283,6 +283,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+      - name: Verify frozen application source
+        env:
+          AURA_COVERAGE_APPLICATION_REFERENCE: ${{ inputs.application_reference }}
+        run: python3 .github/scripts/coverage_products.py verify-reference --fetch-missing
       - uses: ./.github/actions/select-xcode
       - uses: actions/download-artifact@v4
         with:

@@ -27,14 +27,43 @@ def xctestrun(project: Path) -> dict[str, JsonValue]:
     return {
         "AuraTests": {"BlueprintName": "AuraTests", "InProcessParallelizationEnabled": False, "IsAppHostedTestBundle": True, "ProductModuleName": "AuraTests"},
         "__xctestrun_metadata__": {"CodeCoverageBuildableInfos": [
-            {"SourceFiles": ["App.swift"], "SourceFilesCommonPathPrefix": str(project / "Aura")},
-            {"SourceFiles": ["Entity.swift"], "SourceFilesCommonPathPrefix": str(project / "AuraKit/Sources")},
-            {"SourceFiles": ["__Snapshots__/image.png"], "SourceFilesCommonPathPrefix": str(project / "AuraTests")},
+            {"SourceFiles": ["App.swift"], "SourceFilesCommonPathPrefix": str(project / "Aura") + "/"},
+            {"SourceFiles": ["Entity.swift"], "SourceFilesCommonPathPrefix": str(project / "AuraKit/Sources") + "/"},
+            {"SourceFiles": ["__Snapshots__/image.png"], "SourceFilesCommonPathPrefix": str(project / "AuraTests") + "/"},
         ]},
     }
 
 
 class TestCoverageProducts:
+    def test_given_source_prefix_inside_filename_when_xctestrun_validated_then_retains_concatenated_source_path(
+        self: TestCoverageProducts,
+        project: Path,
+        xctestrun: dict[str, JsonValue],
+    ) -> None:
+        # given
+        fake_path = project / "AuraKit/Tests/TestDoubles/FakeAppIconSwitcher.swift"
+        fake_path.parent.mkdir(parents=True)
+        fake_path.write_text("struct FakeAppIconSwitcher {}\n")
+        metadata = xctestrun["__xctestrun_metadata__"]
+        assert isinstance(metadata, dict)
+        infos = metadata["CodeCoverageBuildableInfos"]
+        assert isinstance(infos, list)
+        infos.append({
+            "SourceFiles": ["AppIconSwitcher.swift"],
+            "SourceFilesCommonPathPrefix": str(project / "AuraKit/Tests/TestDoubles/Fake"),
+        })
+
+        # when
+        result = products.xctestrun_sources(project, xctestrun)
+
+        # then
+        assert result == (
+            "Aura/App.swift",
+            "AuraKit/Sources/Entity.swift",
+            "AuraKit/Tests/TestDoubles/FakeAppIconSwitcher.swift",
+            "AuraTests/__Snapshots__/image.png",
+        )
+
     def test_given_valid_product_archive_when_restore_cli_runs_then_restores_checksum_verified_products(
         self: TestCoverageProducts,
         tmp_path: Path,

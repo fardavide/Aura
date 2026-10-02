@@ -204,7 +204,7 @@ def archive_products(source: Path, destination: Path) -> ProductArchive:
     return ProductArchive(destination, _file_sha256(destination), tuple(member.relative_to(source).as_posix() for member in members))
 
 
-def main(arguments: Sequence[str] | None = None) -> int:
+def main(arguments: Sequence[str] | None = None, root: Path | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     archive = commands.add_parser("archive")
@@ -214,7 +214,32 @@ def main(arguments: Sequence[str] | None = None) -> int:
     restore.add_argument("--archive", required=True, type=Path)
     restore.add_argument("--destination", required=True, type=Path)
     restore.add_argument("--sha256", required=True)
+    reference = commands.add_parser("verify-reference")
+    reference.add_argument("--revision", default=os.environ.get("AURA_COVERAGE_APPLICATION_REFERENCE"))
+    reference.add_argument("--fetch-missing", action="store_true")
     options = parser.parse_args(list(arguments) if arguments is not None else None)
+    if options.command == "verify-reference":
+        revision: object = options.revision
+        if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise ValueError("Application reference must be a full commit SHA")
+        project = root if root is not None else Path(__file__).resolve().parents[2]
+        available = subprocess.run(
+            ("git", "cat-file", "-t", revision), cwd=project, capture_output=True, text=True,
+        )
+        if available.returncode != 0 and options.fetch_missing:
+            subprocess.run(
+                ("git", "fetch", "--no-tags", "--depth=1", "origin", revision),
+                cwd=project, capture_output=True, check=True, text=True,
+            )
+        proof = verify_application_reference(project, revision)
+        print(json.dumps({
+            "collection_revision": proof.collection_revision,
+            "revision": proof.revision,
+            "schema": 1,
+            "source_digest": proof.source_digest,
+            "verified_files": list(proof.verified_files),
+        }, sort_keys=True))
+        return 0
     destination: object = options.destination
     if not isinstance(destination, Path):
         raise ValueError("compiled product archive paths are missing")
@@ -391,8 +416,9 @@ def xctestrun_sources(root: Path, plan: JsonValue) -> tuple[str, ...]:
         for filename in files:
             if not isinstance(filename, str):
                 raise ValueError("coverage source file must be a string")
-            relative = _safe_path(filename)
-            source = Path(prefix) / relative
+            _safe_path(filename)
+            # Xcode removes a common text prefix, which may end inside a filename.
+            source = Path(prefix + filename)
             if not source.exists():
                 raise ValueError(f"missing xctestrun mapping input: {source}")
             sources.append(source.relative_to(root).as_posix())
