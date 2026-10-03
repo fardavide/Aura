@@ -17,6 +17,230 @@ import pytest
 
 
 class TestIosCollection:
+    def test_given_incomplete_native_settings_when_host_initialization_times_out_then_retains_reason_and_restores_simulator(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        products = tmp_path / "Products"
+        app = products / "Debug-iphonesimulator/Aura.app"
+        app.mkdir(parents=True)
+        (app / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": "fardavide.Aura"}))
+        container = tmp_path / "Simulator/AppData"
+        preferences = container / "Library/Preferences/fardavide.Aura.plist"
+        native_commands: list[tuple[str, ...]] = []
+        elapsed_seconds = [0.0]
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            assert check is True
+            native_commands.append(tuple(command))
+            match command[2]:
+                case "list":
+                    stdout = json.dumps({"devices": {"ios-26-5": [
+                        {"udid": "prepared-simulator", "state": "Shutdown"},
+                    ]}})
+                case "bootstatus" | "install" | "terminate" | "shutdown":
+                    stdout = ""
+                case "launch":
+                    assert not preferences.exists()
+                    preferences.parent.mkdir(parents=True)
+                    preferences.write_bytes(plistlib.dumps({"theme": "system"}))
+                    stdout = "fardavide.Aura: 42\n"
+                case "get_app_container":
+                    stdout = str(container) + "\n"
+                case _:
+                    raise AssertionError(f"Unexpected native command: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        def monotonic() -> float:
+            return elapsed_seconds[0]
+
+        def sleep(seconds: float) -> None:
+            assert 0 < seconds <= 1
+            elapsed_seconds[0] += 60
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+        monkeypatch.setattr(coverage_collect.time, "monotonic", monotonic)
+        monkeypatch.setattr(coverage_collect.time, "sleep", sleep)
+
+        # when
+        with pytest.raises(ValueError, match="initial settings") as failure:
+            coverage_collect.prepare_snapshot_host(products=products, simulator="prepared-simulator", root=tmp_path)
+
+        # then
+        assert 120 <= elapsed_seconds[0] <= 180
+        assert [command[2] for command in native_commands] == [
+            "list", "bootstatus", "install", "launch", "get_app_container", "terminate", "shutdown",
+        ]
+        assert plistlib.loads(preferences.read_bytes()) == {"theme": "system"}
+        diagnostic = (tmp_path / "build/coverage-diagnostics/host-preparation-prepared-simulator.log").read_text()
+        assert str(failure.value) in diagnostic, "Retained diagnostics must explain why native host initialization failed"
+
+    def test_given_native_launch_and_shutdown_failures_when_preparing_host_then_preserves_primary_startup_failure_and_diagnostics(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        products = tmp_path / "Products"
+        app = products / "Debug-iphonesimulator/Aura.app"
+        app.mkdir(parents=True)
+        (app / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": "fardavide.Aura"}))
+        launch_command = ("xcrun", "simctl", "launch", "--arch=arm64", "prepared-simulator", "fardavide.Aura")
+        startup_failure = subprocess.CalledProcessError(
+            returncode=71, cmd=launch_command, output="launch output\n", stderr="primary native startup failure\n",
+        )
+        native_commands: list[tuple[str, ...]] = []
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            assert check is True
+            native_commands.append(tuple(command))
+            match command[2]:
+                case "list":
+                    stdout = json.dumps({"devices": {"ios-26-5": [
+                        {"udid": "prepared-simulator", "state": "Shutdown"},
+                    ]}})
+                case "bootstatus" | "install":
+                    stdout = ""
+                case "launch":
+                    assert tuple(command) == launch_command
+                    raise startup_failure
+                case "shutdown":
+                    raise subprocess.CalledProcessError(
+                        returncode=72, cmd=command, output="shutdown output\n", stderr="secondary cleanup failure\n",
+                    )
+                case _:
+                    raise AssertionError(f"Unexpected native command after startup failure: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+
+        # when
+        with pytest.raises(subprocess.CalledProcessError) as failure:
+            coverage_collect.prepare_snapshot_host(products=products, simulator="prepared-simulator", root=tmp_path)
+
+        # then
+        assert failure.value is startup_failure, "Simulator cleanup must preserve the original native startup exception"
+        assert failure.value.returncode == 71
+        assert failure.value.stderr == "primary native startup failure\n"
+        assert [command[2] for command in native_commands] == ["list", "bootstatus", "install", "launch", "shutdown"]
+        diagnostic = (tmp_path / "build/coverage-diagnostics/host-preparation-prepared-simulator.log").read_text()
+        assert "primary native startup failure" in diagnostic
+        assert "secondary cleanup failure" in diagnostic
+
+    @pytest.mark.parametrize("initial_state", ["Booted", "Shutdown"])
+    def test_given_uninitialized_native_host_when_prepared_then_waits_for_app_settings_and_restores_initial_state(
+        self: TestIosCollection,
+        initial_state: Literal["Booted", "Shutdown"],
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        products = tmp_path / "Products"
+        app = products / "Debug-iphonesimulator/Aura.app"
+        app.mkdir(parents=True)
+        (app / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": "fardavide.Aura"}))
+        (app / "Aura").write_bytes(b"compiled instrumented app")
+        container = tmp_path / "Simulator/AppData"
+        preferences = container / "Library/Preferences/fardavide.Aura.plist"
+        native_commands: list[tuple[str, ...]] = []
+        elapsed_seconds = [0.0]
+        waits: list[float] = []
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            assert check is True
+            assert timeout is not None and 0 < timeout <= 180
+            native_commands.append(tuple(command))
+            match command[2]:
+                case "list":
+                    assert tuple(command[2:]) == ("list", "devices", "--json")
+                    stdout = json.dumps({"devices": {"ios-26-5": [
+                        {"udid": "unrelated-device", "state": "Booted" if initial_state == "Shutdown" else "Shutdown"},
+                        {"udid": "prepared-simulator", "state": initial_state},
+                    ]}})
+                case "bootstatus":
+                    assert tuple(command[3:]) == ("prepared-simulator", "-b")
+                    stdout = ""
+                case "install":
+                    assert tuple(command[3:]) == ("prepared-simulator", str(app))
+                    stdout = ""
+                case "launch":
+                    assert tuple(command[3:]) == ("--arch=arm64", "prepared-simulator", "fardavide.Aura")
+                    assert not preferences.exists()
+                    preferences.parent.mkdir(parents=True)
+                    preferences.write_bytes(plistlib.dumps({"theme": "system"}))
+                    stdout = "fardavide.Aura: 42\n"
+                case "get_app_container":
+                    assert tuple(command[3:]) == ("prepared-simulator", "fardavide.Aura", "data")
+                    stdout = str(container) + "\n"
+                case "terminate":
+                    assert tuple(command[3:]) == ("prepared-simulator", "fardavide.Aura")
+                    assert plistlib.loads(preferences.read_bytes()) == {"theme": "system", "dynamicCameraOrder": True}
+                    stdout = ""
+                case "shutdown":
+                    assert initial_state == "Shutdown"
+                    assert tuple(command[3:]) == ("prepared-simulator",)
+                    stdout = ""
+                case _:
+                    raise AssertionError(f"Unexpected native command: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        def monotonic() -> float:
+            return elapsed_seconds[0]
+
+        def sleep(seconds: float) -> None:
+            waits.append(seconds)
+            elapsed_seconds[0] += seconds
+            preferences.write_bytes(plistlib.dumps({"theme": "system", "dynamicCameraOrder": True}))
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+        monkeypatch.setattr(coverage_collect.time, "monotonic", monotonic)
+        monkeypatch.setattr(coverage_collect.time, "sleep", sleep)
+
+        # when
+        coverage_collect.prepare_snapshot_host(products=products, simulator="prepared-simulator", root=tmp_path)
+
+        # then
+        expected_commands = ["list", "bootstatus", "install", "launch", "get_app_container", "terminate"]
+        if initial_state == "Shutdown":
+            expected_commands.append("shutdown")
+        assert [command[2] for command in native_commands] == expected_commands
+        assert waits
+
     def test_given_instrumented_build_producer_when_built_then_enumerates_once_and_seals_plan_without_enumeration_counters(
         self: TestIosCollection,
         monkeypatch: pytest.MonkeyPatch,
@@ -168,7 +392,7 @@ class TestIosCollection:
 
         # then
 
-    def test_given_sealed_producer_enumeration_when_collecting_then_copies_complete_plan_before_cases_without_native_discovery(
+    def test_given_sealed_producer_enumeration_when_collecting_then_initializes_host_and_clears_startup_counters_before_cases(
         self: TestIosCollection,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
@@ -215,6 +439,8 @@ class TestIosCollection:
         destination = tmp_path / "inputs/ios"
         captured_commands: list[tuple[str, ...]] = []
         case_commands: list[tuple[str, ...]] = []
+        host_preparations: list[tuple[Path, str, Path]] = []
+        startup_counter = derived / "Build/ProfileData/host-startup.profraw"
 
         class CaseExecutionReached(RuntimeError):
             pass
@@ -223,12 +449,20 @@ class TestIosCollection:
             captured_commands.append(command)
             raise AssertionError("The consumer must use the sealed producer plan instead of native discovery")
 
+        def prepare_snapshot_host(products: Path, simulator: str, root: Path) -> None:
+            host_preparations.append((products, simulator, root))
+            startup_counter.parent.mkdir(parents=True, exist_ok=True)
+            startup_counter.write_bytes(b"host startup counters must not enter required case coverage")
+
         def run_logged(command: tuple[str, ...], directory: Path, log: Path) -> None:
             assert decode_json((destination / "enumerated-tests.json").read_text()) == native_plan
+            assert host_preparations == [(products, "consumer-simulator", tmp_path)], "Initialize the native host before required cases"
+            assert not startup_counter.exists(), "Clear native host startup counters before required cases"
             case_commands.append(command)
             raise CaseExecutionReached()
 
         monkeypatch.setattr(coverage_collect, "capture_json", capture_json)
+        monkeypatch.setattr(coverage_collect, "prepare_snapshot_host", prepare_snapshot_host, raising=False)
         monkeypatch.setattr(coverage_collect, "run_logged", run_logged)
 
         # when

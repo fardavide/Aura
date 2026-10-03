@@ -415,6 +415,36 @@ failed specifically because the device was shut down. This does not prove an app
 Neither a seed nor an exclusion was changed to conceal this difference. Native CI retry and the
 cause of this local measurement difference remain pending.
 
+### Preserve discovery's host-initialization effect
+
+The later disposable-device probe found one installed Aura bundle and real persisted preferences
+`theme=system`, `dynamicCameraOrder=true` after native discovery. The device was shut down, which
+explained the earlier app-container lookup failure. Old collection therefore started required
+cases after host initialization; moving discovery to the producer had removed that state from
+each consumer. Both old shard profiles took the persisted dynamic-order branch; both unprepared
+new shard profiles took the absent-setting branch. Full LLVM line evidence identified line 72.
+[The first optimized CI trial](https://github.com/fardavide/Aura/actions/runs/37099681855) was
+cancelled after establishing this measurement change; it is acceptance cost, not a valid speed result.
+
+Consumers now install and launch their matching compiled app once on the chosen isolated device,
+wait for its actual initialization to write the original preferences, terminate it and restore the
+prior Booted/Shutdown state, then clear counters before required cases. The tooling never seeds
+preferences or runs extra test cases. Checked native commands have finite timeouts and retained
+diagnostics; primary startup errors survive cleanup errors, and incomplete initialization rejects
+collection. Existing snapshot result uploads remain unchanged; preparation logs have a separate
+failure artifact. Focused REDs reproduced missing preparation, counter contamination, cleanup error
+replacement and missing timeout diagnostics before the fixes. All 468 tooling tests now pass.
+
+The corrected collection `local:ecbcbca4-50db-4c63-b958-86df9b28e077` used the same Xcode 27 application
+source and runtime as the retained reference. Both native shards passed (39 methods in 135.661s,
+40 in 161.798s); preparation took 33.807s and 34.165s. Independent native-receipt validation required
+all 79 methods exactly once. Fresh package execution passed with the same collection identity.
+Aggregation matched every per-file counter and denominator in all three scopes and passed all six
+reference ratchets. Evidence is under `build/coverage-validation/host-restored`; the failed
+unprepared collection remains under `build/coverage-validation/retry-local-v2`. No numerical seed,
+ratchet, source exclusion, native test or snapshot baseline changed. CI repeatability/timing still
+requires the corrected committed workflow on Xcode 26.6.
+
 ## Reusable rules pending Aura validation
 
 Keep global kickstart and related skills unchanged until Davide confirms this adaptation works.
@@ -431,3 +461,5 @@ require order invariance when a policy promises a complete platform mapping unio
 before distributing app-hosted products: compile-time snapshot paths can make a relocated checkout
 unsafe even when LLVM's exported source paths can be normalized. Keep preserved diagnostics and
 previous runs when preparing fresh local counters and collection destinations.
+Preserve discovery/preflight side effects when moving them: shared inventory can change host
+initialization and therefore covered counts even when every test and mapping remains identical.

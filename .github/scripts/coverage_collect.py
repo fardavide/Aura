@@ -169,6 +169,99 @@ def build_ios(
     stamp.write_text(json.dumps(asdict(identity_stamp), indent=2, sort_keys=True))
 
 
+def prepare_snapshot_host(products: Path, simulator: str, root: Path) -> None:
+    # Native discovery used to initialize the app on each consumer simulator.
+    # Preserve that state without repeating discovery or collecting its counters.
+    app = products / "Debug-iphonesimulator/Aura.app"
+    info = decode_json(json.dumps(plistlib.loads((app / "Info.plist").read_bytes())))
+    if not isinstance(info, dict) or info.get("CFBundleIdentifier") != "fardavide.Aura":
+        raise ValueError("Snapshot host must be the matching compiled Aura app")
+    bundle = "fardavide.Aura"
+    log = root / "build/coverage-diagnostics" / f"host-preparation-{simulator}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
+
+    def native(*arguments: str) -> str:
+        command = ("xcrun", "simctl", *arguments)
+        with log.open("a") as receipt:
+            receipt.write(f"{command!r}\n")
+            try:
+                result = subprocess.run(command, cwd=root, check=True, capture_output=True, text=True, timeout=180)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                for output in (error.stdout, error.stderr):
+                    if isinstance(output, bytes):
+                        receipt.write(output.decode(errors="replace"))
+                    elif isinstance(output, str):
+                        receipt.write(output)
+                raise
+            receipt.write(result.stdout)
+            receipt.write(result.stderr)
+        return result.stdout
+
+    inventory = decode_json(native("list", "devices", "--json"))
+    if not isinstance(inventory, dict) or not isinstance(inventory.get("devices"), dict):
+        raise ValueError("Missing snapshot preparation simulator inventory")
+    devices = inventory["devices"]
+    assert isinstance(devices, dict)
+    states: list[JsonValue] = []
+    for group in devices.values():
+        if not isinstance(group, list):
+            raise ValueError("Invalid snapshot preparation simulator inventory")
+        for device in group:
+            if not isinstance(device, dict):
+                raise ValueError("Invalid snapshot preparation device")
+            if device.get("udid") == simulator:
+                states.append(device.get("state"))
+    if len(states) != 1 or states[0] not in ("Booted", "Shutdown"):
+        raise ValueError("Snapshot preparation requires one Booted or Shutdown simulator")
+    launched = False
+    try:
+        native("bootstatus", simulator, "-b")
+        native("install", simulator, str(app))
+        native("launch", "--arch=arm64", simulator, bundle)
+        launched = True
+        container = Path(native("get_app_container", simulator, bundle, "data").strip())
+        if not container.is_absolute() or not container.is_dir():
+            raise ValueError("Missing native snapshot host data container")
+        preferences = container / "Library/Preferences" / f"{bundle}.plist"
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            if preferences.is_file():
+                settings = decode_json(json.dumps(plistlib.loads(preferences.read_bytes())))
+                if not isinstance(settings, dict):
+                    raise ValueError("Invalid native snapshot host settings")
+                if settings.get("theme") == "system" and settings.get("dynamicCameraOrder") is True:
+                    break
+            time.sleep(0.25)
+        else:
+            raise ValueError("Native snapshot host did not persist its initial settings")
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        with log.open("a") as receipt:
+            receipt.write(f"Native snapshot host preparation failed: {error}\n")
+        raise
+    finally:
+        original_error = sys.exception()
+        cleanup_failure: OSError | subprocess.SubprocessError | None = None
+        cleanup_commands: list[tuple[str, ...]] = []
+        if launched:
+            cleanup_commands.append(("terminate", simulator, bundle))
+        if states[0] == "Shutdown":
+            cleanup_commands.append(("shutdown", simulator))
+        for command in cleanup_commands:
+            try:
+                native(*command)
+            except (OSError, subprocess.SubprocessError) as error:
+                if original_error is not None:
+                    original_error.add_note(f"Snapshot host cleanup also failed: {error}")
+                elif cleanup_failure is not None:
+                    cleanup_failure.add_note(f"Snapshot host cleanup also failed: {error}")
+                else:
+                    cleanup_failure = error
+        if cleanup_failure is not None:
+            raise cleanup_failure
+    print(f"Native iOS host preparation: {time.monotonic() - started:.3f}s", flush=True)
+
+
 def collect_ios(
     derived: Path,
     destination: Path,
@@ -206,6 +299,7 @@ def collect_ios(
         if shard not in (0, 1):
             raise ValueError("iOS shard must be 0 or 1")
         methods = balanced_shards(expected=all_methods, durations=typed_durations)[shard]
+    prepare_snapshot_host(products=products, simulator=simulator, root=root)
     clear_counters(derived)
     result = root / "build/coverage-diagnostics" / f"{destination.name}.xcresult"
     if result.exists():

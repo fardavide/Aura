@@ -8,6 +8,11 @@ The iOS build produces instrumented products and independently discovers the com
 test inventory once. The inventory travels with its matching build stamp and checksum in the
 compiled-product archive. Shards validate and consume that inventory without rediscovering tests.
 Discovery counters are cleared before distribution and again before each collection.
+Native discovery also initializes the host app's persisted preferences. Each consumer therefore
+launches the matching compiled host once, waits for its real initial settings, and restores the
+simulator's prior state before clearing counters and executing cases. This preserves the original
+collection state without rediscovering tests or manually writing preferences. Preparation errors
+retain native command diagnostics and fail before any successful collection can be sealed.
 Two isolated runners execute disjoint whole
 suites with serialization within each process. The stable snapshot check validates every native
 receipt and requires the complete independently enumerated inventory exactly once. The coverage
@@ -90,10 +95,11 @@ Tolerances, production Swift, test Swift, snapshots and the target graph are unc
 Subsequent isolated cold package and iOS builds/executions and fresh-counter warm repetition
 retained identical per-file measurements in all three scopes. All six local reference verdicts and
 the original 448 tooling tests passed. Subsequent CI portability and inventory-handoff checks
-bring the tooling suite to 464 passing tests. The optimized retry passed all native cases and
-artifact validation, but its local comparison lost one iOS line in a persisted-setting branch;
-five of six reference ratchets passed. The difference remains under investigation in the execution
-record. The actual default local command correctly stops before tests until an approved CI seed
+bring the tooling suite to 468 passing tests. The first inventory-sharing retry lost one iOS line:
+moving discovery also removed its per-consumer host initialization. Restoring real app preparation
+before clearing counters recovered exact per-file equality in all three scopes and all six reference
+ratchets, without seeding settings or changing exclusions. The failed attempt and native causal
+evidence remain in the execution record. The actual default local command correctly stops before tests until an approved CI seed
 exists. This local proof does not substitute for Xcode 26.6 CI acceptance.
 
 One warm package acceptance attempt crashed in the existing Timeline test's array access; it
