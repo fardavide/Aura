@@ -368,6 +368,53 @@ fetches only a missing reference SHA and verifies protected application inputs b
 coverage artifacts. Local tooling verification passes 451 tests, with three native experiments
 deselected; the initial failed run is acceptance cost, not a successful performance measurement.
 
+## Native CI candidate and retry investigation
+
+[Run 37001257836](https://github.com/fardavide/Aura/actions/runs/37001257836) passed the four original
+required checks, both isolated snapshot jobs, all 451 tooling tests and candidate aggregation.
+Coverage correctly failed solely on the absent approved numerical seed. The unevaluated candidate
+retains actual collection `cd912fee370c6594e6dcec0b933d06546d0fca95`, frozen application revision
+`3fa3b066bacd503bdda83bc703f94e52d744c92b`, all 1,095 protected files, Xcode 26.6/17F113, Swift
+6.3.3, LLVM 21 and iOS 26.5/23F77. Mapped/unmapped inventories match local acceptance. These are
+CI candidate measurements, not an approved seed or a passing ratchet verdict:
+
+| Scope | Covered / total lines | Covered / total regions |
+|---|---:|---:|
+| Package | 5,562 / 17,296 | 2,177 / 5,241 |
+| iOS | 12,411 / 18,085 | 3,181 / 5,376 |
+| Fixed host-first Total | 15,255 / 18,096 | 4,307 / 5,372 |
+
+The trial took 45m38s elapsed and 79m32s total runner time, including the extra bootstrap Coverage
+and candidate jobs. Frozen main took 30m23s and 43m58s respectively. This is not a speed improvement.
+The native 40- and 39-method shards passed in 526.380s and 662.350s; the old full native run took
+1,247.628s. Each shard additionally repeated native discovery before case execution (approximately
+4m16s and 7m49s). Candidate source verification took 217s twice; the full inventory includes 2.1 GiB
+of snapshot PNGs, and the original verifier retained Git and working-tree copies simultaneously.
+Checkouts cost 110–172s per job. Product archiving cost 38s; per-artifact upload/download steps cost
+1–8s. Queues and dependency waits are retained in raw job metadata under `build/coverage-validation`.
+
+The retry streams byte comparison against authoritative Git blobs, verifies collection tree object
+identity against frozen main, and preserves the exact canonical digest. A 16 MiB regression reduced
+peak allocation below 8 MiB; the full 1,095-file local proof used under 3 MiB in 9.352s. Native
+inventory discovery now runs once with the instrumented build and travels with sealed products.
+Consumers reject corrupt, missing, incompatible, symlinked or failed inventories before execution.
+Discovery counters are excluded from distribution. Local producer discovery verified all 79 methods
+in 24.892s. Suite weights now come from the complete validated CI case union, with provenance.
+The tooling suite passes 464 tests. Both optimized native shards passed (39 methods in 136.512s,
+40 methods in 162.628s), emitted valid manifests and passed the exact 79-method union check.
+Fresh package collection passed with the same collection identity. Comparison against the retained
+Xcode 27 local reference passed five ratchets but failed the iOS line ratchet: 12,390 / 18,054
+instead of 12,391 / 18,054. Package and fixed Total measurements remain identical per file;
+iOS differs only in `DefaultSettingsRepository` (39 / 148 lines instead of 40 / 148).
+Region counts and all denominators agree. Full native LLVM line evidence identifies line 72,
+the persisted dynamic-camera-order read; theme/dynamic-order branch counters also differ.
+Artifacts and the failed verdict are preserved under `build/coverage-validation/retry-local-v2`.
+The source/compiler/runtime agree. Discovery's possible app-state effect remains a hypothesis:
+isolated discovery returned all methods but left the simulator shut down; app-container lookup
+failed specifically because the device was shut down. This does not prove an app-state change.
+Neither a seed nor an exclusion was changed to conceal this difference. Native CI retry and the
+cause of this local measurement difference remain pending.
+
 ## Reusable rules pending Aura validation
 
 Keep global kickstart and related skills unchanged until Davide confirms this adaptation works.

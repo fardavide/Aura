@@ -2,7 +2,8 @@
 
 from pathlib import Path
 import argparse
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 import subprocess
 import sys
 from uuid import uuid4
@@ -12,6 +13,8 @@ import os
 import platform
 import plistlib
 import shutil
+import time
+from hashlib import sha256
 from coverage_artifacts import CollectionIdentity, validate_artifact, write_manifest
 from coverage_inventory import JsonValue, IosRuntimeIdentity, balanced_shards, decode_json, enumerated_ios_tests, ios_runtime_identity, package_methods, verify_ios_tests, verify_package_events, verify_partition
 from coverage_products import IosBuildStamp, archive_products, restore_products, source_digest, source_inventory, validate_ios_build_stamp, validate_mapping_inventory, xctestrun_sources
@@ -51,9 +54,14 @@ def capture_json(
     directory: Path,
     output: Path,
 ) -> JsonValue:
-    result = subprocess.run(command, cwd=directory, check=True, capture_output=True, text=True)
+    result = subprocess.run(command, cwd=directory, check=False, capture_output=True, text=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(result.stdout)
+    if result.returncode:
+        output.with_suffix(output.suffix + ".stderr").write_text(result.stderr)
+    elif result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+    result.check_returncode()
     return decode_json(result.stdout)
 
 
@@ -77,6 +85,50 @@ def create_context(root: Path) -> CollectionIdentity:
     )
 
 
+def write_ios_enumeration(products: Path, plan: JsonValue, stamp: IosBuildStamp) -> None:
+    enumerated_ios_tests(plan)
+    content = (json.dumps(plan, indent=2, sort_keys=True) + "\n").encode()
+    (products / "coverage-enumerated-tests.json").write_bytes(content)
+    (products / "coverage-enumeration.json").write_text(json.dumps({
+        "schema": 1, "build_stamp": asdict(stamp), "sha256": sha256(content).hexdigest(),
+    }, indent=2, sort_keys=True) + "\n")
+
+
+def read_ios_enumeration(products: Path, stamp: IosBuildStamp) -> JsonValue:
+    for name in ("coverage-enumerated-tests.json", "coverage-enumeration.json"):
+        path = products / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("Compiled native enumeration must contain regular files without symlinks")
+    content = (products / "coverage-enumerated-tests.json").read_bytes()
+    receipt = decode_json((products / "coverage-enumeration.json").read_text())
+    if not isinstance(receipt, dict) or type(receipt.get("schema")) is not int or receipt != {
+        "schema": 1, "build_stamp": asdict(stamp), "sha256": sha256(content).hexdigest(),
+    }:
+        raise ValueError("Compiled native test enumeration identity or checksum differs")
+    plan = decode_json(content.decode())
+    enumerated_ios_tests(plan)
+    return plan
+
+
+@contextmanager
+def snapshot_simulator(provided: str | None = None) -> Iterator[str]:
+    if provided is not None:
+        yield provided
+        return
+    runtime = snapshot_runtime(decode_json(subprocess.run(
+        ("xcrun", "simctl", "list", "runtimes", "--json"), check=True, capture_output=True, text=True,
+    ).stdout))
+    simulator = subprocess.run(
+        ("xcrun", "simctl", "create", f"AuraCoverage-{uuid4()}", "com.apple.CoreSimulator.SimDeviceType.iPhone-17", runtime),
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    try:
+        yield simulator
+    finally:
+        subprocess.run(("xcrun", "simctl", "shutdown", simulator), capture_output=True, text=True)
+        subprocess.run(("xcrun", "simctl", "delete", simulator), check=True, capture_output=True, text=True)
+
+
 def build_ios(
     derived: Path,
     identity: CollectionIdentity,
@@ -84,6 +136,8 @@ def build_ios(
 ) -> None:
     stamp = derived / "Build/Products/coverage-build.json"
     stamp.unlink(missing_ok=True)
+    for name in ("coverage-enumerated-tests.json", "coverage-enumeration.json"):
+        (stamp.parent / name).unlink(missing_ok=True)
     run_logged(command=(
         "xcodebuild", "build-for-testing", "-scheme", "Aura", "-destination", "generic/platform=iOS Simulator",
         "-derivedDataPath", str(derived), "-clonedSourcePackagesDirPath", str(root / "SourcePackages"),
@@ -94,12 +148,25 @@ def build_ios(
     if len(plans) != 1:
         raise ValueError("iOS instrumented build must emit exactly one xctestrun")
     xctestrun_sources(root, decode_json(json.dumps(plistlib.loads(plans[0].read_bytes()))))
+    clear_counters(derived)
+    discovery_started = time.monotonic()
+    with snapshot_simulator() as simulator:
+        native_plan = capture_json(command=(
+            "xcodebuild", "test-without-building", "-xctestrun", str(plans[0]), "-derivedDataPath", str(derived),
+            "-destination", f"platform=iOS Simulator,id={simulator}", "-enumerate-tests",
+            "-test-enumeration-style", "flat", "-test-enumeration-format", "json",
+            "-test-enumeration-output-path", "-", "-parallel-testing-enabled", "NO", "-quiet",
+        ), directory=root, output=root / "build/coverage-diagnostics/ios-enumeration.json")
+    print(f"Native iOS inventory discovery: {time.monotonic() - discovery_started:.3f}s", flush=True)
+    clear_counters(derived)
     if source_digest(root) != identity.source_digest:
         raise ValueError("Source changed while building iOS products")
-    stamp.write_text(json.dumps(asdict(IosBuildStamp(
+    identity_stamp = IosBuildStamp(
         architecture=identity.architecture, configuration=identity.configuration,
         source_digest=identity.source_digest, toolchain=identity.toolchain,
-    )), indent=2, sort_keys=True))
+    )
+    write_ios_enumeration(stamp.parent, native_plan, identity_stamp)
+    stamp.write_text(json.dumps(asdict(identity_stamp), indent=2, sort_keys=True))
 
 
 def collect_ios(
@@ -113,21 +180,15 @@ def collect_ios(
     if destination.exists():
         raise ValueError(f"Collection destination must be fresh: {destination}")
     products = derived / "Build/Products"
-    validate_ios_build_stamp(
-        expected=IosBuildStamp(architecture=identity.architecture, configuration=identity.configuration, source_digest=identity.source_digest, toolchain=identity.toolchain),
-        stored=decode_json((products / "coverage-build.json").read_text()),
-    )
+    stamp = IosBuildStamp(architecture=identity.architecture, configuration=identity.configuration, source_digest=identity.source_digest, toolchain=identity.toolchain)
+    validate_ios_build_stamp(expected=stamp, stored=decode_json((products / "coverage-build.json").read_text()))
     plans = tuple(products.glob("*.xctestrun"))
     if len(plans) != 1:
         raise ValueError("iOS collection requires exactly one xctestrun")
     xctestrun_sources(root, decode_json(json.dumps(plistlib.loads(plans[0].read_bytes()))))
+    native_plan = read_ios_enumeration(products, stamp)
     destination.mkdir(parents=True)
-    native_plan = capture_json(command=(
-        "xcodebuild", "test-without-building", "-xctestrun", str(plans[0]), "-derivedDataPath", str(derived),
-        "-destination", f"platform=iOS Simulator,id={simulator}", "-enumerate-tests",
-        "-test-enumeration-style", "flat", "-test-enumeration-format", "json",
-        "-test-enumeration-output-path", "-", "-parallel-testing-enabled", "NO", "-quiet",
-    ), directory=root, output=destination / "enumerated-tests.json")
+    shutil.copy2(products / "coverage-enumerated-tests.json", destination / "enumerated-tests.json")
     all_methods = enumerated_ios_tests(native_plan)
     methods = all_methods
     if shard is not None:
@@ -409,18 +470,8 @@ def main() -> int:
             elif arguments.action == "ios-build":
                 build_ios(derived=arguments.derived, identity=identity, root=root)
             elif arguments.action == "ios":
-                simulator = arguments.simulator
-                owned = simulator is None
-                if owned:
-                    runtime = snapshot_runtime(decode_json(subprocess.run(("xcrun", "simctl", "list", "runtimes", "--json"), check=True, capture_output=True, text=True).stdout))
-                    simulator = subprocess.run(("xcrun", "simctl", "create", f"AuraCoverage-{uuid4()}", "com.apple.CoreSimulator.SimDeviceType.iPhone-17", runtime), check=True, capture_output=True, text=True).stdout.strip()
-                assert isinstance(simulator, str)
-                try:
+                with snapshot_simulator(arguments.simulator) as simulator:
                     collect_ios(derived=arguments.derived, destination=arguments.inputs / (f"ios-{arguments.shard}" if arguments.shard is not None else "ios"), identity=identity, root=root, shard=arguments.shard, simulator=simulator)
-                finally:
-                    if owned:
-                        subprocess.run(("xcrun", "simctl", "shutdown", simulator), capture_output=True, text=True)
-                        subprocess.run(("xcrun", "simctl", "delete", simulator), check=True, capture_output=True, text=True)
             elif arguments.action == "products":
                 archive = archive_products(source=arguments.derived / "Build/Products", destination=root / "build/ios-products.tar.gz")
                 (root / "build/ios-products.json").write_text(json.dumps({"sha256": archive.sha256, "identity": asdict(identity)}, indent=2, sort_keys=True))

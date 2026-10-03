@@ -4,7 +4,11 @@ Aura collects coverage during its required host AuraKit tests and app-hosted iOS
 The package command runs inside `AuraKit/`; the app scheme does not contain package tests.
 Both iOS and macOS compilation remain required. macOS snapshots remain intentionally excluded.
 
-The iOS build produces instrumented products once. Two isolated runners execute disjoint whole
+The iOS build produces instrumented products and independently discovers the complete native
+test inventory once. The inventory travels with its matching build stamp and checksum in the
+compiled-product archive. Shards validate and consume that inventory without rediscovering tests.
+Discovery counters are cleared before distribution and again before each collection.
+Two isolated runners execute disjoint whole
 suites with serialization within each process. The stable snapshot check validates every native
 receipt and requires the complete independently enumerated inventory exactly once. The coverage
 job validates and aggregates artifacts; it never builds, tests, boots a simulator or renders images.
@@ -85,8 +89,12 @@ Tolerances, production Swift, test Swift, snapshots and the target graph are unc
 
 Subsequent isolated cold package and iOS builds/executions and fresh-counter warm repetition
 retained identical per-file measurements in all three scopes. All six local reference verdicts and
-448 tooling tests passed. The actual default local command correctly stops before tests until an
-approved CI seed exists. This local proof does not substitute for Xcode 26.6 CI acceptance.
+the original 448 tooling tests passed. Subsequent CI portability and inventory-handoff checks
+bring the tooling suite to 464 passing tests. The optimized retry passed all native cases and
+artifact validation, but its local comparison lost one iOS line in a persisted-setting branch;
+five of six reference ratchets passed. The difference remains under investigation in the execution
+record. The actual default local command correctly stops before tests until an approved CI seed
+exists. This local proof does not substitute for Xcode 26.6 CI acceptance.
 
 One warm package acceptance attempt crashed in the existing Timeline test's array access; it
 produced no successful manifest. The preserved failed attempt and subsequent passing execution
@@ -97,4 +105,6 @@ CI elapsed time includes queues and dependency waits; runner time sums occupied 
 Report checkout, simulator startup, build, render, diagnostic teardown and artifact transfer
 separately, without summing nested durations. Shard maxima measured on one local Mac are a possible
 parallel interval, not observed CI wall time. CI transfer and final performance remain to be measured
-after authorized publication. Global kickstart and related skills remain unchanged pending confirmation.
+after the optimized retry. The first successful native candidate was slower overall; its timings
+and the subsequent corrections are retained in the execution record. Global kickstart and related
+skills remain unchanged pending confirmation.

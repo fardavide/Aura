@@ -14,6 +14,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
+from typing import BinaryIO
 
 from coverage_inventory import JsonValue, decode_json
 from coverage_report import Scope
@@ -61,7 +62,7 @@ def verify_application_reference(root: Path, revision: str) -> ApplicationRefere
     ).stdout.strip()
     reference = _committed_application_inputs(root, revision)
     committed = _committed_application_inputs(root, collection_revision)
-    current: dict[str, bytes] = {}
+    current: dict[str, Path] = {}
     for name in ("Aura", "AuraKit", "AuraTests", "Aura.xcodeproj"):
         if (root / name).is_symlink():
             raise ValueError("Protected application root is a symlink")
@@ -78,39 +79,81 @@ def verify_application_reference(root: Path, revision: str) -> ApplicationRefere
                 if _protected_application_path(PurePosixPath(relative)):
                     if path.is_symlink() or not path.is_file():
                         raise ValueError("Protected application input is not a regular file")
-                    current[relative] = path.read_bytes()
+                    current[relative] = path
     for name in ("project.yml", "project.yaml"):
         path = root / name
         if path.exists():
             if path.is_symlink() or not path.is_file():
                 raise ValueError("Protected project definition is not a regular file")
-            current[name] = path.read_bytes()
+            current[name] = path
     if not reference or set(current) != set(reference) or set(committed) != set(reference):
         raise ValueError("Application reference protected inventory differs")
     digest = sha256()
     app_scheme = "Aura.xcodeproj/xcshareddata/xcschemes/Aura.xcscheme"
-    for name in sorted(reference):
-        expected, actual = reference[name], current[name]
-        recorded = committed[name]
-        if name == app_scheme:
-            expected = _serial_application_scheme(expected, require_serial=False)
-            actual = _serial_application_scheme(actual, require_serial=True)
-            recorded = _serial_application_scheme(recorded, require_serial=False)
-        if actual != expected or recorded != expected:
+    for name in reference:
+        # Equal Git object IDs identify the same immutable blob. The scheme alone
+        # permits the documented serialization normalization below.
+        if name != app_scheme and reference[name] != committed[name]:
             raise ValueError(f"Application reference protected input differs: {name}")
-        digest.update(name.encode())
-        digest.update(b"\0")
-        digest.update(len(actual).to_bytes(8, "big"))
-        digest.update(actual)
+    with subprocess.Popen(
+        ("git", "cat-file", "--batch"), cwd=root,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    ) as blobs:
+        assert blobs.stdin is not None and blobs.stdout is not None
+        try:
+            for name in sorted(reference):
+                size = _request_git_blob(blobs.stdin, blobs.stdout, reference[name])
+                digest.update(name.encode())
+                digest.update(b"\0")
+                if name == app_scheme:
+                    if size > 1024 * 1024:
+                        raise ValueError("Application reference scheme is too large")
+                    expected = _serial_application_scheme(blobs.stdout.read(size), require_serial=False)
+                    if blobs.stdout.read(1) != b"\n":
+                        raise ValueError("Application reference Git blob receipt is incomplete")
+                    recorded_size = _request_git_blob(blobs.stdin, blobs.stdout, committed[name])
+                    if recorded_size > 1024 * 1024:
+                        raise ValueError("Application reference scheme is too large")
+                    recorded = _serial_application_scheme(blobs.stdout.read(recorded_size), require_serial=False)
+                    if blobs.stdout.read(1) != b"\n":
+                        raise ValueError("Application reference Git blob receipt is incomplete")
+                    actual = _serial_application_scheme(current[name].read_bytes(), require_serial=True)
+                    if actual != expected or recorded != expected:
+                        raise ValueError(f"Application reference protected input differs: {name}")
+                    digest.update(len(actual).to_bytes(8, "big"))
+                    digest.update(actual)
+                else:
+                    digest.update(size.to_bytes(8, "big"))
+                    with current[name].open("rb") as working:
+                        remaining = size
+                        while remaining:
+                            expected_chunk = blobs.stdout.read(min(remaining, 64 * 1024))
+                            if not expected_chunk:
+                                raise ValueError("Application reference Git blob receipt is incomplete")
+                            actual_chunk = working.read(len(expected_chunk))
+                            if actual_chunk != expected_chunk:
+                                raise ValueError(f"Application reference protected input differs: {name}")
+                            digest.update(actual_chunk)
+                            remaining -= len(expected_chunk)
+                        if working.read(1):
+                            raise ValueError(f"Application reference protected input differs: {name}")
+                    if blobs.stdout.read(1) != b"\n":
+                        raise ValueError("Application reference Git blob receipt is incomplete")
+            blobs.stdin.close()
+            if blobs.wait(timeout=30) != 0:
+                raise ValueError("Application reference Git blob verification failed")
+        finally:
+            if blobs.poll() is None:
+                blobs.kill()
     return ApplicationReference(collection_revision, revision, digest.hexdigest(), tuple(sorted(reference)))
 
 
-def _committed_application_inputs(root: Path, revision: str) -> dict[str, bytes]:
+def _committed_application_inputs(root: Path, revision: str) -> dict[str, str]:
     tree = subprocess.run(
         ("git", "ls-tree", "-r", "-z", revision),
         cwd=root, capture_output=True, check=True,
     ).stdout
-    objects: list[tuple[str, str]] = []
+    objects: dict[str, str] = {}
     for record in tree.split(b"\0"):
         if not record:
             continue
@@ -121,30 +164,21 @@ def _committed_application_inputs(root: Path, revision: str) -> dict[str, bytes]
         mode, kind, object_id = metadata.decode("ascii").split()
         if kind != "blob" or mode not in ("100644", "100755"):
             raise ValueError("Application reference contains a non-regular protected input")
-        objects.append((name, object_id))
-    if not objects:
-        return {}
-    payload = subprocess.run(
-        ("git", "cat-file", "--batch"), cwd=root, capture_output=True, check=True,
-        input="".join(f"{object_id}\n" for _, object_id in objects).encode("ascii"),
-    ).stdout
-    inputs: dict[str, bytes] = {}
-    offset = 0
-    for name, expected_id in objects:
-        end = payload.index(b"\n", offset)
-        object_id, kind, size_text = payload[offset:end].decode("ascii").split()
-        size = int(size_text)
-        offset = end + 1
-        if object_id != expected_id or kind != "blob" or size < 0 or len(payload) < offset + size + 1:
-            raise ValueError("Application reference Git blob receipt is invalid")
-        inputs[name] = payload[offset:offset + size]
-        offset += size
-        if payload[offset:offset + 1] != b"\n":
-            raise ValueError("Application reference Git blob receipt is incomplete")
-        offset += 1
-    if offset != len(payload):
-        raise ValueError("Application reference Git blob receipt has unexpected data")
-    return inputs
+        objects[name] = object_id
+    return objects
+
+
+def _request_git_blob(requests: BinaryIO, payload: BinaryIO, expected_id: str) -> int:
+    requests.write(f"{expected_id}\n".encode("ascii"))
+    requests.flush()
+    fields = payload.readline().decode("ascii").split()
+    if len(fields) != 3:
+        raise ValueError("Application reference Git blob receipt is incomplete")
+    object_id, kind, size_text = fields
+    size = int(size_text)
+    if object_id != expected_id or kind != "blob" or size < 0:
+        raise ValueError("Application reference Git blob receipt is invalid")
+    return size
 
 
 def _protected_application_path(path: PurePosixPath) -> bool:

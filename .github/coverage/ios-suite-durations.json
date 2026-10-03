@@ -1,28 +1,29 @@
 {
   "measurement": {
     "architecture": "arm64",
-    "configuration": "Debug",
+    "configuration": "Debug-instrumented-v1",
     "device": "iPhone 17",
-    "duration_basis": "Sum of passed Test Case durationInSeconds from the complete unsharded instrumented run",
+    "duration_basis": "Sum of passed native Test Case durationInSeconds from the validated complete CI shard union",
     "method_count": 79,
-    "result_bundle": "build/coverage-reference/ios.xcresult",
+    "result_bundle": "github:37001257836:1 / coverage-ios-0 and coverage-ios-1",
     "runtime": "iOS Simulator 26.5 (23F77)",
-    "source_revision": "15cf8cc098e27c12e753d42275b7b2723a241fd7",
-    "sum_method_seconds": 310.64059376716614,
-    "xcode": "27.0 (27A266a)"
+    "source_revision": "3fa3b066bacd503bdda83bc703f94e52d744c92b",
+    "collection_revision": "cd912fee370c6594e6dcec0b933d06546d0fca95",
+    "sum_method_seconds": 1188.542079925537,
+    "xcode": "26.6 (17F113)"
   },
   "schema": 1,
   "weights": {
-    "AuraTests": 0.000029802322387695312,
-    "AuroraColorSnapshotTests": 0.0013852119445800781,
-    "CameraDetailSnapshotTests": 19.387689352035522,
-    "CameraGridSnapshotTests": 31.99381446838379,
-    "EventDetailSnapshotTests": 22.278570890426636,
-    "EventsListSnapshotTests": 28.354137897491455,
-    "ExportEditorSnapshotTests": 43.201350688934326,
-    "ExportsListSnapshotTests": 32.933408975601196,
-    "RecordingPlayerSnapshotTests": 48.26516580581665,
-    "SettingsSnapshotTests": 52.37788462638855,
-    "TimelineScreenSnapshotTests": 31.847156047821045
+    "AuraTests": 0.0002849102020263672,
+    "AuroraColorSnapshotTests": 0.007601022720336914,
+    "CameraDetailSnapshotTests": 110.42566895484924,
+    "CameraGridSnapshotTests": 130.0726945400238,
+    "EventDetailSnapshotTests": 72.1228141784668,
+    "EventsListSnapshotTests": 117.91983032226562,
+    "ExportEditorSnapshotTests": 168.01319813728333,
+    "ExportsListSnapshotTests": 115.99374771118164,
+    "RecordingPlayerSnapshotTests": 196.34945106506348,
+    "SettingsSnapshotTests": 162.3372929096222,
+    "TimelineScreenSnapshotTests": 115.29949617385864
   }
 }

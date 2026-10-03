@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 import re
 import subprocess
+import tracemalloc
+from xml.etree import ElementTree
 
 import pytest
 
@@ -11,6 +14,52 @@ from coverage_inventory import decode_json
 
 
 class TestApplicationReference:
+    def test_given_large_protected_snapshot_when_reference_is_verified_then_exact_source_proof_uses_bounded_memory(
+        self: TestApplicationReference,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        scenario = self.Scenario(root=tmp_path, snapshot_size_bytes=16 * 1024 * 1024)
+        expected_digest = hashlib.sha256()
+        for name in scenario.protected_files:
+            path = scenario.root / name
+            expected_digest.update(name.encode("utf-8"))
+            expected_digest.update(b"\0")
+            if name == "Aura.xcodeproj/xcshareddata/xcschemes/Aura.xcscheme":
+                scheme = ElementTree.parse(path)
+                for testable in scheme.iter("TestableReference"):
+                    testable.set("parallelizable", "NO")
+                payload = ElementTree.tostring(scheme.getroot(), encoding="utf-8")
+                expected_digest.update(len(payload).to_bytes(8, "big"))
+                expected_digest.update(payload)
+            else:
+                expected_digest.update(path.stat().st_size.to_bytes(8, "big"))
+                with path.open("rb") as source:
+                    while chunk := source.read(64 * 1024):
+                        expected_digest.update(chunk)
+        tracing_was_active = tracemalloc.is_tracing()
+        if not tracing_was_active:
+            tracemalloc.start()
+        allocated_before, peak_before = tracemalloc.get_traced_memory()
+
+        # when
+        try:
+            proof = coverage_products.verify_application_reference(
+                root=scenario.root,
+                revision=scenario.reference_revision,
+            )
+            _, peak_after = tracemalloc.get_traced_memory()
+        finally:
+            if not tracing_was_active:
+                tracemalloc.stop()
+
+        # then
+        assert proof.collection_revision == scenario.collection_revision
+        assert proof.revision == scenario.reference_revision
+        assert proof.verified_files == scenario.protected_files
+        assert proof.source_digest == expected_digest.hexdigest()
+        assert peak_after < max(peak_before, allocated_before + 8 * 1024 * 1024)
+
     def test_given_export_ignore_hides_committed_test_missing_from_worktree_when_reference_is_verified_then_incomplete_source_proof_is_rejected(
         self: TestApplicationReference,
         tmp_path: Path,
@@ -240,6 +289,7 @@ class TestApplicationReference:
             self: TestApplicationReference.Scenario,
             root: Path,
             reference_uses_default_parallelization: bool = False,
+            snapshot_size_bytes: int = 0,
         ) -> None:
             self.root = root
             scheme_parallelization = "" if reference_uses_default_parallelization else ' parallelizable="YES"'
@@ -261,6 +311,13 @@ class TestApplicationReference:
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content)
+            if snapshot_size_bytes:
+                chunk = b"\x89PNG\r\n\x1a\n" * 8192
+                with (root / "AuraTests/__Snapshots__/screen.png").open("wb") as snapshot:
+                    remaining = snapshot_size_bytes
+                    while remaining:
+                        written = snapshot.write(chunk[:min(remaining, len(chunk))])
+                        remaining -= written
             git = (
                 "git", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
                 "-c", "init.defaultBranch=main", "-c", "user.email=coverage-proof@example.invalid",
