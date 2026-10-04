@@ -95,7 +95,9 @@ Tolerances, production Swift, test Swift, snapshots and the target graph are unc
 Subsequent isolated cold package and iOS builds/executions and fresh-counter warm repetition
 retained identical per-file measurements in all three scopes. All six local reference verdicts and
 the original 448 tooling tests passed. Subsequent CI portability and inventory-handoff checks
-bring the tooling suite to 468 passing tests. The first inventory-sharing retry lost one iOS line:
+bring the tooling suite to 469 passing tests. Isolated consumers explicitly resolve pinned snapshot
+dependency sources into the producer's SourcePackages location before collection; compiled products
+alone do not include those xctestrun inputs. The first inventory-sharing retry lost one iOS line:
 moving discovery also removed its per-consumer host initialization. Restoring real app preparation
 before clearing counters recovered exact per-file equality in all three scopes and all six reference
 ratchets, without seeding settings or changing exclusions. The failed attempt and native causal

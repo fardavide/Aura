@@ -445,6 +445,25 @@ unprepared collection remains under `build/coverage-validation/retry-local-v2`. 
 ratchet, source exclusion, native test or snapshot baseline changed. CI repeatability/timing still
 requires the corrected committed workflow on Xcode 26.6.
 
+### Restore dependency resolution on isolated consumers
+
+[Run 37191324715](https://github.com/fardavide/Aura/actions/runs/37191324715), collection revision
+`ea7de27a848002fdbe2bd293c322b119712fe08f`, passed all 468 tooling tests, package execution and
+both platform builds. Both snapshot consumers rejected a missing xctestrun source input before
+host preparation: `SourcePackages/checkouts/swift-snapshot-testing/Sources/SnapshotTesting/AssertSnapshot.swift`.
+The removed per-consumer native enumeration had also resolved remote dependency sources; compiled
+products alone do not supply those files. No tests ran on the consumers, no successful manifest or
+candidate was emitted, and required snapshot/Coverage verdicts failed closed. This trial is failed
+acceptance cost, not a speed measurement.
+
+Each consumer now explicitly resolves the Aura scheme's pinned dependencies into the producer's
+`SourcePackages` location before collection, using Xcode's `-onlyUsePackageVersionsFromResolvedFile`.
+This restores the source-resolution effect without rebuilding products or repeating enumeration or
+test cases. The installed Xcode help verifies the flag contracts. A workflow RED reproduced the
+missing step; all 469 tooling tests pass after the fix. A real resolution into an empty local
+validation directory completed, supplied the missing file, left tracked inputs unchanged and emitted
+no coverage counters. Native CI acceptance remains pending the corrected workflow retry.
+
 ## Reusable rules pending Aura validation
 
 Keep global kickstart and related skills unchanged until Davide confirms this adaptation works.
@@ -463,3 +482,5 @@ unsafe even when LLVM's exported source paths can be normalized. Keep preserved 
 previous runs when preparing fresh local counters and collection destinations.
 Preserve discovery/preflight side effects when moving them: shared inventory can change host
 initialization and therefore covered counts even when every test and mapping remains identical.
+It can also remove dependency-source resolution needed by isolated consumers; compiled-product
+reuse must retain the matching source inputs and pin enforcement.

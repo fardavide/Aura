@@ -147,6 +147,8 @@ jobs:
         run: make coverage-context
       - name: Validate and restore instrumented products
         run: make coverage-products-restore
+      - name: Resolve pinned snapshot dependency sources
+        run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages -onlyUsePackageVersionsFromResolvedFile -quiet
       - name: Run snapshot tests
         run: make coverage-ios SHARD=${{ matrix.shard }}
       - name: Preserve snapshot coverage and receipts

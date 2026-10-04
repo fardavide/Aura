@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import shlex
 
 import pytest
 import yaml
@@ -48,6 +49,33 @@ def workflow() -> WorkflowScenario:
 
 
 class TestCoverageWorkflow:
+    def test_given_isolated_snapshot_runner_when_restoring_products_then_resolves_pinned_dependency_sources_before_collection(
+        self: TestCoverageWorkflow,
+        workflow: WorkflowScenario,
+    ) -> None:
+        # given
+        steps = workflow.steps("snapshot-shards")
+        commands = workflow.commands("snapshot-shards")
+
+        # when
+        resolutions = [command for command in commands if "-resolvePackageDependencies" in command]
+
+        # then
+        assert len(resolutions) == 1, "Each snapshot runner needs the pinned dependency source checkout before collection"
+        resolution = resolutions[0]
+        tokens = shlex.split(resolution)
+        assert tokens[0] == "xcodebuild"
+        assert tokens[tokens.index("-scheme") + 1] == "Aura"
+        assert "-onlyUsePackageVersionsFromResolvedFile" in tokens
+        assert tokens[tokens.index("-clonedSourcePackagesDirPath") + 1] == "SourcePackages"
+        assert commands.index(resolution) < commands.index("make coverage-ios SHARD=${{ matrix.shard }}")
+        resolution_step = next(step for step in steps if step.get("run") == resolution)
+        assert "if" not in resolution_step, "Both isolated snapshot runners need the same pinned dependency sources"
+        assert not any(
+            "-enumerate-tests" in command or "xcodebuild build" in command or "xcodebuild test" in command
+            for command in commands
+        )
+
     def test_given_application_reference_input_when_candidate_runs_then_passes_reference_through_environment_with_parent_history(
         self: TestCoverageWorkflow,
         workflow: WorkflowScenario,
