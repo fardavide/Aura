@@ -464,6 +464,52 @@ missing step; all 469 tooling tests pass after the fix. A real resolution into a
 validation directory completed, supplied the missing file, left tracked inputs unchanged and emitted
 no coverage counters. Native CI acceptance remains pending the corrected workflow retry.
 
+### Successful pinned-source retry and simulator lifetime
+
+[Run 37212333481](https://github.com/fardavide/Aura/actions/runs/37212333481), collection revision
+`0c065b9994abd8bfb29286da69529f36cbfbcf39`, passed all four original required verdicts, both native
+shards, 469 tooling tests and validated candidate aggregation. Coverage stopped only on the absent
+approved seed. Complete measurement objects match the first successful Xcode 26.6 CI candidate
+exactly, including every per-file covered count, denominator and mapping/unmapped inventory.
+All 1,095 protected inputs and source/compiler/runtime fingerprints agree. Candidate measurements
+remain unevaluated and cannot advance a baseline.
+
+Elapsed time was 37m17s and occupied runner time 74m41s, including both bootstrap Coverage and
+candidate jobs. Original required checks finished after 33m39s. This improved the first candidate
+(45m38s/79m32s), but remains slower and more expensive than frozen main (30m23s/43m58s).
+The native 39/40-method shards passed in 572.671s/561.219s. Consumer initialization took
+238.510s/239.649s, then restored the newly created devices to Shutdown; the following native test
+command spent another roughly 3m48s/4m20s before cases started. Producer discovery took 216.201s.
+Pinned-source resolution took 38s/36s; product restore 5s/4s. Per-artifact transfers took 1–7s,
+archiving 46s, checkouts 65–180s. Initial queues were 4–9s, shard queues 7s and final-job queues
+8–10s. Candidate source verification dropped to 16s and validated aggregation took 23s.
+Nested durations are not added as independent costs. Raw metadata and review are retained in
+`build/coverage-validation/ci-37212333481`.
+
+The separate CI/local player-region difference is the existing weak-item callback early return
+at line 342: retained CI profile count 9, local profile count 0, with matching coordinate geometry
+and line counts. This identifies the differing region without asserting an unproven cause of
+callback timing across toolchain/SDK/host environments. Both same-toolchain CI candidates agree
+exactly, including that region; no exclusion or ratchet changed.
+
+The next execution change boots an owned disposable simulator before yielding it, retains that
+Booted state through host preparation and required cases, then shuts down/deletes it. Borrowed
+simulators retain their existing behavior. Preparation counters are still cleared before cases.
+Lifecycle commands are bounded and boot/cleanup diagnostics survive primary native failures;
+diagnostic I/O failures cannot skip deletion or replace a native boot error. Focused REDs reproduced
+unbooted handoff, missing receipts, cleanup error replacement, blocked diagnostic paths and
+receipt-close failure; all 476 tooling tests now pass. Snapshot lifecycle logs have their own
+failure artifact, preserving the original result-bundle and preparation-log uploads.
+
+Local fresh collection `local:0307ddf6-434d-499b-abba-df1cfeb073ed` stopped before cases because
+an earlier result bundle remained at the shared destination. Its incomplete artifact is retained;
+owned diagnostics were archived under `build/coverage-history/9b156c1e-c153-490f-a8bb-f7c1cba002cb`.
+The separate fresh `boot-retained-v2` collection passed package execution and both native shards
+(39 in 137.341s; 40 in 162.450s), and independent receipt validation required all 79 methods exactly
+once. Boot took 19.742s/18.479s and host preparation 13.881s/17.814s. Aggregation matched every
+per-file measurement in all three scopes and passed all six retained local reference ratchets.
+These local timings do not establish a CI saving; native CI measurement remains required.
+
 ## Reusable rules pending Aura validation
 
 Keep global kickstart and related skills unchanged until Davide confirms this adaptation works.
@@ -484,3 +530,7 @@ Preserve discovery/preflight side effects when moving them: shared inventory can
 initialization and therefore covered counts even when every test and mapping remains identical.
 It can also remove dependency-source resolution needed by isolated consumers; compiled-product
 reuse must retain the matching source inputs and pin enforcement.
+Retain owned runtime readiness through initialization and collection instead of paying for a
+second boot; prove unchanged measurements and renderer verdicts, clear preparation counters,
+then release the owned runtime. Keep cleanup independent of diagnostic I/O and preserve the
+primary native failure.

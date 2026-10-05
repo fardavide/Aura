@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from dataclasses import asdict
 from hashlib import sha256
@@ -11,12 +12,358 @@ import plistlib
 import shutil
 import subprocess
 import sys
-from typing import Literal
+from typing import Literal, TextIO
 
 import pytest
 
 
 class TestIosCollection:
+    def test_given_native_boot_failure_and_receipt_close_failure_when_context_starts_then_preserves_native_error_and_cleans_device(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        boot_command = ("xcrun", "simctl", "bootstatus", "failed-snapshot-simulator", "-b")
+        boot_failure = subprocess.CalledProcessError(
+            returncode=70, cmd=boot_command,
+            output="original native boot progress\n", stderr="original native boot failure\n",
+        )
+        native_commands: list[tuple[str, ...]] = []
+        diagnostic = tmp_path / "build/coverage-diagnostics/simulator-failed-snapshot-simulator.log"
+        original_open = Path.open
+
+        @contextmanager
+        def failing_close(receipt: TextIO) -> Iterator[TextIO]:
+            with receipt:
+                try:
+                    yield receipt
+                finally:
+                    raise OSError("Boot diagnostic flush failed")
+
+        def open_file(
+            path: Path,
+            mode: Literal["r", "w", "a"] = "r",
+            buffering: int = -1,
+            encoding: str | None = None,
+            errors: str | None = None,
+            newline: str | None = None,
+        ) -> AbstractContextManager[TextIO]:
+            receipt = original_open(path, mode, buffering, encoding, errors, newline)
+            if path == diagnostic and mode == "w":
+                return failing_close(receipt)
+            return receipt
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            native_commands.append(tuple(command))
+            match command[2]:
+                case "list":
+                    stdout = json.dumps({"runtimes": [{
+                        "identifier": "ios-26-6", "isAvailable": True, "name": "iOS 26.6", "version": "26.6",
+                    }]})
+                case "create":
+                    stdout = "failed-snapshot-simulator\n"
+                case "bootstatus":
+                    assert tuple(command) == boot_command
+                    assert check is True
+                    raise boot_failure
+                case "shutdown" | "delete":
+                    assert command[-1] == "failed-snapshot-simulator"
+                    stdout = ""
+                case _:
+                    raise AssertionError(f"Unexpected simulator lifecycle command: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+        monkeypatch.setattr(Path, "open", open_file)
+
+        # when
+        with pytest.raises((subprocess.CalledProcessError, OSError)) as failure:
+            with coverage_collect.snapshot_simulator(root=tmp_path):
+                pytest.fail("A failed native boot must not yield an owned device")
+
+        # then
+        assert failure.value is boot_failure, "Closing the boot diagnostic must preserve the original native failure"
+        assert boot_failure.returncode == 70
+        assert boot_failure.stdout == "original native boot progress\n"
+        assert boot_failure.stderr == "original native boot failure\n"
+        assert [command[2] for command in native_commands] == ["list", "create", "bootstatus", "shutdown", "delete"]
+
+    def test_given_blocked_lifecycle_diagnostic_directory_when_owned_device_is_created_then_cleans_device_and_preserves_directory_error(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        blocked_directory = tmp_path / "build/coverage-diagnostics"
+        blocked_directory.parent.mkdir()
+        blocked_directory.write_bytes(b"existing regular file must remain unchanged")
+        native_commands: list[tuple[str, ...]] = []
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            native_commands.append(tuple(command))
+            match command[2]:
+                case "list":
+                    stdout = json.dumps({"runtimes": [{
+                        "identifier": "ios-26-6", "isAvailable": True, "name": "iOS 26.6", "version": "26.6",
+                    }]})
+                case "create":
+                    stdout = "owned-snapshot-simulator\n"
+                case "shutdown" | "delete":
+                    assert command[-1] == "owned-snapshot-simulator"
+                    stdout = ""
+                case _:
+                    raise AssertionError(f"No native boot may run after diagnostics directory failure: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+
+        # when
+        with pytest.raises(OSError) as failure:
+            with coverage_collect.snapshot_simulator(root=tmp_path):
+                pytest.fail("A blocked diagnostics directory must prevent yielding an owned device")
+
+        # then
+        assert isinstance(failure.value, FileExistsError), "Cleanup logging must preserve the original diagnostics-directory creation error"
+        assert failure.value.filename == str(blocked_directory)
+        assert [command[2] for command in native_commands] == ["list", "create", "shutdown", "delete"]
+        assert blocked_directory.read_bytes() == b"existing regular file must remain unchanged"
+
+    def test_given_owned_boot_and_delete_failures_when_context_starts_then_preserves_boot_error_and_records_cleanup_failure(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        boot_command = ("xcrun", "simctl", "bootstatus", "failed-snapshot-simulator", "-b")
+        boot_failure = subprocess.CalledProcessError(
+            returncode=70, cmd=boot_command,
+            output="primary boot progress\n", stderr="primary boot failure\n",
+        )
+        native_commands: list[tuple[str, ...]] = []
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            native_commands.append(tuple(command))
+            match command[2]:
+                case "list":
+                    stdout = json.dumps({"runtimes": [{
+                        "identifier": "ios-26-6", "isAvailable": True, "name": "iOS 26.6", "version": "26.6",
+                    }]})
+                case "create":
+                    stdout = "failed-snapshot-simulator\n"
+                case "bootstatus":
+                    assert tuple(command) == boot_command
+                    assert check is True
+                    raise boot_failure
+                case "shutdown":
+                    assert command[-1] == "failed-snapshot-simulator"
+                    stdout = ""
+                case "delete":
+                    assert check is True
+                    assert command[-1] == "failed-snapshot-simulator"
+                    raise subprocess.CalledProcessError(
+                        returncode=72, cmd=command,
+                        output="secondary delete progress\n", stderr="secondary delete cleanup failure\n",
+                    )
+                case _:
+                    raise AssertionError(f"Unexpected simulator lifecycle command: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+
+        # when
+        with pytest.raises(subprocess.CalledProcessError) as failure:
+            with coverage_collect.snapshot_simulator(root=tmp_path):
+                pytest.fail("A failed owned simulator boot must not yield a device")
+
+        # then
+        assert failure.value is boot_failure, "Owned cleanup must preserve the original native boot exception"
+        assert failure.value.returncode == 70
+        assert [command[2] for command in native_commands] == ["list", "create", "bootstatus", "shutdown", "delete"]
+        diagnostic = (tmp_path / "build/coverage-diagnostics/simulator-failed-snapshot-simulator.log").read_text()
+        for evidence in (
+            "primary boot progress", "primary boot failure",
+            "secondary delete progress", "secondary delete cleanup failure",
+        ):
+            assert evidence in diagnostic
+
+    def test_given_owned_simulator_boot_failure_when_context_starts_then_retains_native_diagnostics_and_cleans_without_yielding(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        boot_command = ("xcrun", "simctl", "bootstatus", "failed-snapshot-simulator", "-b")
+        boot_failure = subprocess.CalledProcessError(
+            returncode=70, cmd=boot_command,
+            output="native boot progress before failure\n", stderr="native boot service could not initialize\n",
+        )
+        native_commands: list[tuple[str, ...]] = []
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            native_commands.append(tuple(command))
+            match command[2]:
+                case "list":
+                    stdout = json.dumps({"runtimes": [{
+                        "identifier": "ios-26-6", "isAvailable": True, "name": "iOS 26.6", "version": "26.6",
+                    }]})
+                case "create":
+                    stdout = "failed-snapshot-simulator\n"
+                case "bootstatus":
+                    assert tuple(command) == boot_command
+                    assert check is True
+                    assert timeout is not None and 0 < timeout <= 180
+                    raise boot_failure
+                case "shutdown" | "delete":
+                    assert command[-1] == "failed-snapshot-simulator"
+                    stdout = ""
+                case _:
+                    raise AssertionError(f"Unexpected simulator lifecycle command: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+
+        # when
+        with pytest.raises(subprocess.CalledProcessError) as failure:
+            with coverage_collect.snapshot_simulator(root=tmp_path):
+                pytest.fail("A failed owned simulator boot must not yield a device")
+
+        # then
+        assert failure.value is boot_failure
+        assert [command[2] for command in native_commands] == ["list", "create", "bootstatus", "shutdown", "delete"]
+        diagnostic = (tmp_path / "build/coverage-diagnostics/simulator-failed-snapshot-simulator.log").read_text()
+        assert "native boot progress before failure" in diagnostic
+        assert "native boot service could not initialize" in diagnostic
+
+    def test_given_borrowed_simulator_when_context_yields_then_preserves_caller_device_without_owned_lifecycle_commands(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            raise AssertionError(f"Borrowed simulators must retain caller ownership: {command}")
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+
+        # when
+        with coverage_collect.snapshot_simulator(provided="caller-simulator") as simulator:
+            # then
+            assert simulator == "caller-simulator"
+
+    def test_given_owned_disposable_simulator_when_context_yields_then_is_fully_booted_before_use_and_cleaned_afterward(
+        self: TestIosCollection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # given
+        import coverage_collect
+
+        events: list[str] = []
+        booted = False
+
+        def run(
+            command: Sequence[str],
+            *,
+            capture_output: bool = False,
+            check: bool = False,
+            cwd: Path | None = None,
+            text: bool = False,
+            timeout: float | None = None,
+        ) -> subprocess.CompletedProcess[str]:
+            nonlocal booted
+            assert tuple(command[:2]) == ("xcrun", "simctl")
+            events.append(command[2])
+            match command[2]:
+                case "list":
+                    assert tuple(command[2:]) == ("list", "runtimes", "--json")
+                    stdout = json.dumps({"runtimes": [{
+                        "identifier": "ios-26-6", "isAvailable": True, "name": "iOS 26.6", "version": "26.6",
+                    }]})
+                case "create":
+                    assert command[-1] == "ios-26-6"
+                    stdout = "owned-snapshot-simulator\n"
+                case "bootstatus":
+                    assert tuple(command[3:]) == ("owned-snapshot-simulator", "-b")
+                    assert check is True
+                    assert timeout is not None and 0 < timeout <= 180
+                    booted = True
+                    stdout = "Fully booted\n"
+                case "shutdown":
+                    assert command[-1] == "owned-snapshot-simulator"
+                    booted = False
+                    stdout = ""
+                case "delete":
+                    assert command[-1] == "owned-snapshot-simulator"
+                    stdout = ""
+                case _:
+                    raise AssertionError(f"Unexpected simulator lifecycle command: {command}")
+            return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(coverage_collect.subprocess, "run", run)
+
+        # when
+        with coverage_collect.snapshot_simulator() as simulator:
+            assert simulator == "owned-snapshot-simulator"
+            assert booted, "Disposable snapshot simulators must complete bootstatus before the context yields"
+            events.append("use")
+
+        # then
+        assert events == ["list", "create", "bootstatus", "use", "shutdown", "delete"]
+        assert booted is False
+
     def test_given_incomplete_native_settings_when_host_initialization_times_out_then_retains_reason_and_restores_simulator(
         self: TestIosCollection,
         monkeypatch: pytest.MonkeyPatch,
@@ -312,6 +659,7 @@ class TestIosCollection:
             check: bool = False,
             cwd: Path | None = None,
             text: bool = False,
+            timeout: float | None = None,
         ) -> subprocess.CompletedProcess[str]:
             assert tuple(command[:2]) == ("xcrun", "simctl")
             simulator_commands.append(tuple(command))
@@ -322,6 +670,11 @@ class TestIosCollection:
                     }]})
                 case "create":
                     stdout = "owned-enumeration-simulator\n"
+                case "bootstatus":
+                    assert tuple(command[3:]) == ("owned-enumeration-simulator", "-b")
+                    assert check is True
+                    assert timeout is not None and 0 < timeout <= 180
+                    stdout = "Fully booted\n"
                 case "shutdown" | "delete":
                     stdout = ""
                 case _:
@@ -339,7 +692,7 @@ class TestIosCollection:
         assert len(enumeration_commands) == 1, "The build producer must discover the complete native test inventory once"
         assert coverage_collect.read_ios_enumeration(products=products, stamp=stamp) == native_plan
         assert decode_json((products / "coverage-build.json").read_text()) == asdict(stamp)
-        assert [command[2] for command in simulator_commands] == ["list", "create", "shutdown", "delete"]
+        assert [command[2] for command in simulator_commands] == ["list", "create", "bootstatus", "shutdown", "delete"]
         assert all(command[-1] == "owned-enumeration-simulator" for command in simulator_commands[-2:])
         assert all(not counter.exists() for counter in counters)
 

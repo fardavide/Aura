@@ -111,7 +111,7 @@ def read_ios_enumeration(products: Path, stamp: IosBuildStamp) -> JsonValue:
 
 
 @contextmanager
-def snapshot_simulator(provided: str | None = None) -> Iterator[str]:
+def snapshot_simulator(provided: str | None = None, *, root: Path | None = None) -> Iterator[str]:
     if provided is not None:
         yield provided
         return
@@ -122,11 +122,73 @@ def snapshot_simulator(provided: str | None = None) -> Iterator[str]:
         ("xcrun", "simctl", "create", f"AuraCoverage-{uuid4()}", "com.apple.CoreSimulator.SimDeviceType.iPhone-17", runtime),
         check=True, capture_output=True, text=True,
     ).stdout.strip()
+    log = (root if root is not None else Path(__file__).resolve().parents[2]) / "build/coverage-diagnostics" / f"simulator-{simulator}.log"
     try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        command = ("xcrun", "simctl", "bootstatus", simulator, "-b")
+        started = time.monotonic()
+        boot_failure: subprocess.CalledProcessError | subprocess.TimeoutExpired | None = None
+        try:
+            with log.open("w") as receipt:
+                receipt.write(f"{command!r}\n")
+                try:
+                    boot = subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                    boot_failure = error
+                    for output in (error.stdout, error.stderr):
+                        if isinstance(output, bytes):
+                            receipt.write(output.decode(errors="replace"))
+                        elif isinstance(output, str):
+                            receipt.write(output)
+                    raise
+                receipt.write(boot.stdout)
+                receipt.write(boot.stderr)
+        except OSError as error:
+            if boot_failure is not None:
+                boot_failure.add_note(f"Owned simulator boot diagnostic also failed: {error}")
+                raise boot_failure from error
+            else:
+                raise
+        print(f"Native iOS simulator boot: {time.monotonic() - started:.3f}s", flush=True)
         yield simulator
     finally:
-        subprocess.run(("xcrun", "simctl", "shutdown", simulator), capture_output=True, text=True)
-        subprocess.run(("xcrun", "simctl", "delete", simulator), check=True, capture_output=True, text=True)
+        original_error = sys.exception()
+        cleanup_failure: OSError | subprocess.SubprocessError | None = None
+        for action in ("shutdown", "delete"):
+            command = ("xcrun", "simctl", action, simulator)
+            cleanup: subprocess.CompletedProcess[str] | None = None
+            failure: OSError | subprocess.SubprocessError | None = None
+            try:
+                cleanup = subprocess.run(command, check=action == "delete", capture_output=True, text=True, timeout=180)
+            except (OSError, subprocess.SubprocessError) as error:
+                failure = error
+            try:
+                with log.open("a") as receipt:
+                    receipt.write(f"{command!r}\n")
+                    if cleanup is not None:
+                        receipt.write(f"{cleanup.stdout}{cleanup.stderr}")
+                    if failure is not None:
+                        receipt.write(f"Owned simulator cleanup failed: {failure}\n")
+                    if isinstance(failure, (subprocess.CalledProcessError, subprocess.TimeoutExpired)):
+                        for output in (failure.stdout, failure.stderr):
+                            if isinstance(output, bytes):
+                                receipt.write(output.decode(errors="replace"))
+                            elif isinstance(output, str):
+                                receipt.write(output)
+            except OSError as error:
+                if failure is not None:
+                    failure.add_note(f"Owned simulator diagnostic also failed: {error}")
+                else:
+                    failure = error
+            if failure is not None:
+                if original_error is not None:
+                    original_error.add_note(f"Owned simulator cleanup also failed: {failure}")
+                elif cleanup_failure is not None:
+                    cleanup_failure.add_note(f"Owned simulator cleanup also failed: {failure}")
+                else:
+                    cleanup_failure = failure
+        if cleanup_failure is not None:
+            raise cleanup_failure
 
 
 def build_ios(
@@ -150,7 +212,7 @@ def build_ios(
     xctestrun_sources(root, decode_json(json.dumps(plistlib.loads(plans[0].read_bytes()))))
     clear_counters(derived)
     discovery_started = time.monotonic()
-    with snapshot_simulator() as simulator:
+    with snapshot_simulator(root=root) as simulator:
         native_plan = capture_json(command=(
             "xcodebuild", "test-without-building", "-xctestrun", str(plans[0]), "-derivedDataPath", str(derived),
             "-destination", f"platform=iOS Simulator,id={simulator}", "-enumerate-tests",
@@ -564,7 +626,7 @@ def main() -> int:
             elif arguments.action == "ios-build":
                 build_ios(derived=arguments.derived, identity=identity, root=root)
             elif arguments.action == "ios":
-                with snapshot_simulator(arguments.simulator) as simulator:
+                with snapshot_simulator(arguments.simulator, root=root) as simulator:
                     collect_ios(derived=arguments.derived, destination=arguments.inputs / (f"ios-{arguments.shard}" if arguments.shard is not None else "ios"), identity=identity, root=root, shard=arguments.shard, simulator=simulator)
             elif arguments.action == "products":
                 archive = archive_products(source=arguments.derived / "Build/Products", destination=root / "build/ios-products.tar.gz")

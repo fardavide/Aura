@@ -95,13 +95,17 @@ Tolerances, production Swift, test Swift, snapshots and the target graph are unc
 Subsequent isolated cold package and iOS builds/executions and fresh-counter warm repetition
 retained identical per-file measurements in all three scopes. All six local reference verdicts and
 the original 448 tooling tests passed. Subsequent CI portability and inventory-handoff checks
-bring the tooling suite to 469 passing tests. Isolated consumers explicitly resolve pinned snapshot
+bring the tooling suite to 476 passing tests. Isolated consumers explicitly resolve pinned snapshot
 dependency sources into the producer's SourcePackages location before collection; compiled products
 alone do not include those xctestrun inputs. The first inventory-sharing retry lost one iOS line:
 moving discovery also removed its per-consumer host initialization. Restoring real app preparation
 before clearing counters recovered exact per-file equality in all three scopes and all six reference
-ratchets, without seeding settings or changing exclusions. The failed attempt and native causal
-evidence remain in the execution record. The actual default local command correctly stops before tests until an approved CI seed
+ratchets, without seeding settings or changing exclusions. The successful corrected Xcode 26.6 CI
+candidate matches every per-file measurement from the earlier successful CI candidate, but took
+37m17s elapsed and 74m41s runner time, exceeding frozen main. The next trial retains owned simulator
+readiness through initialization and collection; local equality and all six reference verdicts pass,
+and CI timing remains pending. The failed attempts and native causal evidence remain in the execution
+record. The actual default local command correctly stops before tests until an approved CI seed
 exists. This local proof does not substitute for Xcode 26.6 CI acceptance.
 
 One warm package acceptance attempt crashed in the existing Timeline test's array access; it

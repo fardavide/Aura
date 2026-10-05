@@ -49,6 +49,41 @@ def workflow() -> WorkflowScenario:
 
 
 class TestCoverageWorkflow:
+    def test_given_snapshot_failure_when_artifacts_are_uploaded_then_retains_simulator_lifecycle_logs_separately_from_host_and_case_results(
+        self: TestCoverageWorkflow,
+        workflow: WorkflowScenario,
+    ) -> None:
+        # given
+        uploads: dict[str, dict[str, JsonValue]] = {}
+        for step in workflow.steps("snapshot-shards"):
+            settings = step.get("with")
+            if step.get("uses") == "actions/upload-artifact@v4" and isinstance(settings, dict):
+                path = settings.get("path")
+                assert isinstance(path, str)
+                uploads[path] = step
+
+        # when
+        simulator = uploads.get("build/coverage-diagnostics/simulator-*.log")
+
+        # then
+        assert isinstance(simulator, dict), "Snapshot failures must retain native simulator boot and cleanup diagnostics"
+        assert simulator.get("if") in ("failure()", "${{ failure() }}")
+        simulator_settings = simulator.get("with")
+        assert isinstance(simulator_settings, dict)
+        simulator_name = simulator_settings.get("name")
+        assert isinstance(simulator_name, str)
+        assert "${{ matrix.shard }}" in simulator_name
+        for existing_path in (
+            "build/coverage-diagnostics/host-preparation-*.log",
+            "build/coverage-diagnostics/ios-${{ matrix.shard }}.xcresult",
+        ):
+            existing = uploads.get(existing_path)
+            assert isinstance(existing, dict)
+            assert existing.get("if") in ("failure()", "${{ failure() }}")
+            existing_settings = existing.get("with")
+            assert isinstance(existing_settings, dict)
+            assert existing_settings.get("name") != simulator_name
+
     def test_given_isolated_snapshot_runner_when_restoring_products_then_resolves_pinned_dependency_sources_before_collection(
         self: TestCoverageWorkflow,
         workflow: WorkflowScenario,

@@ -196,6 +196,14 @@ jobs:
           path: build/coverage-diagnostics/host-preparation-*.log
           retention-days: 7
           if-no-files-found: warn
+      - name: Upload simulator lifecycle diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-lifecycle-${{ matrix.shard }}
+          path: build/coverage-diagnostics/simulator-*.log
+          retention-days: 7
+          if-no-files-found: warn
 
   snapshot-tests:
     name: Snapshot tests (iOS)
