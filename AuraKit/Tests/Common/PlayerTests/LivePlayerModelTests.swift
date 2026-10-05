@@ -306,6 +306,31 @@ struct LivePlayerModelTests {
         #expect(scenario.sut.isPlaying)
     }
 
+    @Test func `given a playing replacement stream when a released item reports waiting then playback and its deadline are unchanged`() throws {
+        // given
+        let scenario = Scenario()
+        scenario.sut.start()
+        scenario.sut.retry()
+        defer { scenario.sut.stop() }
+        let current = try #require(scenario.sut.player.currentItem)
+        scenario.sut.handlePlaybackStatus(.playing, for: current)
+        weak var released: AVPlayerItem?
+        do {
+            let original = AVPlayerItem(asset: AVMutableComposition())
+            released = original
+        }
+        try #require(released == nil)
+
+        // when
+        scenario.sut.handlePlaybackStatus(.waitingToPlayAtSpecifiedRate, for: released)
+
+        // then
+        #expect(scenario.sut.state == .playing)
+        #expect(scenario.sut.isPlaying)
+        #expect(scenario.sut.player.currentItem === current)
+        #expect(scenario.sut.playbackDeadline == nil)
+    }
+
     @Test func `given a replacement stream when an old waiting deadline finishes then the new stream keeps loading`() async throws {
         // given
         let wait = FakePlaybackWait()

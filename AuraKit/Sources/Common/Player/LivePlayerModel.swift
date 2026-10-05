@@ -218,7 +218,8 @@ public final class LivePlayerModel {
         }
     }
 
-    func handlePlaybackStatus(_ status: AVPlayer.TimeControlStatus, for item: AVPlayerItem) {
+    func handlePlaybackStatus(_ status: AVPlayer.TimeControlStatus, for item: AVPlayerItem?) {
+        guard let item else { return }
         guard didStart, isPlaying, player.currentItem === item else { return }
         switch status {
         case .playing:
@@ -339,7 +340,6 @@ public final class LivePlayerModel {
         playbackObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self, weak item] player, _ in
             let status = player.timeControlStatus
             Task { @MainActor in
-                guard let item else { return }
                 self?.handlePlaybackStatus(status, for: item)
             }
         }
