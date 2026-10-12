@@ -234,6 +234,13 @@ public enum FrigatePreviewUrl {
 /// stream served cover exactly the same seconds, so both floor identically.
 public enum FrigateRecordingsUrl {
 
+    public static func mapping(base: URL, camera: String, after: Double, before: Double) -> URL {
+        makeUrl(
+            base: base,
+            path: "api/vod/\(camera)/start/\(epochSeconds(after.rounded(.down)))/end/\(epochSeconds(before.rounded(.down)))"
+        )
+    }
+
     /// The recording segments covering the window — the ground truth for what is playable.
     public static func segments(base: URL, camera: String, after: Double, before: Double) -> URL {
         makeUrl(

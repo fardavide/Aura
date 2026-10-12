@@ -45,6 +45,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.8.2 — 2026-10-12
+- **Recording playback runs smoothly at 4× and 8×.** Fast-forward works in the Timeline grid
+  and camera detail. Audio stays available at 1× and 2×; faster speeds play video only.
+
 ### 0.8.1 — 2026-10-02
 - **New server setups start with the streaming port filled in.** Live video defaults to HTTP
   on port 1984. Local and remote ports remain separately editable, and saved settings stay as they are.

@@ -259,7 +259,8 @@ let package = Package(
                 "TimelinePresentation", "TimelineDomain", "CamerasDomain", "CamerasEntities",
                 "SettingsDomain", "ExportsDomain", "CommonDesign", "TestDoubles",
             ],
-            path: "Tests/Timeline/PresentationTests"
+            path: "Tests/Timeline/PresentationTests",
+            resources: [.copy("Fixtures")]
         ),
     ],
     swiftLanguageModes: [.v6]

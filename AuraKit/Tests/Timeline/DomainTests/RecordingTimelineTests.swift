@@ -223,7 +223,7 @@ struct GetCameraRecordingsTests {
         let playback = try await sut.execute(for: CameraName("drive"), in: window)
 
         // then
-        #expect(playback.source == source)
+        #expect(playback.source == .stream(source))
         #expect(repository.lastWindow == window)
     }
 

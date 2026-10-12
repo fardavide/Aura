@@ -1,5 +1,12 @@
 # Status & roadmap
 
+Recording fast-forward is implemented locally for the Timeline grid and camera detail: 1×/2×
+retain HLS and audio; 4×/8× use bounded video-only compositions of original recordings. The
+production grid decoded all three cameras smoothly at both fast speeds on native macOS and
+iOS Simulator against the local Frigate 0.18 server. Physical iPhone performance remains a
+TestFlight verification item. The fix is prepared as 0.8.2 (build 66), with verification
+evidence in `recording-fast-forward-verification.md`; the Xcode 27 migration is separate.
+
 New server setups now prefill HTTP/1984 for live streaming on both routes. Saved
 settings remain unchanged, and each port remains editable independently. The user
 confirmed that entering 1984 restored playback after updating to 0.8.0.

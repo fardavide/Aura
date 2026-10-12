@@ -8,6 +8,8 @@ import TimelineDomain
 public final class FakeCameraRecordingsRepository: CameraRecordingsRepository, @unchecked Sendable {
     public var result: Result<[RecordingSegment], TimelineError>
     public var source: CameraStreamSource
+    public var clipsResult: Result<[RecordingClip], TimelineError> = .success([])
+    public var clipsForWindow: (@Sendable (TimeRange) -> Result<[RecordingClip], TimelineError>)?
     /// The window of the most recent fetch — asserted on when a test pins which hour was loaded.
     public private(set) var lastWindow: TimeRange?
     public private(set) var fetchCount = 0
@@ -32,5 +34,11 @@ public final class FakeCameraRecordingsRepository: CameraRecordingsRepository, @
 
     public func playbackSource(for camera: CameraName, in window: TimeRange) -> CameraStreamSource {
         source
+    }
+
+    public func clips(for camera: CameraName, in window: TimeRange) async throws(TimelineError) -> [RecordingClip] {
+        _ = try await segments(for: camera, in: window)
+        if let clipsForWindow { return try clipsForWindow(window).get() }
+        return try clipsResult.get()
     }
 }

@@ -1,5 +1,6 @@
-/// How fast recorded footage plays back. Mirrors the ladder Frigate's own client offers, so the
-/// same recording behaves the same way in either.
+import TimelineDomain
+
+/// How fast recorded footage plays back.
 public enum PlaybackSpeed: Double, CaseIterable, Sendable {
     case oneX = 1
     case twoX = 2
@@ -8,6 +9,13 @@ public enum PlaybackSpeed: Double, CaseIterable, Sendable {
 
     public var rate: Float {
         Float(rawValue)
+    }
+
+    var recordingMode: RecordingMode {
+        switch self {
+        case .oneX, .twoX: .standard
+        case .fourX, .eightX: .fastForward
+        }
     }
 
     public var title: String {

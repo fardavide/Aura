@@ -5,9 +5,8 @@ import CommonFrigate
 import CommonNetwork
 import TimelineDomain
 
-/// Reads a camera's recording segments and resolves the window's authenticated playlist. Both are
-/// built from the **same** window bounds — the wall-clock mapping only holds while the footage
-/// described and the stream served cover the same seconds.
+/// Reads a camera's recording segments and resolves its authenticated HLS or original-file clips.
+/// Media and wall-clock mapping use the same window bounds so they describe the same footage.
 public struct FrigateCameraRecordingsRepository: CameraRecordingsRepository {
     private let config: ServerConfig
     private let api: FrigateApiClient
@@ -46,6 +45,31 @@ public struct FrigateCameraRecordingsRepository: CameraRecordingsRepository {
                 after: window.start.timeIntervalSince1970, before: window.end.timeIntervalSince1970
             ),
             headers: headers
+        )
+    }
+
+    public func clips(for camera: CameraName, in window: TimeRange) async throws(TimelineError) -> [RecordingClip] {
+        let segments = try await segments(for: camera, in: window)
+        guard RecordingTimeline(window: window, segments: segments).playableDuration > 0 else { return [] }
+        let url = FrigateRecordingsUrl.mapping(
+            base: config.baseUrl, camera: camera.value,
+            after: window.start.timeIntervalSince1970, before: window.end.timeIntervalSince1970
+        )
+        let data: Data
+        do {
+            data = try await api.get(url)
+        } catch {
+            throw TimelineError(error)
+        }
+        let mapping: RecordingMappingDto
+        do {
+            mapping = try JSONDecoder().decode(RecordingMappingDto.self, from: data)
+        } catch {
+            throw .invalidData
+        }
+        return try mapping.clips(
+            base: config.baseUrl, camera: camera, headers: playbackSource(for: camera, in: window).headers,
+            segments: segments, window: window
         )
     }
 }

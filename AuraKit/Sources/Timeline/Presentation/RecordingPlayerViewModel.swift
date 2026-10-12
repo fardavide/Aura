@@ -178,6 +178,7 @@ public final class RecordingPlayerViewModel {
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var speedLoad: Task<Void, Never>?
 
     public init(
         camera: Camera,
@@ -215,6 +216,7 @@ public final class RecordingPlayerViewModel {
 
     isolated deinit {
         detachPlayer()
+        speedLoad?.cancel()
         exportPollTask?.cancel()
     }
 
@@ -385,7 +387,24 @@ public final class RecordingPlayerViewModel {
     }
 
     public func select(_ speed: PlaybackSpeed) {
+        let previousMode = self.speed.recordingMode
         self.speed = speed
+        guard livePlayback == nil else { return }
+        if previousMode != speed.recordingMode {
+            loadGeneration += 1
+            speedLoad?.cancel()
+            detachPlayer()
+            display = .loading
+            let target = instant
+            speedLoad = Task { [weak self] in
+                guard let self, !Task.isCancelled else { return }
+                await self.load(
+                    window: RecordingWindow.containing(target, mode: speed.recordingMode),
+                    seeking: .instant(target)
+                )
+            }
+            return
+        }
         guard isPlaying else { return }
         player?.rate = speed.rate
     }
@@ -399,18 +418,31 @@ public final class RecordingPlayerViewModel {
     /// nothing recorded past it yet.
     public func skip(by seconds: TimeInterval) async {
         // A seek is a newer intent than any load still in flight — let it win.
+        speedLoad?.cancel()
         loadGeneration += 1
         let origin = instant
         let target = timeline.playerTime(at: instant) + seconds
         if target < 0 {
-            let previous = RecordingWindow.containing(window.start.addingTimeInterval(-1))
-            await load(window: previous, seeking: .latestFootage)
+            while !Task.isCancelled {
+                let mode = speed.recordingMode
+                let previous = RecordingWindow.containing(window.start.addingTimeInterval(-1), mode: mode)
+                guard previous.end > span.start else {
+                    setPlaying(false)
+                    break
+                }
+                guard await load(window: previous, seeking: .latestFootage, stopWhenEmpty: mode == .standard) else { break }
+                if mode == .fastForward, case .noFootage = display { continue }
+                break
+            }
         } else if target > timeline.playableDuration {
             await loadFollowingWindow()
         } else {
             if case .live = display {
                 followsLiveEdge = false
                 await load(window: window, seeking: .instant(timeline.instant(atPlayerTime: target)))
+            } else if case .loading = display {
+                let instant = timeline.instant(atPlayerTime: target)
+                await load(window: RecordingWindow.containing(instant, mode: speed.recordingMode), seeking: .instant(instant))
             } else {
                 seek(toPlayerTime: target)
             }
@@ -429,6 +461,9 @@ public final class RecordingPlayerViewModel {
     /// show the next recorded moment: reading the position back off the player would collapse the
     /// gap away and quietly report the wrong time.
     public func seek(to target: Date) async {
+        speedLoad?.cancel()
+        // Every seek, including Live, supersedes media still being prepared for older intent.
+        loadGeneration += 1
         let clamped = span.clamp(target)
         followsLiveEdge = span.end.timeIntervalSince(clamped) <= Self.liveEdgeTolerance
         if followsLiveEdge, let liveSource {
@@ -438,15 +473,17 @@ public final class RecordingPlayerViewModel {
             return
         }
         if case .live = display {
-            await load(window: RecordingWindow.containing(clamped), seeking: .instant(clamped))
+            await load(window: RecordingWindow.containing(clamped, mode: speed.recordingMode), seeking: .instant(clamped))
+            return
+        }
+        if case .loading = display {
+            await load(window: RecordingWindow.containing(clamped, mode: speed.recordingMode), seeking: .instant(clamped))
             return
         }
         guard window.contains(clamped) else {
-            await load(window: RecordingWindow.containing(clamped), seeking: .instant(clamped))
+            await load(window: RecordingWindow.containing(clamped, mode: speed.recordingMode), seeking: .instant(clamped))
             return
         }
-        // A seek is newer intent than any load still in flight — let it win.
-        loadGeneration += 1
         apply(instant: clamped)
         guard timeline.playableDuration > 0 else { return }
         movePlayer(toPlayerTime: timeline.playerTime(at: clamped), exact: true)
@@ -465,8 +502,8 @@ public final class RecordingPlayerViewModel {
         // the drag owns the playhead, so a landing load must not yank it. (The very first load
         // stays: discarding it would strand the spinner.)
         switch display {
-        case .ready, .live: loadGeneration += 1
-        case .loading, .noFootage, .failed: break
+        case .ready, .live, .noFootage, .failed: loadGeneration += 1
+        case .loading: break
         }
         setPlaying(false)
         if livePlayback != nil {
@@ -555,21 +592,27 @@ public final class RecordingPlayerViewModel {
     /// hour hasn't happened yet, which is how the live edge is recognised.
     @discardableResult
     private func loadFollowingWindow() async -> Bool {
-        let next = RecordingWindow.containing(window.end)
-        guard next.start < now() else { return false }
-        await load(window: next, seeking: .instant(next.start))
+        while !Task.isCancelled {
+            let mode = speed.recordingMode
+            let next = RecordingWindow.containing(window.end, mode: mode)
+            guard next.start < now() else { return false }
+            guard await load(window: next, seeking: .instant(next.start), stopWhenEmpty: mode == .standard) else { return true }
+            if mode == .fastForward, case .noFootage = display { continue }
+            return true
+        }
         return true
     }
 
     /// Answers whether the window was applied — `false` for a superseded or failed load, so a
     /// caller with follow-up state changes (the live-hour catch-up) knows to drop them too.
     @discardableResult
-    private func load(window newWindow: TimeRange, seeking target: SeekTarget) async -> Bool {
+    private func load(window newWindow: TimeRange, seeking target: SeekTarget, stopWhenEmpty: Bool = true) async -> Bool {
+        guard !Task.isCancelled else { return false }
         loadGeneration += 1
         let generation = loadGeneration
         let playback: RecordingPlayback
         do {
-            playback = try await recordings.execute(for: camera.name, in: newWindow)
+            playback = try await recordings.execute(for: camera.name, in: newWindow, mode: speed.recordingMode)
         } catch {
             // A torn-down fetch (the screen was left) is not a server failure — leave the state
             // for whatever replaces it rather than flashing an error on the way out.
@@ -582,25 +625,45 @@ public final class RecordingPlayerViewModel {
             isRecordingPlaying = false
             return false
         }
-        guard generation == loadGeneration else { return false }
+        guard generation == loadGeneration, !Task.isCancelled else { return false }
         // The live hour's catch-up refetch found nothing new: the player is already parked on the
         // newest frame, and rebuilding it would only blank the picture for the same frames.
         if newWindow == window, playback.timeline == timeline, case .ready = display { return true }
-        window = newWindow
-        timeline = playback.timeline
-        if case .live = display, followsLiveEdge { return true }
-        detachPlayer()
-
-        guard timeline.playableDuration > 0 else {
-            apply(instant: resolve(target))
-            display = .noFootage
-            isRecordingPlaying = false
+        if case .live = display, followsLiveEdge {
+            window = newWindow
+            timeline = playback.timeline
             return true
         }
-        let player = makeAuthedPlayer(url: playback.source.url, headers: playback.source.headers)
+        guard playback.timeline.playableDuration > 0 else {
+            window = newWindow
+            timeline = playback.timeline
+            detachPlayer()
+            apply(instant: isScrubbing ? instant : resolve(target))
+            display = .noFootage
+            if stopWhenEmpty { isRecordingPlaying = false }
+            return true
+        }
+        let player: AVPlayer
+        do {
+            player = try await makeRecordingPlayer(source: playback.source)
+        } catch {
+            guard generation == loadGeneration, !Task.isCancelled else { return false }
+            detachPlayer()
+            display = .failed
+            isRecordingPlaying = false
+            return false
+        }
+        guard generation == loadGeneration, !Task.isCancelled else { return false }
+        window = newWindow
+        timeline = playback.timeline
+        detachPlayer()
         attach(player, playing: newWindow)
         display = .ready(player)
-        seek(toPlayerTime: timeline.playerTime(at: resolve(target)))
+        // The initial or speed-change load can finish under a drag. Keep the finger's latest
+        // instant while making the loaded media available for the eventual settle.
+        let resolved = isScrubbing ? instant : resolve(target)
+        apply(instant: resolved)
+        movePlayer(toPlayerTime: timeline.playerTime(at: resolved), exact: true)
         // Read the intent now rather than capturing it at call time: a play/pause taken while the
         // fetch was in flight is the newer one and must not be reverted.
         setPlaying(isPlaying)

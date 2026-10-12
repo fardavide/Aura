@@ -37,6 +37,121 @@ struct PreviewTilePlaybackTests {
         #expect(scenario.recordings.lastWindow == TimeRange(start: at(3600), end: at(7200)))
     }
 
+    @Test(arguments: [PlaybackSpeed.fourX, .eightX])
+    func `given fast forward when playback begins then the bounded two minute window is fetched`(speed: PlaybackSpeed) async {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+
+        // when
+        await scenario.sut.beginPlayback(at: at(5000), speed: speed)
+
+        // then
+        #expect(scenario.recordings.lastWindow == TimeRange(start: at(4920), end: at(5040)))
+    }
+
+    @Test(arguments: [PlaybackSpeed.oneX, .twoX])
+    func `given a fast forward tile when selecting a low speed then its hour recording source is restored`(speed: PlaybackSpeed) async throws {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+        let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
+        scenario.recordings.clipsResult = .success([
+            RecordingClip(
+                source: CameraStreamSource(url: fixture, headers: [:]),
+                range: TimeRange(start: at(5000), end: at(5002)),
+                sourceOffset: 0,
+                duration: 2
+            ),
+        ])
+        await scenario.sut.beginPlayback(at: at(5000), speed: .fourX)
+
+        // when
+        scenario.sut.select(speed)
+        for _ in 0..<10_000 {
+            if scenario.recordings.fetchCount >= 2,
+               case let .recording(player) = scenario.sut.display,
+               (player.currentItem?.asset as? AVURLAsset)?.url == scenario.recordings.source.url { break }
+            await Task.yield()
+        }
+
+        // then
+        #expect(scenario.recordings.fetchCount == 2)
+        #expect(scenario.recordings.lastWindow == TimeRange(start: at(3600), end: at(7200)))
+        guard case let .recording(player) = scenario.sut.display else {
+            Issue.record("Expected the tile to play the hour recording")
+            return
+        }
+        let asset = try #require(player.currentItem?.asset as? AVURLAsset)
+        #expect(asset.url == scenario.recordings.source.url)
+    }
+
+    @Test func `given a pending fast forward tile when a newer low speed is selected then the late start cannot replace the hour source`() async throws {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+        let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
+        scenario.recordings.clipsResult = .success([
+            RecordingClip(
+                source: CameraStreamSource(url: fixture, headers: [:]),
+                range: TimeRange(start: at(5000), end: at(5002)),
+                sourceOffset: 0,
+                duration: 2
+            ),
+        ])
+        let gate = Gate()
+        scenario.recordings.onSegments = { call in
+            if call == 1 { await gate.wait() }
+        }
+        let start = Task { await scenario.sut.beginPlayback(at: at(5000), speed: .fourX) }
+        for _ in 0..<10_000 where scenario.recordings.fetchCount < 1 {
+            await Task.yield()
+        }
+
+        // when
+        scenario.sut.select(.twoX)
+        await gate.open()
+        await start.value
+        for _ in 0..<10_000 {
+            if scenario.recordings.fetchCount >= 2,
+               case let .recording(player) = scenario.sut.display,
+               (player.currentItem?.asset as? AVURLAsset)?.url == scenario.recordings.source.url { break }
+            await Task.yield()
+        }
+
+        // then
+        #expect(scenario.recordings.fetchCount == 2)
+        #expect(scenario.recordings.lastWindow == TimeRange(start: at(3600), end: at(7200)))
+        guard case let .recording(player) = scenario.sut.display else {
+            Issue.record("Expected the tile to play the newer hour source")
+            return
+        }
+        let asset = try #require(player.currentItem?.asset as? AVURLAsset)
+        #expect(asset.url == scenario.recordings.source.url)
+    }
+
+    @Test func `given a fast forward clip that cannot load when the clock ticks inside its window then the failed window is not fetched again`() async {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+        await scenario.loadPreviews(at: at(5000))
+        scenario.recordings.clipsResult = .success([
+            RecordingClip(
+                source: CameraStreamSource(url: URL(filePath: "/missing-fast-forward-recording.mp4"), headers: [:]),
+                range: TimeRange(start: at(5000), end: at(5002)),
+                sourceOffset: 0,
+                duration: 2
+            ),
+        ])
+        await scenario.sut.beginPlayback(at: at(5000), speed: .fourX)
+        let fetches = scenario.recordings.fetchCount
+
+        // when
+        for instant in [at(5001), at(5002), at(5003)] {
+            scenario.sut.scrub(to: instant)
+            for _ in 0..<1000 { await Task.yield() }
+        }
+
+        // then
+        #expect(scenario.recordings.fetchCount == fetches)
+    }
+
     @Test func `given an hour with no footage when playback begins then the tile keeps its preview material`() async {
         // given
         let scenario = Scenario(segments: [])
@@ -77,6 +192,79 @@ struct PreviewTilePlaybackTests {
     }
 
     // MARK: - Following the transport
+
+    @Test func `given a loaded four times tile when selecting eight times speed then its media item is reused`() async throws {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+        let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
+        scenario.recordings.clipsResult = .success([
+            RecordingClip(
+                source: CameraStreamSource(url: fixture, headers: [:]),
+                range: TimeRange(start: at(5000), end: at(5002)),
+                sourceOffset: 0,
+                duration: 2
+            ),
+        ])
+        await scenario.sut.beginPlayback(at: at(5000), speed: .fourX)
+        guard case let .recording(player) = scenario.sut.display else {
+            Issue.record("Expected the fast forward tile to be ready")
+            return
+        }
+        let item = try #require(player.currentItem)
+        let fetches = scenario.recordings.fetchCount
+
+        // when
+        scenario.sut.select(.eightX)
+        for _ in 0..<100 { await Task.yield() }
+
+        // then
+        #expect(item.asset is AVComposition)
+        #expect(scenario.recordings.fetchCount == fetches)
+        guard case let .recording(currentPlayer) = scenario.sut.display else {
+            Issue.record("Expected the fast forward tile to remain ready")
+            return
+        }
+        #expect(currentPlayer.currentItem === item)
+    }
+
+    @Test func `given a fast forward tile when the clock reaches the window end then the following two minute window is fetched`() async throws {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+        let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
+        let source = CameraStreamSource(url: fixture, headers: [:])
+        scenario.recordings.clipsResult = .success([
+            RecordingClip(source: source, range: TimeRange(start: at(5000), end: at(5002)), sourceOffset: 0, duration: 2),
+        ])
+        await scenario.sut.beginPlayback(at: at(5000), speed: .fourX)
+        guard case let .recording(initialPlayer) = scenario.sut.display else {
+            Issue.record("Expected the first fast forward window to be ready")
+            return
+        }
+        let initialItem = try #require(initialPlayer.currentItem)
+        scenario.recordings.clipsResult = .success([
+            RecordingClip(source: source, range: TimeRange(start: at(5040), end: at(5042)), sourceOffset: 0, duration: 2),
+        ])
+
+        // when
+        scenario.sut.scrub(to: at(5040))
+        for _ in 0..<10_000 {
+            if scenario.recordings.fetchCount >= 2,
+               case let .recording(player) = scenario.sut.display,
+               player.currentItem !== initialItem,
+               player.currentItem?.asset is AVComposition { break }
+            await Task.yield()
+        }
+
+        // then
+        #expect(scenario.recordings.fetchCount == 2)
+        #expect(scenario.recordings.lastWindow == TimeRange(start: at(5040), end: at(5160)))
+        guard case let .recording(player) = scenario.sut.display else {
+            Issue.record("Expected the following fast forward window to be ready")
+            return
+        }
+        #expect(player.currentItem !== initialItem)
+        #expect(player.currentItem?.asset is AVComposition)
+    }
 
     @Test func `given a playing tile when the clock crosses into the next hour then that hour is fetched`() async {
         // given
