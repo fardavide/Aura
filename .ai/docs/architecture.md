@@ -50,6 +50,15 @@ The app target hosts only the composition root + a root view that routes between
 (when a connection is configured) and Settings, and applies the theme. Multiplatform: iOS +
 native macOS; iOS-only APIs (PiP, background audio) stay behind a platform wrapper.
 
+## Recording media
+
+Recording playback has two media modes behind the same domain use case. Normal speeds use an
+authenticated HLS source in a clock-hour window; fast-forward uses authenticated original-file
+clips in aligned two-minute windows. Each clip carries its wall-clock range, source offset and
+encoded duration. The Data adapter resolves Frigate's mapping; Presentation builds the native
+video-only composition. Domain stays independent of AVFoundation. The detail player and grid
+share composition construction and preserve their existing wall-clock/gap mapping.
+
 ## Storage
 
 `UserDefaults` for non-secret connection config — two API addresses plus optional per-route live

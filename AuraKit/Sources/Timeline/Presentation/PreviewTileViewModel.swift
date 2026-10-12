@@ -116,7 +116,7 @@ public final class PreviewTileViewModel {
         self.speed = speed
         lastRequestedInstant = instant
         abandonedWindow = nil
-        await load(window: RecordingWindow.containing(instant), at: instant)
+        await load(window: RecordingWindow.containing(instant, mode: speed.recordingMode), at: instant)
     }
 
     /// Leaves playback and puts the tile back on its scrub material at the instant it stopped.
@@ -133,7 +133,18 @@ public final class PreviewTileViewModel {
     }
 
     public func select(_ speed: PlaybackSpeed) {
+        let previousMode = self.speed.recordingMode
         self.speed = speed
+        if previousMode != speed.recordingMode, isPlaying, let instant = lastRequestedInstant {
+            loadGeneration += 1
+            windowLoad?.cancel()
+            windowLoad = nil
+            abandonedWindow = nil
+            detachPlayback()
+            display = .loading
+            loadWindow(containing: instant)
+            return
+        }
         playback?.player.rate = speed.rate
     }
 
@@ -195,20 +206,23 @@ public final class PreviewTileViewModel {
     /// come back with nothing to play — playback ticks many times a second, so an ungated retry
     /// would refetch the same empty hour continuously.
     private func loadWindow(containing time: Date) {
-        let window = RecordingWindow.containing(time)
+        let window = RecordingWindow.containing(time, mode: speed.recordingMode)
         guard window != abandonedWindow, windowLoad == nil else { return }
+        let generation = loadGeneration + 1
         windowLoad = Task { [weak self] in
+            guard !Task.isCancelled else { return }
             await self?.load(window: window, at: time)
-            self?.windowLoad = nil
+            if self?.loadGeneration == generation { self?.windowLoad = nil }
         }
     }
 
     private func load(window: TimeRange, at instant: Date) async {
+        guard !Task.isCancelled else { return }
         loadGeneration += 1
         let generation = loadGeneration
         let recording: RecordingPlayback
         do {
-            recording = try await recordings.execute(for: camera.name, in: window)
+            recording = try await recordings.execute(for: camera.name, in: window, mode: speed.recordingMode)
         } catch {
             // A torn-down fetch (playback stopped, or the tile left the screen) is not a server
             // failure — leave the display for whatever replaces it.
@@ -217,7 +231,7 @@ public final class PreviewTileViewModel {
             fallBackToPreview(at: lastRequestedInstant ?? instant)
             return
         }
-        guard generation == loadGeneration else { return }
+        guard generation == loadGeneration, !Task.isCancelled else { return }
         // Read the target now rather than capturing it at call time: the playhead kept moving while
         // the fetch was in flight, and where it is now is where the stream must open.
         let target = lastRequestedInstant ?? instant
@@ -229,12 +243,22 @@ public final class PreviewTileViewModel {
             return
         }
         abandonedWindow = nil
+        let player: AVPlayer
+        do {
+            player = try await makeRecordingPlayer(source: recording.source)
+        } catch {
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            abandonedWindow = window
+            detachPlayback()
+            display = .failed
+            return
+        }
+        guard generation == loadGeneration, !Task.isCancelled else { return }
         detachPlayback()
-        let player = makeAuthedPlayer(url: recording.source.url, headers: recording.source.headers)
         let started = TilePlayback(window: window, timeline: recording.timeline, player: player)
         playback = started
         display = .recording(player)
-        seek(started, toPlayerTime: recording.timeline.playerTime(at: target))
+        seek(started, toPlayerTime: recording.timeline.playerTime(at: lastRequestedInstant ?? target))
         player.rate = speed.rate
     }
 

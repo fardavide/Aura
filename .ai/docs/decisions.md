@@ -2344,3 +2344,24 @@ Sendable conformance while appending to an unsynchronized array. No test inspect
 tracking. The fake now holds immutable canned bytes with compiler-checked Sendable
 conformance. A regression sends 10,000 concurrent requests and checks that every request
 completes with the configured bytes; it reproduced signal 11 before the change.
+
+## Recording fast-forward uses bounded original-file compositions (2026-10-11)
+
+Native AVPlayer's Frigate VOD HLS path produced less than one decoded frame per second at
+4×/8× on macOS and iOS Simulator, matching the physical iPhone report. Its ready items
+reported no fast-forward capability. Removing audio or changing buffering did not fix it;
+the server rejects the alternative I-frame playlist. Original recording MP4 video tracks
+assembled into a native composition decoded smoothly at both speeds.
+
+Use HLS with audio at 1×/2× and video-only compositions at 4×/8× in both recording surfaces.
+Resolve the VOD JSON mapping through the existing API route, then retain each original-file
+source, mapped offset and duration. Use aligned two-minute windows: resolving a full hour's
+hundreds of assets took about thirteen seconds, while bounded windows started in roughly a
+second. Switching media modes preserves the requested instant and play/pause intent;
+switching 4×↔8× reuses the item. Gaps and empty historical windows retain transport semantics.
+
+Some original files carry an audio timestamp much later than their video track, inflating
+the container duration. Insert only the mapped video range, never the whole container or its
+audio track. Authentication remains attached to each original URL asset. API/live transport
+settings and server configuration are unchanged. Physical iPhone performance and authenticated
+remote media access remain TestFlight verification items.

@@ -5,4 +5,5 @@ import CamerasEntities
 public protocol CameraRecordingsRepository: Sendable {
     func segments(for camera: CameraName, in window: TimeRange) async throws(TimelineError) -> [RecordingSegment]
     func playbackSource(for camera: CameraName, in window: TimeRange) -> CameraStreamSource
+    func clips(for camera: CameraName, in window: TimeRange) async throws(TimelineError) -> [RecordingClip]
 }

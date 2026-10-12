@@ -68,6 +68,37 @@ retention — see below), `/api/events` (list, and `?after=` for the grid's "tod
 (`latest.jpg`, `thumbnail.jpg`, `clip.mp4`). Event/review times are Unix epoch seconds; map at the
 DTO boundary. Details: `/frigate-rest`.
 
+### Recording fast-forward (verified Frigate 0.18, 2026-10-11)
+
+Normal 1×/2× recording playback retains the root VOD HLS playlist and audio. At 4×/8×,
+native HLS decoded only about 0.5–0.7 frames per second and spent most of its time waiting
+in both native macOS and iOS Simulator probes. A video-only native composition of the
+original recordings removes that limitation. The production three-camera grid sampled
+about 78–85 decoded frames per second on iOS Simulator; sampling at 10 ms limits the
+reported rate. This verifies decoded frames rather than just an advancing player clock.
+
+`GET /api/vod/{camera}/start/{s}/end/{e}` returns the mapping JSON, with parallel
+`durations` in milliseconds and `sequences[0].clips` containing `type`, filesystem `path`,
+and optional millisecond `clipFrom`. For these bounded, non-discontinuous requests, one
+sequence describes the gapless media. The filesystem prefix `/media/frigate/recordings/`
+maps to HTTP `<api-base>/recordings/`. nginx supports byte ranges on those original MP4s.
+The recorded filenames use UTC `<YYYY-MM-DD>/<HH>/<camera>/<MM.SS>.mp4`; correlate them
+with segment start timestamps, then remove keyframe preroll so wall-clock and media start
+at the requested instant together. Apply the minimum duration after removing that preroll.
+
+Use two-minute aligned fast windows; resolving an hour's 361 assets took roughly thirteen
+seconds, whereas bounded production windows became ready in about 0.3–1.4 seconds. Some
+files have delayed AAC timestamps and a container duration far beyond their video duration;
+compose the mapped video ranges only. This original-file path is separate from the generated
+`/api/.../clip.mp4` export endpoint. The configured live port is unrelated to recordings.
+
+The local API was reachable; the configured Tailscale address timed out with Tailscale off.
+Playback probes used the selected local API route. No connection settings were changed.
+Physical iPhone and remote/authenticated playback remain distinct verification items.
+
+Source contracts: [Frigate 0.18 media mapping](https://github.com/blakeblackshear/frigate/blob/v0.18.0/frigate/api/media.py),
+[recording filenames](https://github.com/blakeblackshear/frigate/blob/v0.18.0/frigate/record/maintainer.py).
+
 ### Recordings playback findings (verified against Frigate v0.17.2 source)
 - **Recordings are single-resolution.** Frigate records only the stream carrying the `record` role;
   there is no second rendition to pick. The multi-stream map in `/api/config` is go2rtc **live**
