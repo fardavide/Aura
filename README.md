@@ -45,6 +45,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.8.3 — 2026-10-13
+- **Fast-forward stops flashing “No footage at this time” between recordings.** The next
+  section loads while the current footage plays, so playback can carry on at 4× and 8×.
+
 ### 0.8.2 — 2026-10-12
 - **Recording playback runs smoothly at 4× and 8×.** Fast-forward works in the Timeline grid
   and camera detail. Audio stays available at 1× and 2×; faster speeds play video only.

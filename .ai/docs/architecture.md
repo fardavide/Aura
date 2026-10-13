@@ -59,6 +59,12 @@ encoded duration. The Data adapter resolves Frigate's mapping; Presentation buil
 video-only composition. Domain stays independent of AVFoundation. The detail player and grid
 share composition construction and preserve their existing wall-clock/gap mapping.
 
+Each playback owner prepares at most one following historical window during the last five
+seconds of fast-forward playback. Preparation includes native player readiness and stays in
+Presentation. The foreground handoff reuses the prepared player or in-flight request; a failed
+speculative request gets a shared foreground retry. Growing windows are fetched on demand so
+new recordings cannot be hidden by an early cached result.
+
 ## Storage
 
 `UserDefaults` for non-secret connection config — two API addresses plus optional per-route live
