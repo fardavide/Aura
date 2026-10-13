@@ -137,7 +137,7 @@ public final class RecordingPlayerViewModel {
     public private(set) var isPlayingSelection = false
     @ObservationIgnored private var exportPollTask: Task<Void, Never>?
 
-    private let recordings: GetCameraRecordings
+    private let preloader: RecordingWindowPreloader
     private let getDayTimeline: GetDayTimeline
     private let createExportUseCase: CreateExport
     private let getExport: GetExport
@@ -196,7 +196,7 @@ public final class RecordingPlayerViewModel {
         self.camera = camera
         self.filmstrip = filmstrip
         self.scrubPreview = scrubPreview
-        self.recordings = recordings
+        preloader = RecordingWindowPreloader(camera: camera.name, recordings: recordings)
         self.getDayTimeline = getDayTimeline
         createExportUseCase = createExport
         self.getExport = getExport
@@ -588,6 +588,20 @@ public final class RecordingPlayerViewModel {
         }
     }
 
+    func playbackTimeChanged(to playerTime: TimeInterval, from sourcePlayer: AVPlayer) {
+        guard player === sourcePlayer, isPlaying, playerTime.isFinite else { return }
+        if speed.recordingMode == .fastForward,
+           timeline.playableDuration - playerTime <= Double(speed.rate) * 5 {
+            let next = RecordingWindow.containing(window.end, mode: .fastForward)
+            if next.end <= now() { preloader.prepare(window: next) }
+        }
+        // The exhausted item's end is outside its footage. Keep its last frame until the
+        // following window lands instead of presenting that loading interval as a gap.
+        if speed.recordingMode == .fastForward, playerTime >= timeline.playableDuration,
+           !isPlayingSelection { return }
+        apply(instant: timeline.instant(atPlayerTime: playerTime))
+    }
+
     /// Loads the hour after the current one. Answers `false` without touching anything when that
     /// hour hasn't happened yet, which is how the live edge is recognised.
     @discardableResult
@@ -610,9 +624,9 @@ public final class RecordingPlayerViewModel {
         guard !Task.isCancelled else { return false }
         loadGeneration += 1
         let generation = loadGeneration
-        let playback: RecordingPlayback
+        let prepared: PreparedRecordingWindow
         do {
-            playback = try await recordings.execute(for: camera.name, in: newWindow, mode: speed.recordingMode)
+            prepared = try await preloader.load(window: newWindow, mode: speed.recordingMode)
         } catch {
             // A torn-down fetch (the screen was left) is not a server failure — leave the state
             // for whatever replaces it rather than flashing an error on the way out.
@@ -626,6 +640,7 @@ public final class RecordingPlayerViewModel {
             return false
         }
         guard generation == loadGeneration, !Task.isCancelled else { return false }
+        let playback = prepared.recording
         // The live hour's catch-up refetch found nothing new: the player is already parked on the
         // newest frame, and rebuilding it would only blank the picture for the same frames.
         if newWindow == window, playback.timeline == timeline, case .ready = display { return true }
@@ -645,7 +660,10 @@ public final class RecordingPlayerViewModel {
         }
         let player: AVPlayer
         do {
-            player = try await makeRecordingPlayer(source: playback.source)
+            switch prepared {
+            case .playable(_, let ready): player = ready
+            case .empty, .unprepared: player = try await makeRecordingPlayer(source: playback.source)
+            }
         } catch {
             guard generation == loadGeneration, !Task.isCancelled else { return false }
             detachPlayer()
@@ -759,13 +777,13 @@ public final class RecordingPlayerViewModel {
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main
-        ) { [weak self] time in
+        ) { [weak self, weak player] time in
             MainActor.assumeIsolated {
                 // Only while running: paused, the playhead belongs to whoever positioned it, and
                 // the observer's post-seek tick would otherwise collapse a gap-side instant onto
                 // the footage the stream actually resumes at.
-                guard let self, self.isPlaying, time.seconds.isFinite else { return }
-                self.apply(instant: self.timeline.instant(atPlayerTime: time.seconds))
+                guard let player else { return }
+                self?.playbackTimeChanged(to: time.seconds, from: player)
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -783,6 +801,7 @@ public final class RecordingPlayerViewModel {
     }
 
     private func detachPlayer() {
+        preloader.cancel()
         if let livePlayback {
             isRecordingPlaying = livePlayback.isPlaying
             livePlayback.stop()

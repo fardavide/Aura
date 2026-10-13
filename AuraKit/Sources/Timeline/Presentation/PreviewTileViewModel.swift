@@ -35,8 +35,9 @@ public final class PreviewTileViewModel {
     public private(set) var display: Display = .loading
 
     private let previews: GetCameraPreviews
-    private let recordings: GetCameraRecordings
+    private let preloader: RecordingWindowPreloader
     private let imageLoader: any PreviewImageLoading
+    private let now: @MainActor () -> Date
     private var clips: [PreviewClip] = []
     private var frames: [PreviewFrame] = []
     private var activeClip: PreviewClip?
@@ -68,12 +69,14 @@ public final class PreviewTileViewModel {
         camera: Camera,
         previews: GetCameraPreviews,
         recordings: GetCameraRecordings,
-        imageLoader: any PreviewImageLoading
+        imageLoader: any PreviewImageLoading,
+        now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.camera = camera
         self.previews = previews
-        self.recordings = recordings
+        preloader = RecordingWindowPreloader(camera: camera.name, recordings: recordings)
         self.imageLoader = imageLoader
+        self.now = now
     }
 
     /// The first load for the tile's window. The view drives this off the **fixed span start**, so
@@ -127,6 +130,7 @@ public final class PreviewTileViewModel {
         guard isPlaying else { return }
         isPlaying = false
         loadGeneration += 1
+        preloader.cancel()
         windowLoad?.cancel()
         windowLoad = nil
         fallBackToPreview(at: instant)
@@ -136,6 +140,7 @@ public final class PreviewTileViewModel {
         let previousMode = self.speed.recordingMode
         self.speed = speed
         if previousMode != speed.recordingMode, isPlaying, let instant = lastRequestedInstant {
+            preloader.cancel()
             loadGeneration += 1
             windowLoad?.cancel()
             windowLoad = nil
@@ -188,6 +193,11 @@ public final class PreviewTileViewModel {
     /// and swapping hours where the playhead has left the one being streamed.
     private func follow(to time: Date) {
         if let playback, playback.window.contains(time) {
+            if speed.recordingMode == .fastForward,
+               playback.timeline.playableDuration - playback.timeline.playerTime(at: time) <= Double(speed.rate) * 5 {
+                let next = RecordingWindow.containing(playback.window.end, mode: .fastForward)
+                if next.end <= now() { preloader.prepare(window: next) }
+            }
             let drift = playback.player.currentTime().seconds - playback.timeline.playerTime(at: time)
             guard abs(drift) > Self.driftTolerance else { return }
             seek(playback, toPlayerTime: playback.timeline.playerTime(at: time))
@@ -220,9 +230,9 @@ public final class PreviewTileViewModel {
         guard !Task.isCancelled else { return }
         loadGeneration += 1
         let generation = loadGeneration
-        let recording: RecordingPlayback
+        let prepared: PreparedRecordingWindow
         do {
-            recording = try await recordings.execute(for: camera.name, in: window, mode: speed.recordingMode)
+            prepared = try await preloader.load(window: window, mode: speed.recordingMode)
         } catch {
             // A torn-down fetch (playback stopped, or the tile left the screen) is not a server
             // failure — leave the display for whatever replaces it.
@@ -232,6 +242,7 @@ public final class PreviewTileViewModel {
             return
         }
         guard generation == loadGeneration, !Task.isCancelled else { return }
+        let recording = prepared.recording
         // Read the target now rather than capturing it at call time: the playhead kept moving while
         // the fetch was in flight, and where it is now is where the stream must open.
         let target = lastRequestedInstant ?? instant
@@ -245,7 +256,10 @@ public final class PreviewTileViewModel {
         abandonedWindow = nil
         let player: AVPlayer
         do {
-            player = try await makeRecordingPlayer(source: recording.source)
+            switch prepared {
+            case .playable(_, let ready): player = ready
+            case .empty, .unprepared: player = try await makeRecordingPlayer(source: recording.source)
+            }
         } catch {
             guard generation == loadGeneration, !Task.isCancelled else { return }
             abandonedWindow = window

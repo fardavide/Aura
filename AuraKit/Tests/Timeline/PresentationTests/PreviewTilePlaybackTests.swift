@@ -227,6 +227,130 @@ struct PreviewTilePlaybackTests {
         #expect(currentPlayer.currentItem === item)
     }
 
+    @Test func `given continuous fast forward footage when the clock approaches the window end then the following window starts loading before current footage ends`() async throws {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+        let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
+        let source = CameraStreamSource(url: fixture, headers: [:])
+        scenario.recordings.clipsForWindow = { window in
+            .success(stride(from: window.start.timeIntervalSince1970, to: window.end.timeIntervalSince1970, by: 2).map { start in
+                RecordingClip(
+                    source: source,
+                    range: TimeRange(start: at(start), end: at(start + 2)),
+                    sourceOffset: 0,
+                    duration: 2
+                )
+            })
+        }
+        await scenario.sut.beginPlayback(at: at(4920), speed: .eightX)
+        guard case let .recording(player) = scenario.sut.display else {
+            Issue.record("Expected the current fast forward footage before approaching its boundary")
+            return
+        }
+        try #require(player.currentItem?.asset is AVComposition)
+        player.pause()
+        let gate = Gate()
+        scenario.recordings.onSegments = { call in
+            if call == 2 { await gate.wait() }
+        }
+
+        // when — the transport still has one second of footage in the current window.
+        scenario.sut.scrub(to: at(5039))
+        for _ in 0..<10_000 where scenario.recordings.fetchCount < 2 { await Task.yield() }
+        let requestedWindow = scenario.recordings.lastWindow
+        scenario.sut.endPlayback(at: at(5039))
+        await gate.open()
+
+        // then
+        #expect(requestedWindow == TimeRange(start: at(5040), end: at(5160)))
+    }
+
+    @Test func `given a growing following window when the transport approaches its boundary then speculative loading is deferred`() async throws {
+        // given
+        let recordings = FakeCameraRecordingsRepository(.success(fullHour(from: 3600)))
+        let sut = PreviewTileViewModel(
+            camera: camera,
+            previews: GetCameraPreviews(provider: FakeCameraPreviewProvider(clips: [], frames: [])),
+            recordings: GetCameraRecordings(repository: recordings),
+            imageLoader: FakePreviewImageLoader(image: nil),
+            now: { at(5041) }
+        )
+        let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
+        let source = CameraStreamSource(url: fixture, headers: [:])
+        recordings.clipsForWindow = { window in
+            .success(stride(from: window.start.timeIntervalSince1970, to: window.end.timeIntervalSince1970, by: 2).map { start in
+                RecordingClip(source: source, range: TimeRange(start: at(start), end: at(start + 2)), sourceOffset: 0, duration: 2)
+            })
+        }
+        await sut.beginPlayback(at: at(4920), speed: .eightX)
+        guard case let .recording(player) = sut.display else {
+            Issue.record("Expected the current recording composition")
+            return
+        }
+        player.pause()
+
+        // when
+        sut.scrub(to: at(5039))
+        for _ in 0..<100 { await Task.yield() }
+        let fetchCount = recordings.fetchCount
+        sut.endPlayback(at: at(5039))
+
+        // then
+        #expect(fetchCount == 1)
+    }
+
+    @Test func `given a pending continuous fast forward window when the clock crosses its boundary then playback uses it without fetching it again`() async throws {
+        // given
+        let scenario = Scenario(segments: fullHour(from: 3600))
+        let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
+        let source = CameraStreamSource(url: fixture, headers: [:])
+        scenario.recordings.clipsForWindow = { window in
+            .success(stride(from: window.start.timeIntervalSince1970, to: window.end.timeIntervalSince1970, by: 2).map { start in
+                RecordingClip(
+                    source: source,
+                    range: TimeRange(start: at(start), end: at(start + 2)),
+                    sourceOffset: 0,
+                    duration: 2
+                )
+            })
+        }
+        await scenario.sut.beginPlayback(at: at(4920), speed: .eightX)
+        guard case let .recording(initialPlayer) = scenario.sut.display else {
+            Issue.record("Expected the current fast forward footage before its boundary")
+            return
+        }
+        let initialItem = try #require(initialPlayer.currentItem)
+        try #require(initialItem.asset is AVComposition)
+        initialPlayer.pause()
+        let gate = Gate()
+        scenario.recordings.onSegments = { call in
+            if call == 2 { await gate.wait() }
+        }
+        scenario.sut.scrub(to: at(5039))
+        for _ in 0..<10_000 where scenario.recordings.fetchCount < 2 { await Task.yield() }
+        try #require(scenario.recordings.lastWindow == TimeRange(start: at(5040), end: at(5160)))
+
+        // when
+        scenario.sut.scrub(to: at(5040))
+        await gate.open()
+        for _ in 0..<10_000 {
+            if case let .recording(player) = scenario.sut.display,
+               player.currentItem !== initialItem,
+               player.currentItem?.asset is AVComposition { break }
+            await Task.yield()
+        }
+
+        // then
+        guard case let .recording(player) = scenario.sut.display else {
+            Issue.record("Expected the following fast forward window to play")
+            return
+        }
+        try #require(player.currentItem !== initialItem)
+        try #require(player.currentItem?.asset is AVComposition)
+        #expect(scenario.recordings.fetchCount == 2)
+        scenario.sut.endPlayback(at: at(5040))
+    }
+
     @Test func `given a fast forward tile when the clock reaches the window end then the following two minute window is fetched`() async throws {
         // given
         let scenario = Scenario(segments: fullHour(from: 3600))

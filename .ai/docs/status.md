@@ -1,11 +1,12 @@
 # Status & roadmap
 
-Recording fast-forward is implemented locally for the Timeline grid and camera detail: 1×/2×
-retain HLS and audio; 4×/8× use bounded video-only compositions of original recordings. The
-production grid decoded all three cameras smoothly at both fast speeds on native macOS and
-iOS Simulator against the local Frigate 0.18 server. Physical iPhone performance remains a
-TestFlight verification item. The fix is prepared as 0.8.2 (build 66), with verification
-evidence in `recording-fast-forward-verification.md`; the Xcode 27 migration is separate.
+Recording fast-forward shipped through [the playback change](https://github.com/fardavide/Aura/pull/74)
+as 0.8.2 (build 66). The user confirmed smooth 4×/8× playback on iPhone, then reported a brief
+no-footage message at two-minute recording boundaries. The 0.8.3 (build 67) follow-up prepares
+the following historical window in both playback surfaces and preserves the last valid frame
+during detail handoff. All host package tests, 892 simulator package tests, and both platform
+app builds pass; the PR snapshot gate remains pending. Evidence is in `recording-rollover-verification.md`.
+The Xcode 27 migration is separate.
 
 New server setups now prefill HTTP/1984 for live streaming on both routes. Saved
 settings remain unchanged, and each port remains editable independently. The user

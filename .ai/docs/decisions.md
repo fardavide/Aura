@@ -2360,6 +2360,22 @@ hundreds of assets took about thirteen seconds, while bounded windows started in
 second. Switching media modes preserves the requested instant and play/pause intent;
 switching 4×↔8× reuses the item. Gaps and empty historical windows retain transport semantics.
 
+## Prepare the following historical recording window during playback (2026-10-13)
+
+The physical iPhone report of a brief no-footage message every roughly fifteen seconds at 8×
+matches the two-minute composition boundary. Both recording surfaces previously fetched the
+following window only at that boundary. In detail, the exhausted native item's final time
+also mapped to the loaded recording's exclusive end and falsely displayed a footage gap.
+
+Prepare one following window within five seconds of the current item's end, and wait for its
+native player to become ready while paused. Only prepare windows whose end is already in the
+past: caching a growing window can omit footage recorded after preparation. Coalesce the
+foreground handoff with preparation, retry speculative failures once through a shared
+foreground request, and allow a later explicit retry after a foreground failure. Cancel
+preparation when playback ends or changes media mode. Preserve the last valid detail frame
+while the next item loads and reject periodic callbacks from replaced players. Genuine gaps
+and selection boundaries retain their existing behavior.
+
 Some original files carry an audio timestamp much later than their video track, inflating
 the container duration. Insert only the mapped video range, never the whole container or its
 audio track. Authentication remains attached to each original URL asset. API/live transport
