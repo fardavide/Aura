@@ -15,6 +15,11 @@ platforms — a change can compile on one and break the other.
 
 Run from the repo root. The scheme is `Aura`.
 
+Verify the already-selected toolchain with `xcodebuild -version`: Xcode 27.0 build 27A266a.
+Snapshot references use an iPhone 17 host on iOS 27.0 build 24A434. Use explicit runtime/device
+selection and wait for the test-owned simulator's boot status before capture. Do not switch
+the developer's Xcode selection automatically. The app still supports iOS 26 and macOS 26.5.
+
 ## Delivery gate
 
 Automated builds, package tests, and applicable screenshot tests are the pre-merge acceptance gate.
@@ -33,7 +38,7 @@ xcodebuild build -scheme Aura -destination 'generic/platform=macOS' -quiet
 ### Test (Swift Testing suite)
 
 ```bash
-xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17'
+xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17,OS=27.0'
 xcodebuild test -scheme Aura -destination 'platform=macOS'
 ```
 
@@ -45,7 +50,7 @@ directory** (Xcode Cloud can't run them at all — it resolves schemes through t
 see `.ai/docs/decisions.md`):
 
 ```bash
-cd AuraKit && xcodebuild test -scheme AuraKitTests -destination 'platform=iOS Simulator,name=iPhone 17'
+cd AuraKit && xcodebuild test -scheme AuraKitTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=27.0'
 ```
 
 Do **not** run package test targets through the app project's container (repo root, `Aura` scheme
@@ -60,7 +65,7 @@ target (they need a real host window — see `.ai/docs/decisions.md`). They run 
 one sim run renders every config. macOS is intentionally excluded (AppKit can't capture glass faithfully).
 
 ```bash
-xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17' \
+xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17,OS=27.0' \
   -only-testing:AuraTests/TimelineScreenSnapshotTests
 ```
 
@@ -82,8 +87,8 @@ xcodebuild test -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17
 
 - Append `| tail -n 30` (with `set -o pipefail`) to keep output readable; the line you
   care about is `** BUILD SUCCEEDED **` / `** TEST SUCCEEDED **` or the first error.
-- If `iPhone 17` isn't installed, pick another from
-  `xcrun simctl list devices available`.
+- If the expected runtime or iPhone 17 host is missing, stop and report the exact gap; do not
+  silently use another runtime when comparing or recording references.
 - A harmless `IDERunDestination: Supported platforms ... is empty` warning can appear
   during destination resolution — it does not mean the build failed; check the final
   status line.

@@ -20,7 +20,7 @@ single-user companion app and portfolio piece.
 
 ## Requirements
 
-- iOS 26 / macOS 26, Xcode 26.
+- iOS 26 / macOS 26.5 or later; Xcode 27.0 (build 27A266a) for development and tests.
 - A reachable [Frigate](https://frigate.video) 0.17 server.
 
 ## Tech
@@ -35,7 +35,7 @@ Feature-vertical Clean Architecture in a local `AuraKit` package. **Zero runtime
 ```bash
 cd AuraKit && swift test                                                        # package logic tests
 xcodebuild build -scheme Aura -destination 'generic/platform=iOS Simulator' -quiet
-xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17 Pro'  # app + screenshot tests
+xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17,OS=27.0'  # app + screenshot tests
 ```
 
 The screenshot tests render every screen across the full device matrix (iPhone/iPad ×

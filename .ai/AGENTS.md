@@ -38,7 +38,7 @@ configuration; `.ai/` is the shared agent harness.
 ## Tech stack (decided — do not substitute)
 
 - Swift 6, strict concurrency = complete, `@MainActor` default isolation.
-- SwiftUI + `@Observable`; deployment target iOS 26 / macOS 26.
+- SwiftUI + `@Observable`; app deployment target iOS 26 / macOS 26.5 (package minimum macOS 26).
 - Video: AVFoundation / AVKit (`AVPlayerViewController` → free PiP on iOS); Liquid Glass (`glassEffect`).
 - Networking: `URLSession` + async/await (**no Alamofire**); JSON via `Codable`.
 - Storage: `UserDefaults` (config + theme) + Keychain (password). No SwiftData/CloudKit/sync.
@@ -83,7 +83,7 @@ don't scatter `#if os(...)` through feature code, and **don't re-narrow to iOS-o
 ```bash
 cd AuraKit && swift test                                                      # package logic tests (host)
 xcodebuild build -scheme Aura -destination 'generic/platform=iOS Simulator' -quiet   # + 'generic/platform=macOS'
-xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17 Pro'  # app + screenshot tests
+xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 17,OS=27.0'  # app + screenshot tests
 ```
 
 - **`main` is PR-gated** (GitHub ruleset: required CI checks, no direct pushes) — land every change
@@ -95,7 +95,8 @@ xcodebuild test  -scheme Aura -destination 'platform=iOS Simulator,name=iPhone 1
   `build-test` and `decisions.md`).
 - Build **one platform at a time with `-jobs` capped** — back-to-back parallel `xcodebuild` once
   exhausted the macOS per-user process limit (`fork: resource temporarily unavailable`).
-- **CI** (`.github/workflows/ci.yml`, GitHub-hosted `macos-26`) runs on push/PR to `main`. Snapshot
+- **CI** (`.github/workflows/ci.yml`, GitHub-hosted `xcode-27`, pinned Xcode 27.0 build 27A266a)
+  runs on push/PR to `main`. Snapshots use iPhone 17 on iOS 27.0; OS minimums stay unchanged. Snapshot
   baselines are re-recorded **locally**, never on CI. Xcode Cloud is **archive-only** — neither
   test suite can run there (see `decisions.md`).
 - Prefer the `ast-index` skill for Swift symbol/usage lookups; fall back to `rg`/`grep`. Reserve Bash

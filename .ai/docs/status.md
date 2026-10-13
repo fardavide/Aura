@@ -1,12 +1,17 @@
 # Status & roadmap
 
-Recording fast-forward shipped through [the playback change](https://github.com/fardavide/Aura/pull/74)
-as 0.8.2 (build 66). The user confirmed smooth 4×/8× playback on iPhone, then reported a brief
-no-footage message at two-minute recording boundaries. The 0.8.3 (build 67) follow-up prepares
+The Xcode 27 migration is published as [a draft](https://github.com/fardavide/Aura/pull/75):
+exact compiler/runtime pins, unchanged OS minimums and required CI checks, and a reviewed
+592-image reference candidate. Local verification and all four existing hosted checks passed
+before the latest playback merge; checks are being repeated on updated main. The added iOS 26
+compatibility gate remains unresolved. See `xcode-27-migration-verification.md`.
+
+The original [fast-forward change](https://github.com/fardavide/Aura/pull/74) shipped as 0.8.2
+(build 66), and the user confirmed smooth 4×/8× playback on iPhone. The merged
+[window handoff follow-up](https://github.com/fardavide/Aura/pull/76), 0.8.3 (build 67), prepares
 the following historical window in both playback surfaces and preserves the last valid frame
-during detail handoff. All host package tests, 892 simulator package tests, and both platform
-app builds pass; the PR snapshot gate remains pending. Evidence is in `recording-rollover-verification.md`.
-The Xcode 27 migration is separate.
+during detail handoff. All host tests, 892 simulator package tests, both app builds, and all 79
+snapshot tests passed. Evidence is in `recording-rollover-verification.md`.
 
 New server setups now prefill HTTP/1984 for live streaming on both routes. Saved
 settings remain unchanged, and each port remains editable independently. The user
