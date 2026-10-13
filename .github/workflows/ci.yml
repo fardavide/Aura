@@ -59,12 +59,18 @@ jobs:
       - uses: ./.github/actions/select-xcode
       - name: Provision iOS 26 on the temporary runner
         id: simulator
+        timeout-minutes: 20
         run: bash .github/scripts/prepare-minimum-ios-simulator.sh
+      - name: Collect iOS 26 simulator startup diagnostics
+        if: failure() && steps.simulator.conclusion == 'failure'
+        timeout-minutes: 5
+        run: python3 .github/scripts/collect_simulator_diagnostics.py MinimumIosSimulatorDiagnostics
       - name: Build the app for iOS 26
+        timeout-minutes: 10
         run: |
           xcodebuild build -scheme Aura \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.simulator_id }},OS=26.0' \
-            -derivedDataPath MinimumIosApp -jobs 4 -quiet \
+            -derivedDataPath MinimumIosApp -jobs 4 \
             CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
       - name: Install and launch the Xcode 27-built app on iOS 26
         run: |
@@ -93,6 +99,7 @@ jobs:
           path: |
             MinimumIosPackageResults.xcresult
             MinimumIosLiveDiagnostic.xcresult
+            MinimumIosSimulatorDiagnostics
           retention-days: 7
           if-no-files-found: warn
 
@@ -104,7 +111,7 @@ jobs:
   snapshot-tests:
     name: Snapshot tests (iOS)
     runs-on: xcode-27
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode

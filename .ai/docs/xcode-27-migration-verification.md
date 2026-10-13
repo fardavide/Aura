@@ -1,7 +1,8 @@
 # Xcode 27 migration verification
 
-Local implementation is authorized; commit, push, PR publication, merge, archive settings,
-and developer-machine configuration remain separate approvals. The migration worktree is
+The user authorized draft PR publication and minimum-runtime validation on a temporary CI
+runner. Merge, archive settings, and developer-machine configuration remain separate approvals.
+The migration worktree is
 `build/xcode-27-migration`. Initial recording and repeatability evidence used main at
 `4551f13c6e0bdc48ab7d2b9beddbe07b7f09c085`. The playback fix was published in
 [its own PR](https://github.com/fardavide/Aura/pull/74), passed all four required checks,
@@ -17,8 +18,8 @@ were copied to `/private/tmp/aura-xcode27-original-snapshots` before recording c
 
 The app minimums stay iOS 26.0 and macOS 26.5; the package keeps iOS/macOS 26 minimums.
 Language settings, package pins, dependencies, and app version remain unchanged.
-This machine has no iOS 26 runtime. Verification on the minimum iOS version and native
-macOS 26.5 remains pending an approved environment provision. Xcode Cloud stays
+This machine has no iOS 26 runtime. Minimum iOS validation runs on a provisioned temporary CI
+runner; native macOS 26.5 remains unverified. Xcode Cloud stays
 archive-only; availability of Xcode 27 in the actual archive workflow is unconfirmed.
 
 ## Acceptance evidence
@@ -38,8 +39,8 @@ capture configurations, and 0.98/0.87 comparison thresholds.
 | Full host package suite | Passed; 940 unique tests across 18 bundle summaries, exit 0 |
 | Full iOS package suite | 880 passed, zero failed/skipped, exit 0 |
 | iOS and macOS app builds | Both BUILD SUCCEEDED, exit 0 |
-| iOS 26 runtime compatibility | Pending environment approval |
-| Native candidate CI | Pending publication approval |
+| iOS 26 runtime compatibility | Runtime provisioned in CI; compatibility gate remains red |
+| Native candidate CI | All four existing checks passed on published candidate `2ca4511` |
 
 The original comparison is preserved in `/private/tmp/aura-xcode27-old-baselines.xcresult`
 and `/private/tmp/aura-xcode27-old-reference-report/index.html`. After test rendering
@@ -106,6 +107,36 @@ The next diagnostic moves app build/install/launch ahead of package testing and 
 live-player suite alone before the unchanged full suite. A native-item error assertion adds
 evidence to the failing test. Verbose simulator diagnostic collection is disabled only for
 that focused diagnostic; both its result bundle and the full suite's diagnostics are retained.
+
+Candidate `2ca4511` passed all four existing checks in
+[run 38403927282](https://github.com/fardavide/Aura/actions/runs/38403927282), including the
+full snapshot suite. Its minimum-runtime job provisioned iOS 26.0, then timed out during
+the app build before launch or either package test invocation. GitHub marks the run cancelled;
+the job log endpoint returned `BlobNotFound`, so the build's actual stall point is unverified.
+The following diagnostic keeps the same build destination and flags, removes quiet output,
+and bounds that build step to ten minutes so the job can finalize and retain its logs without
+exhausting the overall job timeout. No assertions, tests, tolerances, or gates are relaxed.
+
+The diagnostic candidate is rebased onto merged playback follow-up `a6d5802` from
+[PR #76](https://github.com/fardavide/Aura/pull/76). Its only rebase conflict was the status
+document; current playback and migration evidence were both preserved. The app is now
+0.8.3 (build 67), inherited from main. The full minimum-runtime package suite consequently
+includes the twelve new playback tests (892 tests rather than the earlier 880).
+
+Candidate `e0ea9c4` passed host tests and both platform builds in
+[run 38472671657](https://github.com/fardavide/Aura/actions/runs/38472671657).
+All 79 snapshot tests passed and xcodebuild emitted `TEST SUCCEEDED`; its simulator
+diagnostic collection timed out after 600 seconds, pushing job cleanup against the
+forty-minute limit and leaving the job cancelled. The snapshot job now has sixty minutes
+to retain the existing diagnostic collection and artifact behavior; comparison thresholds,
+inventory, and the required job verdict stay unchanged.
+
+The minimum-runtime job downloaded and installed iOS 26.0 (23A343), then hung after
+runtime enumeration during simulator creation/boot. It never reached app build, launch,
+or package tests. No phase markers existed to distinguish those setup commands, and
+the cancelled job retained no native results. Creation, boot, and readiness now emit
+phase markers; provisioning is bounded to twenty minutes, preserving time for job cleanup
+and logs. The app-build diagnostic's ten-minute limit and verbose output remain in place.
 
 ## Rollback contract
 

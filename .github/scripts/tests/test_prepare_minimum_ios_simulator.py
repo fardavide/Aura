@@ -30,7 +30,7 @@ class TestPrepareMinimumIosSimulator(unittest.TestCase):
             "simulator_id=MINIMUM-IOS-DEVICE\n",
         )
         invocations = scenario.command_invocations.read_text().splitlines()
-        self.assertEqual(len(invocations), 6)
+        self.assertEqual(len(invocations), 5)
         self.assertEqual(
             invocations[:3],
             [
@@ -49,8 +49,7 @@ class TestPrepareMinimumIosSimulator(unittest.TestCase):
         self.assertEqual(
             invocations[4:],
             [
-                "xcrun simctl boot MINIMUM-IOS-DEVICE",
-                "xcrun simctl bootstatus MINIMUM-IOS-DEVICE -b",
+                "xcrun simctl bootstatus MINIMUM-IOS-DEVICE -b -d",
             ],
         )
 
@@ -92,6 +91,7 @@ class TestPrepareMinimumIosSimulator(unittest.TestCase):
                 '    [ "$5" = "com.apple.CoreSimulator.SimRuntime.iOS-26-0" ] || exit 94\n'
                 '    printf "%s\\n" "MINIMUM-IOS-DEVICE" ;;\n'
                 '  "simctl boot MINIMUM-IOS-DEVICE"|"simctl bootstatus MINIMUM-IOS-DEVICE -b") ;;\n'
+                '  "simctl bootstatus MINIMUM-IOS-DEVICE -b -d") ;;\n'
                 '  *) exit 97 ;;\n'
                 'esac\n'
             )

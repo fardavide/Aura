@@ -19,9 +19,11 @@ if ! jq -e '[.runtimes[] | select(
 fi
 
 jq -c '.runtimes[] | {identifier, version, buildversion, isAvailable}' <<< "$runtimes"
+echo 'Creating the iOS 26 simulator'
 simulator_id="$(xcrun simctl create Aura-Minimum-iOS \
   com.apple.CoreSimulator.SimDeviceType.iPhone-17 \
   com.apple.CoreSimulator.SimRuntime.iOS-26-0)"
-xcrun simctl boot "$simulator_id"
-xcrun simctl bootstatus "$simulator_id" -b
+echo "Booting and waiting for the iOS 26 simulator: $simulator_id"
+xcrun simctl bootstatus "$simulator_id" -b -d
+echo 'The iOS 26 simulator is ready'
 printf 'simulator_id=%s\n' "$simulator_id" >> "$GITHUB_OUTPUT"
