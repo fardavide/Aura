@@ -50,6 +50,42 @@ jobs:
       - name: Build
         run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -jobs 4 -quiet CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
+  minimum-ios:
+    name: Compatibility (iOS 26)
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/select-xcode
+      - name: Provision iOS 26 on the temporary runner
+        id: simulator
+        run: bash .github/scripts/prepare-minimum-ios-simulator.sh
+      - name: Run package tests on iOS 26
+        working-directory: AuraKit
+        run: |
+          xcodebuild test -scheme AuraKitTests \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.simulator_id }},OS=26.0' \
+            -jobs 4 -parallel-testing-enabled NO \
+            -resultBundlePath ../MinimumIosPackageResults.xcresult
+      - name: Build the app for iOS 26
+        run: |
+          xcodebuild build -scheme Aura \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.simulator_id }},OS=26.0' \
+            -derivedDataPath MinimumIosApp -jobs 4 -quiet \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+      - name: Install and launch the Xcode 27-built app on iOS 26
+        run: |
+          xcrun simctl install '${{ steps.simulator.outputs.simulator_id }}' MinimumIosApp/Build/Products/Debug-iphonesimulator/Aura.app
+          xcrun simctl launch '${{ steps.simulator.outputs.simulator_id }}' "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' MinimumIosApp/Build/Products/Debug-iphonesimulator/Aura.app/Info.plist)"
+      - name: Retain iOS 26 test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimum-ios-package-results
+          path: MinimumIosPackageResults.xcresult
+          retention-days: 7
+          if-no-files-found: warn
+
   # Liquid-Glass screenshot tests (app-hosted AuraTests target, iOS-only). Isolated on purpose:
   # the reference PNGs are recorded locally and their rendering is environment-sensitive
   # (precision 0.98 area budget / perceptualPrecision 0.87 = ΔE 13 — see decisions.md) — keeping them in their own job means a snapshot
