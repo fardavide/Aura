@@ -87,6 +87,26 @@ ones. The [runner manifest](https://github.com/actions/runner-images/blob/main/i
 lists the required Xcode and iOS runtime; a successful actual runner execution is still
 required before cutover. The [runner is in public preview](https://github.com/actions/runner-images/issues/14404).
 
+## Hosted candidate results
+
+[Migration PR #75](https://github.com/fardavide/Aura/pull/75) is a draft. Candidate `da08916`
+ran on the pinned hosted environment in [run 38370317745](https://github.com/fardavide/Aura/actions/runs/38370317745).
+Both platform builds and the host package suite passed. All 79 snapshot comparisons passed
+on the first attempt, but the runner did not exit before the job timeout; the failed-job-only
+retry completed successfully, so all four existing required checks are green.
+
+The added iOS 26.0 job successfully downloaded runtime build `23A343` on a temporary runner.
+The first package run passed 566 tests, with two test-bundle startup timeouts. On retry all
+880 tests ran: 879 passed, and the existing live-player replacement/deadline test failed
+because its model reported a failed stream rather than a loading one. This is not yet a
+confirmed production incompatibility: native media callbacks and the test's pending asset
+loader need discrimination. The test verdict remains failed; no assertion or gate was relaxed.
+
+The next diagnostic moves app build/install/launch ahead of package testing and runs the
+live-player suite alone before the unchanged full suite. A native-item error assertion adds
+evidence to the failing test. Verbose simulator diagnostic collection is disabled only for
+that focused diagnostic; both its result bundle and the full suite's diagnostics are retained.
+
 ## Rollback contract
 
 Roll back the runner label, Xcode selector, simulator pin, corresponding PNG references,

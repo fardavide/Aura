@@ -348,6 +348,8 @@ struct LivePlayerModelTests {
         await stale.value
 
         // then
+        #expect(scenario.sut.player.currentItem?.status != .failed,
+                "Replacement media error: \(String(describing: scenario.sut.player.currentItem?.error))")
         #expect(scenario.sut.state == .loading)
         #expect(scenario.sut.isPlaying)
         let current = scenario.sut.playbackDeadline
