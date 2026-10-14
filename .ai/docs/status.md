@@ -3,8 +3,13 @@
 The Xcode 27 migration is published as [a draft](https://github.com/fardavide/Aura/pull/75):
 exact compiler/runtime pins, unchanged OS minimums and required CI checks, and a reviewed
 592-image reference candidate. Local verification and all four existing hosted checks passed
-before the latest playback merge; checks are being repeated on updated main. The added iOS 26
-compatibility gate remains unresolved. See `xcode-27-migration-verification.md`.
+on candidate `a951c14`, including all 79 snapshots after the playback merge. Candidate
+`cc074c1` passed both builds and host tests; its snapshot runner lost communication, so that
+attempt has no image-comparison verdict. iOS 26 setup still stalls in boot readiness before
+the app or repaired tests; partial native startup diagnostics are retained. A single supported
+boot-and-wait operation with migration detail is the next controlled CI experiment;
+minimum-runtime acceptance remains open.
+See `xcode-27-migration-verification.md`.
 
 The original [fast-forward change](https://github.com/fardavide/Aura/pull/74) shipped as 0.8.2
 (build 66), and the user confirmed smooth 4×/8× playback on iPhone. The merged

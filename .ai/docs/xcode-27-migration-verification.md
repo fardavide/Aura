@@ -138,6 +138,93 @@ the cancelled job retained no native results. Creation, boot, and readiness now 
 phase markers; provisioning is bounded to twenty minutes, preserving time for job cleanup
 and logs. The app-build diagnostic's ten-minute limit and verbose output remain in place.
 
+Candidate `05c1067` passed all four original checks in
+[run 38515392842](https://github.com/fardavide/Aura/actions/runs/38515392842).
+On iOS 26.0, simulator setup, app build, install, and launch succeeded. The focused
+live-player suite passed all 25 tests, and its earlier replacement/deadline failure did
+not reproduce in the full suite either. The full package result ran all 892 tests:
+890 passed, two failed, and none were skipped. All twelve new playback handoff regressions
+passed on the minimum runtime.
+
+The failures were existing fast-forward tests for retaining the media item when changing
+4× to 8× and skipping backward across empty recording windows. Both used a fixed count of
+`Task.yield()` calls instead of observing native load completion. The first failed its ready
+precondition after 0.309 seconds; the second proceeded with a backward skip before verifying
+that its fast-forward composition had loaded and searched toward the span's lower bound.
+The next candidate repairs only those test preconditions with observation of loading
+completion and a bounded test deadline. Existing behavior assertions, fixtures, production
+code, snapshots, and comparison thresholds remain unchanged; an unexpected failed or
+empty terminal state still fails the ready-composition precondition. Native CI must confirm
+this diagnosis before minimum-runtime validation is accepted.
+
+The test-only candidate passes all fourteen fast-forward acceptance tests and the full
+host package suite. A fresh review confirmed the existing assertions are preserved,
+the backward-skip given state now explicitly requires a native composition, and the
+observation API is available on iOS 26. The speed-selection action synchronously publishes
+loading before starting its media task; observation therefore cannot accept the previous
+ready player. The one-minute test limit still records a failure and cancels a stalled wait.
+
+Native bundles are retained locally at
+`/private/tmp/aura-xcode27-ci-ios26-05c/MinimumIosPackageResults.xcresult` and
+`/private/tmp/aura-xcode27-ci-ios26-05c/MinimumIosLiveDiagnostic.xcresult`.
+
+Candidate `61ddd0f` passed all four original checks in
+[run 38531721273](https://github.com/fardavide/Aura/actions/runs/38531721273),
+including all 79 snapshot tests in eleven suites. Two independent minimum-runtime
+attempts installed iOS 26.0 (23A343), created and requested boot of the simulator,
+then stalled in `simctl bootstatus` until the unchanged twenty-minute provisioning
+deadline. Neither attempt reached app execution or the repaired recording tests.
+Both used runner image `xcode-27-arm64` version `20261006.0244.1`, the same version
+as the earlier candidate that executed all 892 native tests; image-version drift
+does not explain these particular attempts. The underlying startup cause remains
+unverified, and minimum-runtime acceptance remains open.
+
+The next candidate retains read-only process inventory, CoreSimulator system logs,
+and native simulator diagnostics after a provisioning failure. Each probe has a
+sixty-second deadline and the failure-only collection step is bounded to five
+minutes. Partial output and explicit timeouts remain available even if a service
+probe stalls. Native result bundles and this startup evidence share the existing
+always-uploaded diagnostic artifact; startup collection does not change the boot
+readiness requirement, test scope, comparison thresholds, or original failure verdict.
+The new collector regression failed before implementation and the full six-test
+CI script suite passes after implementation.
+
+Candidate `a951c14` passed all four original checks in
+[run 38609264153](https://github.com/fardavide/Aura/actions/runs/38609264153).
+Minimum-runtime startup again reached the twenty-minute deadline. Its retained process
+inventory includes the iOS 26 SpringBoard process while the boot-status client remains
+pending; the system log and process evidence are available in the diagnostic artifact.
+The native diagnostic command received EOF at its Enter prompt and exited without
+creating an archive. The next candidate sends one confirmation line to the read-only
+probes, with the existing subprocess and step deadlines preserved. An independently
+authored child-process regression failed with missing confirmation before this change;
+all seven CI script tests pass after it. The retained logs do not establish the underlying
+readiness stall, and minimum-runtime acceptance remains open.
+
+The downloaded startup evidence is at
+`/private/tmp/aura-xcode27-startup-a951/MinimumIosSimulatorDiagnostics`.
+
+Candidate `cc074c1` passed both app builds and host package tests in
+[run 38681529553](https://github.com/fardavide/Aura/actions/runs/38681529553).
+The snapshot runner lost communication with GitHub during its test step; GitHub retained
+no job log or snapshot result for that attempt. This is an infrastructure failure, not
+evidence of either passing or failing image comparisons.
+
+The iOS 26 setup again reached its twenty-minute readiness deadline. Confirmation now
+allows native diagnostics to retain partial device, display, service, and cache information
+under `/private/tmp/aura-xcode27-startup-cc074/MinimumIosSimulatorDiagnostics`.
+The device reports Booted and has connected displays, while boot readiness remains pending.
+Cache and service warnings alone do not establish the cause; the native collector itself
+also reached its internal thirty-second deadline and retained partial output.
+
+The next controlled experiment uses the documented single `simctl bootstatus -b -d`
+operation to boot and await readiness, with migration details enabled. It replaces the
+separate boot request followed by monitoring. The readiness requirement, twenty-minute
+deadline, full native suite, and all snapshot gates remain unchanged. The independently
+authored startup regression failed with six operations instead of five before this change;
+all seven CI script tests now pass. CI must establish whether this sequence affects the
+observed stall; minimum-runtime acceptance remains open.
+
 ## Rollback contract
 
 Roll back the runner label, Xcode selector, simulator pin, corresponding PNG references,

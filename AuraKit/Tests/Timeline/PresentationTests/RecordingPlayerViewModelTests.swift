@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Observation
 import Testing
 
 import CamerasDomain
@@ -1442,7 +1443,8 @@ struct RecordingFastForwardAcceptanceTests {
         #expect(asset.url == scenario.recordings.source.url)
     }
 
-    @Test func `given loaded four times footage when selecting eight times speed then the same media item is reused`() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func `given loaded four times footage when selecting eight times speed then the same media item is reused`() async throws {
         // given
         let scenario = Scenario(segments: fullHour(from: 3600), startingAt: at(5000))
         let fixture = try #require(Bundle.module.url(forResource: "recording", withExtension: "mp4", subdirectory: "Fixtures"))
@@ -1457,10 +1459,7 @@ struct RecordingFastForwardAcceptanceTests {
         await scenario.sut.loadIfNeeded()
         scenario.sut.togglePlayPause()
         scenario.sut.select(.fourX)
-        for _ in 0..<10_000 {
-            if case let .ready(player) = scenario.sut.display, player.currentItem?.asset is AVComposition { break }
-            await Task.yield()
-        }
+        try await waitForLoadingToFinish(scenario.sut)
         guard case let .ready(player) = scenario.sut.display else {
             Issue.record("Expected the fast forward recording to be ready")
             return
@@ -1818,7 +1817,8 @@ struct RecordingFastForwardAcceptanceTests {
         #expect(!scenario.sut.isPlaying)
     }
 
-    @Test func `given empty fast forward windows behind the playhead when skipping backward then it reaches the preceding recorded window`() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func `given empty fast forward windows behind the playhead when skipping backward then it reaches the preceding recorded window`() async throws {
         // given
         let scenario = Scenario(
             segments: [segment(from: 5038, to: 5040), segment(from: 5280, to: 5282)],
@@ -1842,10 +1842,12 @@ struct RecordingFastForwardAcceptanceTests {
         await scenario.sut.loadIfNeeded()
         scenario.sut.togglePlayPause()
         scenario.sut.select(.fourX)
-        for _ in 0..<10_000 {
-            if case let .ready(player) = scenario.sut.display, player.currentItem?.asset is AVComposition { break }
-            await Task.yield()
+        try await waitForLoadingToFinish(scenario.sut)
+        guard case let .ready(initialPlayer) = scenario.sut.display else {
+            Issue.record("Expected the fast forward recording to be ready before skipping backward")
+            return
         }
+        try #require(initialPlayer.currentItem?.asset is AVComposition)
 
         // when
         await scenario.sut.skip(by: -10)
@@ -1927,6 +1929,21 @@ struct RecordingFastForwardAcceptanceTests {
 }
 
 // MARK: - Helpers
+
+@MainActor
+private func waitForLoadingToFinish(_ sut: RecordingPlayerViewModel) async throws {
+    let loading = Observations {
+        switch sut.display {
+        case .loading: true
+        case .ready, .live, .noFootage, .failed: false
+        }
+    }
+    for await isLoading in loading {
+        try Task.checkCancellation()
+        if !isLoading { return }
+    }
+    try Task.checkCancellation()
+}
 
 private func at(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
 
