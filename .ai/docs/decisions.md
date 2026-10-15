@@ -308,9 +308,10 @@ the fakes are tiny and a solo project doesn't need five more targets. Exception:
 test target — the shared target can't see the protocol.
 
 ## CI: GitHub Actions, jobs split by determinism
-CI runs on **GitHub-hosted `macos-26`** (Apple Silicon; ships the Xcode 26.x line). Each job selects
-the newest installed Xcode 26 explicitly (`xcode-select` on the highest-versioned `Xcode_26*.app`) —
-the image's default Xcode drifts release-to-release, and the macOS deployment target needs a 26.5+ SDK.
+The proposed toolchain migration runs CI on **GitHub-hosted `xcode-27`** (Apple Silicon).
+Each job selects Xcode 27.0 build 27A266a explicitly and fails if it is missing or mismatched.
+The image default and newest installed Xcode are not accepted substitutes. The existing
+Xcode 26.6 gate remains on main until the migration is reviewed and lands.
 The workflow is **four jobs split by how deterministic each check is**, so a fragile check can't mask a
 solid one and the failing signal is precise:
 - **Unit tests** — the package suite via `swift test` on the macOS host. Fast, simulator-free, the

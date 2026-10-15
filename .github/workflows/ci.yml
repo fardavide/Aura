@@ -17,11 +17,13 @@ jobs:
   # via `swift test` (no simulator), matching the documented local workflow (.ai/docs/status.md).
   unit-tests:
     name: Unit tests (AuraKit)
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
+      - name: Test CI environment selection
+        run: python3 -m unittest discover -s .github/scripts/tests -v
       - name: Run package tests
         working-directory: AuraKit
         run: swift test
@@ -31,7 +33,7 @@ jobs:
   # process limit that back-to-back local xcodebuild runs hit (.ai/docs/status.md).
   build:
     name: Build app (${{ matrix.platform.name }})
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -46,7 +48,60 @@ jobs:
       # identity (the native macOS build otherwise fails resolving a "Mac Development" cert; the
       # iOS Simulator build never signs, so these settings are a harmless no-op there).
       - name: Build
-        run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -quiet CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+        run: xcodebuild build -scheme Aura -destination '${{ matrix.platform.destination }}' -jobs 4 -quiet CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+  minimum-ios:
+    name: Compatibility (iOS 26)
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/select-xcode
+      - name: Provision iOS 26 on the temporary runner
+        id: simulator
+        timeout-minutes: 20
+        run: bash .github/scripts/prepare-minimum-ios-simulator.sh
+      - name: Collect iOS 26 simulator startup diagnostics
+        if: failure() && steps.simulator.conclusion == 'failure'
+        timeout-minutes: 5
+        run: python3 .github/scripts/collect_simulator_diagnostics.py MinimumIosSimulatorDiagnostics
+      - name: Build the app for iOS 26
+        timeout-minutes: 10
+        run: |
+          xcodebuild build -scheme Aura \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.simulator_id }},OS=26.0' \
+            -derivedDataPath MinimumIosApp -jobs 4 \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+      - name: Install and launch the Xcode 27-built app on iOS 26
+        run: |
+          xcrun simctl install '${{ steps.simulator.outputs.simulator_id }}' MinimumIosApp/Build/Products/Debug-iphonesimulator/Aura.app
+          xcrun simctl launch '${{ steps.simulator.outputs.simulator_id }}' "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' MinimumIosApp/Build/Products/Debug-iphonesimulator/Aura.app/Info.plist)"
+      - name: Diagnose live-player tests on iOS 26
+        working-directory: AuraKit
+        run: |
+          xcodebuild test -scheme AuraKitTests \
+            -only-testing:CommonPlayerTests/LivePlayerModelTests \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.simulator_id }},OS=26.0' \
+            -jobs 4 -parallel-testing-enabled NO -collect-test-diagnostics never \
+            -resultBundlePath ../MinimumIosLiveDiagnostic.xcresult
+      - name: Run package tests on iOS 26
+        working-directory: AuraKit
+        run: |
+          xcodebuild test -scheme AuraKitTests \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.simulator_id }},OS=26.0' \
+            -jobs 4 -parallel-testing-enabled NO \
+            -resultBundlePath ../MinimumIosPackageResults.xcresult
+      - name: Retain iOS 26 test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimum-ios-package-results
+          path: |
+            MinimumIosPackageResults.xcresult
+            MinimumIosLiveDiagnostic.xcresult
+            MinimumIosSimulatorDiagnostics
+          retention-days: 7
+          if-no-files-found: warn
 
   # Liquid-Glass screenshot tests (app-hosted AuraTests target, iOS-only). Isolated on purpose:
   # the reference PNGs are recorded locally and their rendering is environment-sensitive
@@ -55,8 +110,8 @@ jobs:
   # re-record baselines locally (see /build-test) and commit. This job GATES the PR.
   snapshot-tests:
     name: Snapshot tests (iOS)
-    runs-on: macos-26
-    timeout-minutes: 40
+    runs-on: xcode-27
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/select-xcode
@@ -71,27 +126,18 @@ jobs:
           restore-keys: spm-${{ runner.os }}-
       - name: Resolve packages
         run: xcodebuild -resolvePackageDependencies -scheme Aura -clonedSourcePackagesDirPath SourcePackages
-      # Fail early with a readable message if the expected simulator is missing on this image
-      # release (iOS 26 devices have had transient per-release gaps on the hosted runner).
-      - name: Verify an iOS 26 iPhone 17 simulator is available
-        run: |
-          runtimes="$(xcrun simctl list runtimes available)"
-          devices="$(xcrun simctl list devices available)"
-          grep -E 'iPhone|iPad' <<< "$devices" || true
-          if ! grep -q 'iOS 26' <<< "$runtimes"; then
-            echo "::error::No iOS 26 simulator runtime available on this runner image"
-            exit 1
-          fi
-          if ! grep -q 'iPhone 17' <<< "$devices"; then
-            echo "::error::iPhone 17 simulator not available on this runner image"
-            exit 1
-          fi
+      # Bind the test-owned iPhone 17 to the exact runtime and wait for first boot to finish.
+      - name: Prepare iOS 27 snapshot simulator
+        id: simulator
+        run: bash .github/scripts/prepare-snapshot-simulator.sh
       - name: Run snapshot tests
         run: |
           xcodebuild test \
             -scheme Aura \
             -only-testing:AuraTests \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.simulator_id }},OS=27.0' \
+            -jobs 4 \
+            -parallel-testing-enabled NO \
             -resultBundlePath SnapshotResults.xcresult \
             -clonedSourcePackagesDirPath SourcePackages
       # On a mismatch the suite writes each freshly-rendered screen to AuraTests/__SnapshotFailures__/
