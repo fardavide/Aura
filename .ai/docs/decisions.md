@@ -2382,3 +2382,16 @@ the container duration. Insert only the mapped video range, never the whole cont
 audio track. Authentication remains attached to each original URL asset. API/live transport
 settings and server configuration are unchanged. Physical iPhone performance and authenticated
 remote media access remain TestFlight verification items.
+
+## Timeline scrubbing brakes quickly and ticks during direct input
+
+The iOS Timeline tab uses fast native scroll deceleration. Camera detail stops immediately
+after a gentle release and still gives a deliberate flick a short glide. The release threshold
+also reduces the remaining glide speed, so releases just above the threshold travel only a
+small distance and every glide eases to rest.
+
+Both scrubbers request system selection feedback while the user moves the playhead. A tick
+requires at least 24 points of travel since the previous tick and at least 80 ms between ticks.
+Distance is measured on the track so the cadence works at every zoom. Releasing the drag or
+changing the histogram zoom ends feedback. Only playhead movement within the available time
+range counts toward a tick.
