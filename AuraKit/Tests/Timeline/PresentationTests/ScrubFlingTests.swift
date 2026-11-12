@@ -13,16 +13,24 @@ struct ScrubFlingTests {
         #expect(fling == nil)
     }
 
-    @Test func `given a brisk release then the glide covers the projected distance`() throws {
+    @Test(arguments: [CGFloat(-125), CGFloat(125)])
+    func `given a small movement at release then the scrub settles without gliding`(velocity: CGFloat) {
+        // given - when
+        let fling = ScrubFling(velocity: velocity)
+
+        // then
+        #expect(fling == nil)
+    }
+
+    @Test func `given a brisk release then the glide travels a short distance before settling`() throws {
         // given
         let fling = try #require(ScrubFling(velocity: 1000))
 
         // when
         let total = fling.offset(at: fling.duration)
 
-        // then — the deceleration curve integrates to roughly half a second of travel at the
-        // release speed, minus the tail cut off under the rest velocity
-        #expect(abs(total - 495.6) < 1)
+        // then
+        #expect((80...150).contains(total))
     }
 
     @Test func `given time passing then the glide never reverses`() throws {
@@ -34,6 +42,17 @@ struct ScrubFlingTests {
 
         // then — a backwards release glides monotonically backwards
         #expect(offsets == offsets.sorted(by: >))
+    }
+
+    @Test func `given a brisk release when the glide reaches its end then the track is nearly stationary`() throws {
+        // given
+        let fling = try #require(ScrubFling(velocity: 1000))
+
+        // when
+        let finalMovement = fling.offset(at: fling.duration) - fling.offset(at: fling.duration - 0.001)
+
+        // then
+        #expect(abs(finalMovement) < 0.01)
     }
 
     @Test func `given a harder release then the glide lasts longer`() throws {

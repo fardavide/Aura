@@ -45,6 +45,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.8.4 — 2026-11-12
+- **Timeline scrubbing is easier to settle.** The track stops sooner after you lift your
+  finger, and light haptic ticks mark movement as you drag.
+
 ### 0.8.3 — 2026-10-13
 - **Fast-forward stops flashing “No footage at this time” between recordings.** The next
   section loads while the current footage plays, so playback can carry on at 4× and 8×.

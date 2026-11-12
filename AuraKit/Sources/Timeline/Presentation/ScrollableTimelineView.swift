@@ -33,6 +33,7 @@ struct ScrollableTimelineView: View {
     @GestureState private var pinchBaseline: CGFloat?
     @State private var scrollPosition = ScrollPosition()
     @State private var histogramViewport: CGFloat = 0
+    @State private var scrubFeedback = ScrubFeedback()
 
     var body: some View {
         glassCard
@@ -128,6 +129,7 @@ struct ScrollableTimelineView: View {
                     HistogramTrack(axis: arrangement.axis, span: span, timeline: timeline, length: scale.contentLength)
                     endSpacer(viewport / 2)
                 }
+                .modifier(TimelineScrollDeceleration())
             }
             .scrollPosition($scrollPosition)
             // Vertical anchors the live edge at the top and runs into the past downward, so scrolling
@@ -139,7 +141,11 @@ struct ScrollableTimelineView: View {
                 // While playing, the clock leads and the scroll follows it — reading the time back
                 // out of the offset we just wrote would feed rounding error into the playhead.
                 guard scale.contentLength > 0, !transport.isPlaying else { return }
-                onScrub(scale.instant(atOffset: offset))
+                let instant = scale.instant(atOffset: offset)
+                if pinchBaseline == nil {
+                    scrubFeedback.move(to: scale.offset(for: instant))
+                }
+                onScrub(instant)
             }
             // Playback slides the track under the fixed playhead. Nothing to do while parked: the
             // scroll is then the thing driving the clock, not the other way round.
@@ -151,7 +157,13 @@ struct ScrollableTimelineView: View {
                     scrollPosition.scrollTo(x: scale.offset(for: instant))
                 }
             }
-            .onScrollPhaseChange { _, phase in
+            .onScrollPhaseChange { _, phase, context in
+                if phase == .interacting, pinchBaseline == nil {
+                    let offset = isVertical ? context.geometry.contentOffset.y : context.geometry.contentOffset.x
+                    scrubFeedback.begin(at: scale.offset(for: scale.instant(atOffset: offset)))
+                } else {
+                    scrubFeedback.end()
+                }
                 switch phase {
                 case .idle:
                     clock.endScrub()
@@ -171,9 +183,11 @@ struct ScrollableTimelineView: View {
             // Guard against isScrubbing — and a pending playback resume — getting stuck if the
             // view disappears mid-deceleration.
             .onDisappear {
+                scrubFeedback.end()
                 clock.endScrub()
                 transport.endInteraction()
             }
+            .sensoryFeedback(.selection, trigger: scrubFeedback.tick)
             // Simultaneous so the pinch composes with the scroll pan instead of blocking it.
             .simultaneousGesture(magnify)
             .auroraTrackWell()
@@ -220,6 +234,7 @@ struct ScrollableTimelineView: View {
     private func zoom(to density: CGFloat) {
         let clamped = TimelineZoom.clamped(density)
         guard clamped != pointsPerHour else { return }
+        scrubFeedback.end()
         pointsPerHour = clamped
         let scale = TimelineScale(axis: arrangement.axis, span: span, pointsPerHour: clamped, viewport: histogramViewport)
         if arrangement.axis == .vertical {

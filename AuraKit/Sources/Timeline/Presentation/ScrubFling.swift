@@ -1,36 +1,34 @@
 import Foundation
 
-/// The glide after a scrub drag is released with speed: UIScrollView's deceleration curve applied
-/// to the centre-anchored track, so a thrown timeline slides on and eases to a stop instead of
-/// halting dead under the lifted finger.
+/// The short glide after a deliberate flick of the centre-anchored track.
 ///
 /// Pure — the release velocity is fixed at creation and every offset is a function of elapsed
 /// time, so the curve is unit-tested while the driving loop stays a thin piece of view code.
 struct ScrubFling: Equatable {
     let initialVelocity: CGFloat
 
-    /// UIScrollView's `.normal` deceleration factor, restated per second (it is defined per
-    /// millisecond), so the same feel carries over to a per-second time base.
-    private static let decelerationPerSecond: CGFloat = pow(0.998, 1000)
-    /// Releases slower than this are a positioning drag coming to rest, not a throw.
-    private static let minimumVelocity: CGFloat = 80
-    /// The residual speed that counts as stopped — the asymptote is never actually reached.
-    private static let restVelocity: CGFloat = 8
+    private static let decelerationPerSecond: CGFloat = pow(0.994, 1000)
+    /// Also subtracted from the glide speed, so a release just above the threshold barely coasts.
+    private static let settleVelocity: CGFloat = 180
 
     /// `nil` when the release was too slow to read as a throw.
     init?(velocity: CGFloat) {
-        guard abs(velocity) >= Self.minimumVelocity else { return nil }
+        guard abs(velocity) > Self.settleVelocity else { return nil }
         initialVelocity = velocity
     }
 
     /// Points travelled `elapsed` seconds after release, along the release direction.
     func offset(at elapsed: TimeInterval) -> CGFloat {
         let rate = Self.decelerationPerSecond
-        return initialVelocity * (pow(rate, elapsed) - 1) / log(rate)
+        let time = min(elapsed, duration)
+        let projectedTravel = abs(initialVelocity) * (pow(rate, time) - 1) / log(rate)
+        // Subtract the residual speed throughout the glide so it eases all the way to rest.
+        let travel = projectedTravel - Self.settleVelocity * time
+        return initialVelocity < 0 ? -travel : travel
     }
 
-    /// When the glide has slowed to the rest velocity — the moment to settle the scrub.
+    /// The time when the damped glide reaches zero speed.
     var duration: TimeInterval {
-        log(Self.restVelocity / abs(initialVelocity)) / log(Self.decelerationPerSecond)
+        log(Self.settleVelocity / abs(initialVelocity)) / log(Self.decelerationPerSecond)
     }
 }

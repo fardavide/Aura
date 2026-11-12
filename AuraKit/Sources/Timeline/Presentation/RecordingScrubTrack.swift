@@ -27,6 +27,7 @@ struct RecordingScrubTrack: View {
 
     @Environment(\.calendar) private var calendar
     @State private var dragAnchor: Date?
+    @State private var scrubFeedback = ScrubFeedback()
     /// Live while the system considers the drag active. SwiftUI resets it when a gesture is
     /// *cancelled* (an incoming call, a rotation) without calling `onEnded` — the reset is how
     /// the scrub still gets settled instead of stranding playback paused.
@@ -83,8 +84,10 @@ struct RecordingScrubTrack: View {
             // A cancelled drag never reaches `onEnded` — settle the scrub it left open.
             guard !active, dragAnchor != nil else { return }
             dragAnchor = nil
+            scrubFeedback.end()
             actions.endScrub()
         }
+        .sensoryFeedback(.selection, trigger: scrubFeedback.tick)
         .accessibilityLabel("Timeline")
         .accessibilityValue(Text(state.instant, format: .dateTime.hour().minute().second()))
         .accessibilityAdjustableAction { direction in
@@ -152,6 +155,7 @@ struct RecordingScrubTrack: View {
                     // scrub the glide began stays open, so the resume intent survives the grab.
                     actions.beginScrub()
                     dragAnchor = state.instant
+                    scrubFeedback.begin(at: length / 2)
                     return state.instant
                 }()
                 // Horizontal: dragging right pulls the past under the playhead, so the shift is
@@ -162,10 +166,13 @@ struct RecordingScrubTrack: View {
                     pointsPerHour: state.zoom.pointsPerHour,
                     length: length
                 )
-                actions.scrub(anchored.center(shiftedByPoints: shift))
+                let target = anchored.center(shiftedByPoints: shift)
+                actions.scrub(target)
+                scrubFeedback.move(to: anchored.position(of: state.span.clamp(target)))
             }
             .onEnded { value in
                 dragAnchor = nil
+                scrubFeedback.end()
                 let axisVelocity = axis == .horizontal ? -value.velocity.width : value.velocity.height
                 guard let fling = ScrubFling(velocity: axisVelocity) else {
                     actions.endScrub()
@@ -190,7 +197,7 @@ struct RecordingScrubTrack: View {
                 try? await Task.sleep(for: .milliseconds(16))
                 guard !Task.isCancelled else { return }
                 elapsed += 0.016
-                let target = viewport.center(shiftedByPoints: fling.offset(at: min(elapsed, fling.duration)))
+                let target = viewport.center(shiftedByPoints: fling.offset(at: elapsed))
                 actions.scrub(target)
                 if target <= state.span.start || target >= state.span.end { break }
             }
