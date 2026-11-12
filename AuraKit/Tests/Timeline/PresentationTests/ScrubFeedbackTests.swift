@@ -35,7 +35,23 @@ struct ScrubFeedbackTests {
         #expect([first, duringCooldown, feedback.tick] == [1, 1, 2])
     }
 
-    @Test func `given a released drag when the track glides then feedback stays silent`() {
+    @Test func `given a user scroll when the drag continues into a glide then nearby movements each tick`() {
+        // given
+        var feedback = ScrubFeedback()
+        feedback.update(for: .interacting, at: 300)
+        let now = ContinuousClock.now
+
+        // when
+        feedback.move(to: 316, at: now)
+        let duringDrag = feedback.tick
+        feedback.update(for: .decelerating, at: 319)
+        feedback.move(to: 332, at: now.advanced(by: .milliseconds(90)))
+
+        // then
+        #expect([duringDrag, feedback.tick] == [1, 2])
+    }
+
+    @Test func `given a settled scrub when the track is repositioned then feedback stays silent`() {
         // given
         var feedback = ScrubFeedback()
         feedback.begin(at: 300)

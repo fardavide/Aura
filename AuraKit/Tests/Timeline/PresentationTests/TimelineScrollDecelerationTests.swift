@@ -28,6 +28,22 @@ struct TimelineScrollDecelerationTests {
         #expect(scrollView.decelerationRate == .fast)
     }
 
+    @Test(arguments: [Axis.Set.horizontal, .vertical])
+    func `given a brisk release when settling the histogram then the target coasts farther along the scroll axis`(
+        axes: Axis.Set
+    ) {
+        // given
+        let behavior = TimelineScrollTargetBehavior()
+        let origin = CGPoint(x: 200, y: 200)
+
+        // when
+        let target = behavior.extendedOrigin(origin, velocity: CGVector(dx: 1_000, dy: -1_000), axes: axes)
+
+        // then
+        let expected = axes == .horizontal ? CGPoint(x: 225, y: 200) : CGPoint(x: 200, y: 175)
+        #expect(target == expected)
+    }
+
     @MainActor private struct Scenario {
         let host: UIHostingController<ScrollableTimelineView>
         let window: UIWindow

@@ -18,9 +18,11 @@ the following historical window in both playback surfaces and preserves the last
 during detail handoff. All host tests, 892 simulator package tests, both app builds, and all 79
 snapshot tests passed. Evidence is in `recording-rollover-verification.md`.
 
-Timeline scrubbing passed both app builds, 975 host package tests, 329 Timeline presentation
-tests, and 29 affected snapshot cases with Xcode 27.2 and the iPhone 17 simulator on iOS 27.0.
-The native braking test covered both portrait and landscape. Physical-device feel remains open.
+TestFlight feedback on 0.8.4 confirmed that Timeline scrubbing settles more easily. The 0.8.5
+follow-up gives flicks a little more travel and spaces haptic ticks more closely through the glide.
+Both app builds, 976 host package tests, 331 Timeline presentation tests, and 29 affected snapshot
+cases passed with Xcode 27.2 and the iPhone 17 simulator on iOS 27.0. The new haptic cadence still
+needs a physical-device check.
 
 New server setups now prefill HTTP/1984 for live streaming on both routes. Saved
 settings remain unchanged, and each port remains editable independently. The user

@@ -7,7 +7,7 @@ import Foundation
 struct ScrubFling: Equatable {
     let initialVelocity: CGFloat
 
-    private static let decelerationPerSecond: CGFloat = pow(0.994, 1000)
+    private static let decelerationPerSecond: CGFloat = pow(0.99475, 1000)
     /// Also subtracted from the glide speed, so a release just above the threshold barely coasts.
     private static let settleVelocity: CGFloat = 180
 

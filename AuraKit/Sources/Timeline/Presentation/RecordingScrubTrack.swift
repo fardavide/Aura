@@ -171,23 +171,25 @@ struct RecordingScrubTrack: View {
                 scrubFeedback.move(to: anchored.position(of: state.span.clamp(target)))
             }
             .onEnded { value in
+                let anchor = dragAnchor ?? state.instant
                 dragAnchor = nil
-                scrubFeedback.end()
                 let axisVelocity = axis == .horizontal ? -value.velocity.width : value.velocity.height
                 guard let fling = ScrubFling(velocity: axisVelocity) else {
+                    scrubFeedback.end()
                     actions.endScrub()
                     return
                 }
-                glide(fling, length: length)
+                glide(fling, length: length, dragAnchor: anchor)
             }
     }
 
     /// Runs a released throw to its natural stop: the track keeps sliding along the deceleration
     /// curve, then the scrub settles exactly where the glide ended. The span's edges stop a glide
     /// dead — there is nothing past them to slide onto.
-    private func glide(_ fling: ScrubFling, length: CGFloat) {
-        let viewport = TimelineViewport(
-            center: state.instant,
+    private func glide(_ fling: ScrubFling, length: CGFloat, dragAnchor: Date) {
+        let releasedViewport = viewport(length: length)
+        let feedbackViewport = TimelineViewport(
+            center: dragAnchor,
             pointsPerHour: state.zoom.pointsPerHour,
             length: length
         )
@@ -197,11 +199,13 @@ struct RecordingScrubTrack: View {
                 try? await Task.sleep(for: .milliseconds(16))
                 guard !Task.isCancelled else { return }
                 elapsed += 0.016
-                let target = viewport.center(shiftedByPoints: fling.offset(at: elapsed))
+                let target = releasedViewport.center(shiftedByPoints: fling.offset(at: elapsed))
                 actions.scrub(target)
+                scrubFeedback.move(to: feedbackViewport.position(of: state.span.clamp(target)))
                 if target <= state.span.start || target >= state.span.end { break }
             }
             guard !Task.isCancelled else { return }
+            scrubFeedback.end()
             flingTask = nil
             actions.endScrub()
         }

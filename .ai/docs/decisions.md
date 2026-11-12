@@ -2383,15 +2383,16 @@ audio track. Authentication remains attached to each original URL asset. API/liv
 settings and server configuration are unchanged. Physical iPhone performance and authenticated
 remote media access remain TestFlight verification items.
 
-## Timeline scrubbing brakes quickly and ticks during direct input
+## Timeline scrubbing brakes gently and ticks through the glide
 
-The iOS Timeline tab uses fast native scroll deceleration. Camera detail stops immediately
-after a gentle release and still gives a deliberate flick a short glide. The release threshold
-also reduces the remaining glide speed, so releases just above the threshold travel only a
-small distance and every glide eases to rest.
+UIKit rounds intermediate rates to its fast or normal setting. The iOS Timeline tab uses
+fast native braking and lets SwiftUI extend the landing position in proportion to release
+velocity. Camera detail stops immediately after a gentle release and gives a deliberate flick
+a short glide. The release threshold also reduces the remaining glide speed, so releases just
+above the threshold travel only a small distance and every glide eases to rest.
 
-Both scrubbers request system selection feedback while the user moves the playhead. A tick
-requires at least 24 points of travel since the previous tick and at least 80 ms between ticks.
-Distance is measured on the track so the cadence works at every zoom. Releasing the drag or
-changing the histogram zoom ends feedback. Only playhead movement within the available time
-range counts toward a tick.
+Both scrubbers request system selection feedback through the drag and any resulting glide.
+A tick requires at least 16 points of travel since the previous tick and at least 80 ms between
+ticks. The cadence carries across release, and measuring distance on the track keeps it
+consistent at every zoom. Only playhead movement within the available time range counts
+toward a tick. Feedback stops when the scrub settles or the histogram zoom changes.

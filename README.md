@@ -45,6 +45,10 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.8.5 — 2026-11-12
+- **Timeline scrubbing glides a little farther.** Haptic ticks are closer together and continue
+  while the timeline coasts after a flick.
+
 ### 0.8.4 — 2026-11-12
 - **Timeline scrubbing is easier to settle.** The track stops sooner after you lift your
   finger, and light haptic ticks mark movement as you drag.
