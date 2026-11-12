@@ -30,7 +30,7 @@ struct ScrubFlingTests {
         let total = fling.offset(at: fling.duration)
 
         // then
-        #expect((80...150).contains(total))
+        #expect((90...115).contains(total))
     }
 
     @Test func `given time passing then the glide never reverses`() throws {

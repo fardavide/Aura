@@ -131,6 +131,7 @@ struct ScrollableTimelineView: View {
                 }
                 .modifier(TimelineScrollDeceleration())
             }
+            .modifier(TimelineScrollCoast())
             .scrollPosition($scrollPosition)
             // Vertical anchors the live edge at the top and runs into the past downward, so scrolling
             // *up* reveals older footage. Horizontal anchors the live edge at the trailing edge.
@@ -158,9 +159,9 @@ struct ScrollableTimelineView: View {
                 }
             }
             .onScrollPhaseChange { _, phase, context in
-                if phase == .interacting, pinchBaseline == nil {
+                if pinchBaseline == nil {
                     let offset = isVertical ? context.geometry.contentOffset.y : context.geometry.contentOffset.x
-                    scrubFeedback.begin(at: scale.offset(for: scale.instant(atOffset: offset)))
+                    scrubFeedback.update(for: phase, at: scale.offset(for: scale.instant(atOffset: offset)))
                 } else {
                     scrubFeedback.end()
                 }
