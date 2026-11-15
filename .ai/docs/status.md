@@ -24,6 +24,11 @@ Both app builds, 976 host package tests, 331 Timeline presentation tests, and 29
 cases passed with Xcode 27.2 and the iPhone 17 simulator on iOS 27.0. The new haptic cadence still
 needs a physical-device check.
 
+The camera-to-timeline playback handoff has a hosted regression on iPhone 17 with iOS 27.0.
+The toolbar test reproduced the timeline starting while the camera still held its media item,
+then passed when the item was released before navigation. Returning to the camera loaded a
+fresh item, and all five camera-detail snapshot cases passed.
+
 New server setups now prefill HTTP/1984 for live streaming on both routes. Saved
 settings remain unchanged, and each port remains editable independently. The user
 confirmed that entering 1984 restored playback after updating to 0.8.0.

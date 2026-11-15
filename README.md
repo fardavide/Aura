@@ -45,6 +45,9 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.8.6 — 2026-11-15
+- **Opening Timeline stops playback on the camera screen.** Going back resumes the live stream.
+
 ### 0.8.5 — 2026-11-12
 - **Timeline scrubbing glides a little farther.** Haptic ticks are closer together and continue
   while the timeline coasts after a flick.

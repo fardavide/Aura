@@ -1140,10 +1140,13 @@ Two small user-called improvements, one of them with an architectural edge worth
   takes the destination as an injected `@ViewBuilder` (`CameraGridView` is generic over it) and the
   composition root supplies it, exactly as it already supplies view-model factories: the link is
   wired where every other cross-feature wiring lives, and neither vertical learns about the other.
-  The push is a `CameraTimelineRoute` value registered on the grid's stack, so the button sits in
-  the detail's toolbar while the stack keeps owning navigation. It is offered even when a camera has
-  no go2rtc stream — the recordings are there either way — and the instant is read as the push
-  resolves, so the recordings open at the live edge rather than at whenever the view was built.
+  The detail toolbar opens the destination on the camera stack. The button is also available for
+  cameras without a live stream. The destination reads the current instant as the push resolves
+  and opens at the live edge.
+- **The toolbar stops inline playback before pushing the timeline.** The timeline can start its
+  player while the outgoing camera view is still visible during the transition. The toolbar releases
+  the camera's media item first. Returning to the camera starts a fresh item at the live edge.
+  Picture in Picture retains the stream while it owns playback.
 
 ### The snapshot gate did not catch the Hour default — the area budget has a small-chrome blind spot
 Recorded because it falsifies a claim the previous entry made in good faith. The 0.5.0 tolerance note

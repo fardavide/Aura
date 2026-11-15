@@ -8,14 +8,14 @@ import CommonDesign
 /// interaction and reappear on a single tap; in `.card` they float below the picture and are
 /// always visible (`LiveVideoArrangement.autoHidesControls`).
 public struct LiveVideoView: View {
-    @State private var model: LivePlayerModel
+    private let model: LivePlayerModel
     @State private var autoHideState = true
     @State private var autoHide: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    public init(url: URL, headers: [String: String]) {
-        _model = State(initialValue: LivePlayerModel(url: url, headers: headers))
+    public init(model: LivePlayerModel) {
+        self.model = model
     }
 
     private var arrangement: LiveVideoArrangement {
