@@ -124,10 +124,6 @@ private func liveControls(arrangement: LiveVideoArrangement, state: LiveControlS
     }
 }
 
-/// The full `CameraDetailView`, with a stub `navigationDestination` registered for
-/// `CameraTimelineRoute` — without it, a value-based `NavigationLink` whose type has no destination
-/// in scope renders **disabled**, which would bake a greyed-out, inoperable Timeline button into
-/// the `no-stream` baselines.
 @MainActor
 private func cameraDetail(streamed: CameraStreamSource?) -> some View {
     let camera = Camera(
@@ -136,7 +132,6 @@ private func cameraDetail(streamed: CameraStreamSource?) -> some View {
     let viewModel = CameraDetailViewModel(camera: camera, streamProvider: FakeCameraStreamProvider(streamed))
 
     return NavigationStack {
-        CameraDetailView(camera: camera, viewModel: viewModel)
+        CameraDetailView(camera: camera, viewModel: viewModel) { _ in Color.clear }
     }
-    .navigationDestination(for: CameraTimelineRoute.self) { _ in Color.clear }
 }

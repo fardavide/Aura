@@ -4,27 +4,47 @@ import CamerasDomain
 import CommonDesign
 import CommonPlayer
 
-public struct CameraDetailView: View {
+public struct CameraDetailView<CameraTimeline: View>: View {
     private let camera: Camera
-    private let viewModel: CameraDetailViewModel
+    private let title: String
+    private let cameraTimeline: (Camera) -> CameraTimeline
+    @State private var playback: Playback
+    @State private var isTimelinePresented = false
 
-    public init(camera: Camera, viewModel: CameraDetailViewModel) {
+    public init(
+        camera: Camera,
+        viewModel: CameraDetailViewModel,
+        @ViewBuilder cameraTimeline: @escaping (Camera) -> CameraTimeline
+    ) {
         self.camera = camera
-        self.viewModel = viewModel
+        title = viewModel.title
+        self.cameraTimeline = cameraTimeline
+        let playback: Playback = switch viewModel.state {
+        case .playing(let source):
+            .live(LivePlayerModel(url: source.url, headers: source.headers))
+        case .unavailable:
+            .unavailable
+        }
+        _playback = State(initialValue: playback)
     }
 
     public var body: some View {
         content
-            .navigationTitle(viewModel.title)
+            .navigationTitle(title)
             .toolbar {
-                // Straight from what this camera is showing now to what it recorded — the same
-                // screen a Timeline tile opens, without going through the tab and finding the
-                // camera again. Offered even when there is no live stream: the recordings are
-                // still there. The destination decides the instant, which is the live edge.
-                NavigationLink(value: CameraTimelineRoute(camera: camera)) {
+                Button {
+                    // The Timeline can start playback before the live view disappears.
+                    if case .live(let model) = playback {
+                        model.stop()
+                    }
+                    isTimelinePresented = true
+                } label: {
                     Label("Timeline", systemImage: "calendar.day.timeline.left")
                 }
                 .labelStyle(.iconOnly)
+            }
+            .navigationDestination(isPresented: $isTimelinePresented) {
+                cameraTimeline(camera)
             }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -33,9 +53,9 @@ public struct CameraDetailView: View {
     }
 
     @ViewBuilder private var content: some View {
-        switch viewModel.state {
-        case .playing(let source):
-            LiveVideoView(url: source.url, headers: source.headers)
+        switch playback {
+        case .live(let model):
+            LiveVideoView(model: model)
         case .unavailable:
             ContentUnavailableView {
                 Label {
@@ -49,5 +69,10 @@ public struct CameraDetailView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .auroraBackground()
         }
+    }
+
+    private enum Playback {
+        case live(LivePlayerModel)
+        case unavailable
     }
 }

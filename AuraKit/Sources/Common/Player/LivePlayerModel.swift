@@ -12,8 +12,8 @@ import SwiftUI
 /// is no built-in aspect-fill pinch to race the container's gestures either.
 ///
 /// Playback is started from `start()` (the view's `onAppear`), not `init`, and the player is built
-/// lazily — so the throwaway instances SwiftUI constructs and discards on every `LiveVideoView`
-/// re-init never open a stream or register an observer.
+/// lazily, so the models SwiftUI discards when recreating the camera detail view never open a
+/// stream or register an observer.
 ///
 /// Anything that can leave the stream idle — an audio-session interruption, the app being
 /// backgrounded — makes the current item unplayable rather than merely paused, because a live HLS

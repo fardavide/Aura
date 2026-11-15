@@ -39,10 +39,11 @@ public struct CameraGridView<CameraTimeline: View>: View {
                 .navigationTitle("Cameras")
                 .auroraHiddenNavigationBar()
                 .navigationDestination(for: Camera.self) { camera in
-                    CameraDetailView(camera: camera, viewModel: makeDetailViewModel(camera))
-                }
-                .navigationDestination(for: CameraTimelineRoute.self) { route in
-                    cameraTimeline(route.camera)
+                    CameraDetailView(
+                        camera: camera,
+                        viewModel: makeDetailViewModel(camera),
+                        cameraTimeline: cameraTimeline
+                    )
                 }
         }
         .task {
