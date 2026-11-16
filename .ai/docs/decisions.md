@@ -2403,3 +2403,17 @@ A tick requires at least 16 points of travel since the previous tick and at leas
 ticks. The cadence carries across release, and measuring distance on the track keeps it
 consistent at every zoom. Only playhead movement within the available time range counts
 toward a tick. Feedback stops when the scrub settles or the histogram zoom changes.
+
+## Camera switching in detail (0.9.0)
+
+The camera title opens a compact strip of selectable previews in both details. In Timeline's
+iPhone landscape rail, the picker sits with the clock because the title bar is hidden. Opening
+the menu captures the exact playhead and the play/pause intent. All thumbnails and the selected
+camera use that captured time, even if the source recording advances while the menu is open.
+An exact camera switch starts in recording mode at that time, including near the live edge.
+If the destination has a gap, the playhead stays there so the gap is visible.
+
+Live uses the camera wall's recent snapshots and follows the saved camera order. Timeline uses
+the recording preview path for the hour containing the playhead, with a two-second tolerance.
+Choosing a camera replaces playback in place. The menu is hidden during clip editing or
+processing so switching cannot discard the clip in progress.

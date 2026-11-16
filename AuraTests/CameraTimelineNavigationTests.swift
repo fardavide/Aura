@@ -102,7 +102,9 @@ struct CameraTimelineNavigationTests {
             @Bindable var scenario = self
             let detail = CameraDetailView(
                 camera: camera,
-                viewModel: CameraDetailViewModel(camera: camera, streamProvider: streamProvider)
+                cameras: [camera],
+                preview: { _ in nil },
+                makeViewModel: { CameraDetailViewModel(camera: $0, streamProvider: self.streamProvider) }
             ) { _ in
                 Color.clear.onAppear {
                     self.didReleaseCameraItemBeforeTimelinePlayback = self.cameraPlayer.map { $0.currentItem == nil }

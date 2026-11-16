@@ -17,7 +17,8 @@ public struct TimelineScreenView: View {
     // RootView's `.id`.
     @State private var viewModel: TimelineScreenViewModel
     private let makeTileViewModel: (Camera) -> PreviewTileViewModel
-    private let makeRecordingPlayerViewModel: (Camera, Date) -> RecordingPlayerViewModel
+    private let makeRecordingPlayerViewModel: RecordingPlayerView.ModelFactory
+    private let loadRecordingPreview: RecordingPlayerView.PreviewLoader
     private let onOpenSettings: () -> Void
     /// Where a clip cut on the detail screen is reached afterwards. The detail screen hides the
     /// tab bar, so it cannot select the tab itself.
@@ -86,7 +87,8 @@ public struct TimelineScreenView: View {
     public init(
         viewModel: TimelineScreenViewModel,
         makeTileViewModel: @escaping (Camera) -> PreviewTileViewModel,
-        makeRecordingPlayerViewModel: @escaping (Camera, Date) -> RecordingPlayerViewModel,
+        makeRecordingPlayerViewModel: @escaping RecordingPlayerView.ModelFactory,
+        loadRecordingPreview: @escaping RecordingPlayerView.PreviewLoader,
         onOpenSettings: @escaping () -> Void,
         onOpenExports: @escaping () -> Void
     ) {
@@ -94,6 +96,7 @@ public struct TimelineScreenView: View {
         _viewModel = State(initialValue: viewModel)
         self.makeTileViewModel = makeTileViewModel
         self.makeRecordingPlayerViewModel = makeRecordingPlayerViewModel
+        self.loadRecordingPreview = loadRecordingPreview
         self.onOpenSettings = onOpenSettings
     }
 
@@ -113,8 +116,12 @@ public struct TimelineScreenView: View {
             }
             .auroraHiddenNavigationBar()
             .navigationDestination(item: $openedRecording) { recording in
+                let cameras = if case .ready(let cameras, _) = viewModel.state { cameras } else { [recording.camera] }
                 RecordingPlayerView(
-                    viewModel: makeRecordingPlayerViewModel(recording.camera, recording.instant),
+                    viewModel: makeRecordingPlayerViewModel(recording.camera, recording.instant, .automatic),
+                    cameras: cameras,
+                    makeViewModel: makeRecordingPlayerViewModel,
+                    loadPreview: loadRecordingPreview,
                     onOpenExports: onOpenExports
                 )
             }

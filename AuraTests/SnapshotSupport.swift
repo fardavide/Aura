@@ -178,7 +178,7 @@ func timelineScreen(
             )
         },
         // Never invoked in a snapshot — the destination is only built once a tile is tapped.
-        makeRecordingPlayerViewModel: { camera, instant in
+        makeRecordingPlayerViewModel: { camera, instant, startMode in
             RecordingPlayerViewModel(
                 camera: camera,
                 recordings: GetCameraRecordings(repository: FakeCameraRecordingsRepository(.success([]))),
@@ -203,9 +203,11 @@ func timelineScreen(
                 liveSource: nil,
                 now: { snapshotNow },
                 startingAt: instant,
-                days: snapshotDays
+                days: snapshotDays,
+                startMode: startMode
             )
         },
+        loadRecordingPreview: { _, _ in nil },
         onOpenSettings: {},
         onOpenExports: {}
     )

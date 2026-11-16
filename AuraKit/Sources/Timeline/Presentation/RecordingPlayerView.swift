@@ -1,16 +1,24 @@
 import AVFoundation
 import SwiftUI
 
+import CamerasDomain
+import CommonDesign
 import CommonPlayer
 
 /// Full-resolution playback of one camera's recordings against its own time axis — the screen a
 /// tile in the Timeline grid opens.
 public struct RecordingPlayerView: View {
+    public typealias ModelFactory = (Camera, Date, RecordingPlayerViewModel.StartMode) -> RecordingPlayerViewModel
+    public typealias PreviewLoader = @MainActor (Camera, Date) async -> Image?
+
     // @State-pinned like the sibling screens: the composition root builds a fresh view model on
     // every re-evaluation, and the `.task`s below bind only on appearance — a plain `let` would
     // leave the displayed model waiting on a load that ran against a discarded one.
     @State private var viewModel: RecordingPlayerViewModel
     @Environment(\.scenePhase) private var scenePhase
+    private let cameras: [Camera]
+    private let makeViewModel: ModelFactory
+    private let loadPreview: PreviewLoader
     /// How a finished clip is reached from here. The tab bar is hidden on this screen, so there is
     /// no badge to light up — the way across has to be a control the panel owns.
     private let onOpenExports: () -> Void
@@ -19,29 +27,73 @@ public struct RecordingPlayerView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
 
-    public init(viewModel: RecordingPlayerViewModel, onOpenExports: @escaping () -> Void) {
+    public init(
+        viewModel: RecordingPlayerViewModel,
+        cameras: [Camera],
+        makeViewModel: @escaping ModelFactory,
+        loadPreview: @escaping PreviewLoader,
+        onOpenExports: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: viewModel)
+        self.cameras = cameras
+        self.makeViewModel = makeViewModel
+        self.loadPreview = loadPreview
         self.onOpenExports = onOpenExports
     }
 
     public var body: some View {
         RecordingDetailLayout(
-            state: viewModel.state, actions: actions, filmstrip: viewModel.filmstrip, retryLive: retryLive
+            state: viewModel.state,
+            actions: actions,
+            filmstrip: viewModel.filmstrip,
+            retryLive: retryLive,
+            railHeader: cameraMenu
         ) {
             content
         }
+        .id(viewModel.camera.id)
         .navigationTitle(viewModel.camera.friendlyName ?? viewModel.camera.name.value)
+        .toolbar {
+            if !usesCompactRail {
+                ToolbarItem(placement: .principal) { cameraMenu }
+            }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        // A phone on its side is wide but short, and the footage goes full-bleed there — the
-        // camera's name is already on the hero, so the title bar is only height taken from it.
-        .toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .navigationBar)
+        .toolbar(usesCompactRail ? .hidden : .visible, for: .navigationBar)
         #endif
-        .task { await viewModel.loadIfNeeded() }
-        .task { await viewModel.autoRefresh() }
+        .task(id: viewModel.camera.id) { [viewModel] in await viewModel.loadIfNeeded() }
+        .task(id: viewModel.camera.id) { [viewModel] in await viewModel.autoRefresh() }
         .onDisappear { viewModel.stopLivePlayback() }
         .onChange(of: scenePhase) { _, phase in viewModel.handleScenePhase(phase) }
+    }
+
+    private var usesCompactRail: Bool {
+        #if os(iOS)
+        verticalSizeClass == .compact
+        #else
+        false
+        #endif
+    }
+
+    @ViewBuilder private var cameraMenu: some View {
+        if cameras.count > 1 && !viewModel.state.isExporting {
+            AuroraPreviewMenu(
+                selected: viewModel.camera,
+                options: cameras,
+                name: { $0.friendlyName ?? $0.name.value },
+                captureContext: { (instant: viewModel.instant, isPlaying: viewModel.isPlaying) },
+                caption: { context in
+                    Text(context.instant, format: .dateTime.month(.abbreviated).day().hour().minute().second())
+                },
+                loadPreview: { camera, context in await loadPreview(camera, context.instant) },
+                onSelect: { camera, context in
+                    viewModel.stopPlaybackForCameraSwitch()
+                    viewModel = makeViewModel(camera, context.instant, .cameraSwitch(isPlaying: context.isPlaying))
+                }
+            )
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -83,7 +135,10 @@ public struct RecordingPlayerView: View {
     }
 
     private var actions: RecordingDetailActions {
-        RecordingDetailActions(
+        // A disappearing panel may still settle its scrub. It belongs to the player that
+        // owned it, even if a camera selection has already installed a new player.
+        let viewModel = self.viewModel
+        return RecordingDetailActions(
             playPause: { viewModel.togglePlayPause() },
             skip: { seconds in Task { await viewModel.skip(by: seconds) } },
             selectSpeed: { viewModel.select($0) },

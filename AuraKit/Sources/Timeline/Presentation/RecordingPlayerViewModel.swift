@@ -25,6 +25,11 @@ import TimelineDomain
 @Observable
 @MainActor
 public final class RecordingPlayerViewModel {
+    public enum StartMode {
+        case automatic
+        case cameraSwitch(isPlaying: Bool)
+    }
+
     public enum Display {
         case loading
         case ready(AVPlayer)
@@ -143,6 +148,7 @@ public final class RecordingPlayerViewModel {
     private let getExport: GetExport
     private let liveSource: CameraStreamSource?
     private let now: @MainActor () -> Date
+    private let startMode: StartMode
     /// The motion-strip resolution, pinned from the span at birth so every overlay window — and
     /// every refresh — comes back at the same bucket width.
     private let bucket: TimeInterval
@@ -191,7 +197,8 @@ public final class RecordingPlayerViewModel {
         liveSource: CameraStreamSource?,
         now: @escaping @MainActor () -> Date,
         startingAt instant: Date,
-        days: Int
+        days: Int,
+        startMode: StartMode = .automatic
     ) {
         self.camera = camera
         self.filmstrip = filmstrip
@@ -202,13 +209,24 @@ public final class RecordingPlayerViewModel {
         self.getExport = getExport
         self.liveSource = liveSource
         self.now = now
+        self.startMode = startMode
         self.instant = instant
         let present = now()
-        let initialSpan = TimeRange(start: present.addingTimeInterval(-Double(days) * 86_400), end: present)
+        let historyStart = present.addingTimeInterval(-Double(days) * 86_400)
+        let start: Date
+        switch startMode {
+        case .automatic:
+            followsLiveEdge = present.timeIntervalSince(instant) <= Self.liveEdgeTolerance
+            start = historyStart
+        case .cameraSwitch:
+            followsLiveEdge = false
+            // The old detail may already have been open when this new history span was set.
+            start = min(historyStart, instant)
+        }
+        let initialSpan = TimeRange(start: start, end: present)
         span = initialSpan
         bucket = OverlayWindow.bucketDuration(for: initialSpan)
         overlaysLoadedBack = initialSpan.end
-        followsLiveEdge = present.timeIntervalSince(instant) <= Self.liveEdgeTolerance
         let initial = RecordingWindow.containing(instant)
         window = initial
         timeline = RecordingTimeline(window: initial, segments: [])
@@ -316,24 +334,40 @@ public final class RecordingPlayerViewModel {
 
     /// Loads on first appearance only, so returning to the screen doesn't restart the recording.
     public func loadIfNeeded() async {
+        guard !Task.isCancelled else { return }
         if case .live = display {
             livePlayback?.start()
             return
         }
         guard case .loading = display else { return }
-        isRecordingPlaying = true
+        let target: SeekTarget
+        switch startMode {
+        case .automatic:
+            isRecordingPlaying = true
+            target = .instant(instant)
+        case .cameraSwitch(let isPlaying):
+            isRecordingPlaying = isPlaying
+            target = .cameraSwitch(instant)
+        }
         if followsLiveEdge, let liveSource {
             showLive(liveSource)
         }
         async let overlays = loadOverlays(in: span)
         async let preview: Void = scrubPreview.prepare(range: span, at: instant)
-        await load(window: window, seeking: .instant(instant))
+        await load(window: window, seeking: target)
         _ = await overlays
         _ = await preview
     }
 
     public func stopLivePlayback() {
         livePlayback?.stop()
+    }
+
+    func stopPlaybackForCameraSwitch() {
+        loadGeneration += 1
+        speedLoad?.cancel()
+        detachPlayer()
+        isRecordingPlaying = false
     }
 
     public func handleScenePhase(_ phase: ScenePhase) {
@@ -682,15 +716,20 @@ public final class RecordingPlayerViewModel {
         let resolved = isScrubbing ? instant : resolve(target)
         apply(instant: resolved)
         movePlayer(toPlayerTime: timeline.playerTime(at: resolved), exact: true)
-        // Read the intent now rather than capturing it at call time: a play/pause taken while the
-        // fetch was in flight is the newer one and must not be reverted.
-        setPlaying(isPlaying)
+        // A camera switch into a gap parks there. Starting the stream would immediately move
+        // the clock to the next recorded instant.
+        if case .cameraSwitch = target, !hasFootage {
+            setPlaying(false)
+        } else {
+            // A play/pause taken while the fetch was in flight is newer intent.
+            setPlaying(isPlaying)
+        }
         return true
     }
 
     private func resolve(_ target: SeekTarget) -> Date {
         switch target {
-        case .instant(let instant): instant
+        case .instant(let instant), .cameraSwitch(let instant): instant
         case .latestFootage: timeline.instant(atPlayerTime: timeline.playableDuration)
         }
     }
@@ -790,12 +829,11 @@ public final class RecordingPlayerViewModel {
             forName: AVPlayerItem.didPlayToEndTimeNotification,
             object: player.currentItem,
             queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                // Removing the observer doesn't recall a block already queued on the main queue,
-                // so an end posted just before a window swap could otherwise advance a second time.
-                guard let self, self.window == playedWindow else { return }
-                Task { await self.advanceToNextWindow() }
+        ) { [weak self, weak player] _ in
+            Task { @MainActor in
+                // An already queued notification may outlive its window or the entire camera.
+                guard let self, let player, self.player === player, self.window == playedWindow else { return }
+                await self.advanceToNextWindow()
             }
         }
     }
@@ -824,5 +862,6 @@ public final class RecordingPlayerViewModel {
 /// caller — it is only known once that window's footage has been fetched.
 private enum SeekTarget {
     case instant(Date)
+    case cameraSwitch(Date)
     case latestFootage
 }

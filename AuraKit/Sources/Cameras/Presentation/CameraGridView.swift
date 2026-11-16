@@ -2,6 +2,7 @@ import SwiftUI
 
 import CamerasDomain
 import CommonDesign
+import CommonPlayer
 
 /// The camera grid, and the stack that pushes one camera's live stream — and, from there, that
 /// camera's recordings. The recordings screen belongs to the Timeline vertical, so it arrives as
@@ -10,7 +11,7 @@ public struct CameraGridView<CameraTimeline: View>: View {
     @State private var viewModel: CameraGridViewModel
     private let onOpenSettings: () -> Void
     private let makeDetailViewModel: (Camera) -> CameraDetailViewModel
-    private let cameraTimeline: (Camera) -> CameraTimeline
+    private let cameraTimeline: (Camera, [Camera]) -> CameraTimeline
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -24,7 +25,7 @@ public struct CameraGridView<CameraTimeline: View>: View {
         viewModel: CameraGridViewModel,
         onOpenSettings: @escaping () -> Void,
         makeDetailViewModel: @escaping (Camera) -> CameraDetailViewModel,
-        @ViewBuilder cameraTimeline: @escaping (Camera) -> CameraTimeline
+        @ViewBuilder cameraTimeline: @escaping (Camera, [Camera]) -> CameraTimeline
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onOpenSettings = onOpenSettings
@@ -39,10 +40,13 @@ public struct CameraGridView<CameraTimeline: View>: View {
                 .navigationTitle("Cameras")
                 .auroraHiddenNavigationBar()
                 .navigationDestination(for: Camera.self) { camera in
+                    let cameras = if case .loaded(let cameras) = viewModel.state { cameras } else { [camera] }
                     CameraDetailView(
                         camera: camera,
-                        viewModel: makeDetailViewModel(camera),
-                        cameraTimeline: cameraTimeline
+                        cameras: cameras,
+                        preview: { viewModel.previewImage(for: $0).flatMap(platformImage(from:)) },
+                        makeViewModel: makeDetailViewModel,
+                        cameraTimeline: { cameraTimeline($0, cameras) }
                     )
                 }
         }

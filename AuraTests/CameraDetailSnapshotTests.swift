@@ -132,6 +132,8 @@ private func cameraDetail(streamed: CameraStreamSource?) -> some View {
     let viewModel = CameraDetailViewModel(camera: camera, streamProvider: FakeCameraStreamProvider(streamed))
 
     return NavigationStack {
-        CameraDetailView(camera: camera, viewModel: viewModel) { _ in Color.clear }
+        CameraDetailView(camera: camera, cameras: [camera], preview: { _ in nil }, makeViewModel: { _ in viewModel }) { _ in
+            Color.clear
+        }
     }
 }

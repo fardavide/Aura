@@ -34,11 +34,12 @@ import CommonPlayer
 /// Split out from `RecordingPlayerView` so every arrangement can be screenshot-tested over a
 /// placeholder, with literal state and no player — and with `cameraAreaHighlights` on, the
 /// baselines outline the surface and the slot so a panel creeping over the picture is caught here.
-public struct RecordingDetailLayout<Video: View>: View {
+public struct RecordingDetailLayout<Video: View, RailHeader: View>: View {
     private let state: RecordingDetailState
     private let actions: RecordingDetailActions
     private let filmstrip: RecordingFilmstripStore
     private let retryLive: (() -> Void)?
+    private let railHeader: RailHeader
     private let video: Video
 
     #if os(iOS)
@@ -67,12 +68,14 @@ public struct RecordingDetailLayout<Video: View>: View {
         actions: RecordingDetailActions,
         filmstrip: RecordingFilmstripStore,
         retryLive: (() -> Void)? = nil,
+        railHeader: RailHeader = EmptyView(),
         @ViewBuilder video: () -> Video
     ) {
         self.state = state
         self.actions = actions
         self.filmstrip = filmstrip
         self.retryLive = retryLive
+        self.railHeader = railHeader
         self.video = video()
     }
 
@@ -203,7 +206,7 @@ public struct RecordingDetailLayout<Video: View>: View {
         canvas: CGSize,
         insetTop: CGFloat,
         panelInsetBottom: CGFloat,
-        panelArrangement: RecordingTimelinePanel.Arrangement
+        panelArrangement: RecordingTimelinePanel<RailHeader>.Arrangement
     ) -> some View {
         let availableHeight = max(0, canvas.height - panelHeight)
         let topInset = max(0, (availableHeight - boxSize.height) / 2)
@@ -382,8 +385,10 @@ public struct RecordingDetailLayout<Video: View>: View {
         reduceMotion ? nil : .auroraSlotCrossfade
     }
 
-    private func panel(_ arrangement: RecordingTimelinePanel.Arrangement) -> some View {
-        RecordingTimelinePanel(arrangement: arrangement, state: state, actions: actions, filmstrip: filmstrip)
+    private func panel(_ arrangement: RecordingTimelinePanel<RailHeader>.Arrangement) -> some View {
+        RecordingTimelinePanel(
+            arrangement: arrangement, state: state, actions: actions, filmstrip: filmstrip, railHeader: railHeader
+        )
     }
 
     /// Diagnostics for the screenshot suite: everything zoomed footage may cover. Drawn above the
@@ -423,7 +428,7 @@ public struct RecordingDetailLayout<Video: View>: View {
 
     /// Wide and short is a phone on its side — iPad reports a regular height in every orientation
     /// and multitasking mode, and macOS has no size class at all, so both take the split.
-    private var arrangement: RecordingTimelinePanel.Arrangement {
+    private var arrangement: RecordingTimelinePanel<RailHeader>.Arrangement {
         #if os(iOS)
         if verticalSizeClass == .compact { return .rail }
         return horizontalSizeClass == .compact ? .stacked : .split

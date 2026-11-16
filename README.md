@@ -45,6 +45,9 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.9.0 — 2026-11-16
+- **Switch cameras from either detail screen.** Tap the camera name to choose from previews. Timeline opens the new camera at the same time.
+
 ### 0.8.6 — 2026-11-15
 - **Opening Timeline stops playback on the camera screen.** Going back resumes the live stream.
 - **Camera previews stay inside their tiles.** Camera feeds with different aspect ratios fit in the camera wall without overlapping.
