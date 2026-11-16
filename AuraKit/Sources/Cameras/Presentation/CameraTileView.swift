@@ -19,18 +19,18 @@ struct CameraTileView: View {
     @State private var image: Image?
 
     var body: some View {
-        ZStack {
-            Color.auroraNoFootage
-            if !isOffline, let image {
-                image.resizable().scaledToFill()
+        Color.auroraNoFootage
+            .overlay {
+                if !isOffline, let image {
+                    image.resizable().scaledToFill()
+                }
             }
-        }
-        .clipped()
-        .overlay { overlay }
-        .modifier(TileFrame(style: style))
-        .task(id: imageData) {
-            image = imageData.flatMap(platformImage(from:))
-        }
+            .clipped()
+            .overlay { overlay }
+            .modifier(TileFrame(style: style))
+            .task(id: imageData) {
+                image = imageData.flatMap(platformImage(from:))
+            }
     }
 
     @ViewBuilder private var overlay: some View {

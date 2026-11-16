@@ -111,6 +111,15 @@ public struct SettingsView: View {
                         .foregroundStyle(.auroraTextQuaternary)
                 }
                 .listRowBackground(Color.auroraSettingsRow)
+                if let privacyPolicy = URL(string: "https://fardavide.dev/aura/privacy.html") {
+                    Section {
+                        Link(destination: privacyPolicy) {
+                            Label("Privacy Policy", systemImage: "arrow.up.right")
+                                .auroraText(.headline)
+                        }
+                    }
+                    .listRowBackground(Color.auroraSettingsRow)
+                }
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)

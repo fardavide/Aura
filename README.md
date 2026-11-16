@@ -47,6 +47,8 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ### 0.8.6 — 2026-11-15
 - **Opening Timeline stops playback on the camera screen.** Going back resumes the live stream.
+- **Camera previews stay inside their tiles.** Camera feeds with different aspect ratios fit in the camera wall without overlapping.
+- **Privacy Policy is available in Settings.** You can read it before connecting to a server.
 
 ### 0.8.5 — 2026-11-12
 - **Timeline scrubbing glides a little farther.** Haptic ticks are closer together and continue
