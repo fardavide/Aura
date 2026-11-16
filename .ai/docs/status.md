@@ -29,6 +29,10 @@ The toolbar test reproduced the timeline starting while the camera still held it
 then passed when the item was released before navigation. Returning to the camera loaded a
 fresh item, and all five camera-detail snapshot cases passed.
 
+The Cameras wall now keeps decoded previews within their tiles. A hosted test with 4:3 previews
+reproduced an 8.5-point overlap in the wide layout before the fix. The regression and all eight
+camera snapshot cases passed on iPhone 17 with iOS 27.0.
+
 New server setups now prefill HTTP/1984 for live streaming on both routes. Saved
 settings remain unchanged, and each port remains editable independently. The user
 confirmed that entering 1984 restored playback after updating to 0.8.0.

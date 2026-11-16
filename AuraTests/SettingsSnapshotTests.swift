@@ -1,5 +1,9 @@
 import SwiftUI
 import Testing
+#if os(iOS)
+import UIKit
+import Vision
+#endif
 
 import CamerasDomain
 import SettingsDomain
@@ -152,6 +156,46 @@ struct SettingsSnapshotTests {
         assertScreenSnapshot(view, named: "camera-order-empty")
     }
 }
+
+#if os(iOS)
+@MainActor
+struct SettingsPrivacyPolicyTests {
+    @Test func `given no configured server when Settings opens then the privacy policy is visible`() async throws {
+        // given
+        let settings = await settingsMenu(
+            repository: FakeSettingsRepository(), cameras: nil, appIcon: FakeAppIconSwitcher()
+        )
+        let host = UIHostingController(rootView: settings.snapshotEnvironment())
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let originalWindow = scene.keyWindow
+        let window = UIWindow(windowScene: scene)
+        let wereAnimationsEnabled = UIView.areAnimationsEnabled
+        UIView.setAnimationsEnabled(false)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            originalWindow?.makeKey()
+            UIView.setAnimationsEnabled(wereAnimationsEnabled)
+        }
+
+        // when
+        host.view.layoutIfNeeded()
+        let screenshot = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+            _ = host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        let image = try #require(screenshot.cgImage)
+        let request = VNRecognizeTextRequest()
+        try VNImageRequestHandler(cgImage: image).perform([request])
+        let labels = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+
+        // then
+        try #require(labels.contains { $0.localizedCaseInsensitiveContains("Server") }, "Rendered labels: \(labels)")
+        #expect(labels.contains { $0.localizedCaseInsensitiveContains("Privacy Policy") }, "Rendered labels: \(labels)")
+    }
+}
+#endif
 
 // MARK: - View builders
 

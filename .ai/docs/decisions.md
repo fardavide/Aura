@@ -1328,6 +1328,10 @@ SwiftUI identity is structural: splitting the hero into a second container would
 every swap and rebuild its decoded-image `@State`. `liveCount` is removed; `offlineCount` and
 `isOffline(_:)` already carry every bit of state the live-count pill conveyed.
 
+The wall's assigned tile size also controls the preview crop. A fill-scaled image belongs in an
+overlay on the tile's flexible background. When it participates in measuring the tile, its aspect
+ratio can expand the tile past its assigned frame and cover its neighbors on the wide wall.
+
 ## Aurora restyle: Timeline detail is a flush sheet on a full-bleed video slot (0.6.0)
 
 The recording player overturns the 0.5.0 "floating card" for this screen: the sheet is flush to its
