@@ -107,6 +107,20 @@ struct RecordingFilmstripStoreTests {
     // MARK: - No material
 
     @Test
+    func `given the only preview frame is stale when the camera picker loads then it shows no thumbnail`() async throws {
+        // given
+        let frame = PreviewFrame(camera: camera, time: at(4140), fileName: "preview_driveway-4140.webp")
+        let scenario = Scenario(frames: [frame], frameImage: try onePixelPng(), purpose: .cameraPicker)
+
+        // when
+        await scenario.sut.update(slots: [at(4200)], span: span)
+
+        // then
+        #expect(scenario.sut.images[at(4200)] == nil)
+        #expect(scenario.imageLoader.requestedFrames.isEmpty)
+    }
+
+    @Test
     func `given no material for a slot when updated then it stays a placeholder and nothing is rendered`() async {
         // given
         let scenario = Scenario()
@@ -166,7 +180,8 @@ private struct Scenario {
         clips: [PreviewClip] = [],
         frames: [PreviewFrame] = [],
         frameImage: Data? = nil,
-        cacheLimit: Int = 144
+        cacheLimit: Int = 144,
+        purpose: RecordingFilmstripStore.Purpose = .timelineFilmstrip
     ) {
         provider = FakeCameraPreviewProvider(clips: clips, frames: frames)
         generator = FakeFilmstripThumbnailGenerator()
@@ -176,7 +191,8 @@ private struct Scenario {
             previews: GetCameraPreviews(provider: provider),
             imageLoader: imageLoader,
             generator: generator,
-            cacheLimit: cacheLimit
+            cacheLimit: cacheLimit,
+            purpose: purpose
         )
     }
 }

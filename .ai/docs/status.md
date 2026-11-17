@@ -38,6 +38,11 @@ settings remain unchanged, and each port remains editable independently. The use
 confirmed that entering 1984 restored playback after updating to 0.8.0.
 
 ## Done
+- **Camera switching in detail.** The camera title opens a thumbnail menu in Live and Timeline.
+  The iPhone landscape Timeline places the control above the clock. A Timeline switch uses the
+  menu's captured timestamp for both the preview strip and the new camera's playhead.
+  The package suite, macOS build and 17 focused iPhone 17 tests passed on the final revision.
+  End-to-end verification of the picker with a Frigate server is pending.
 - **Slice 1 — data foundation.** `AuraKit` package; Cameras Domain/Data; Common Network/Frigate;
   Frigate camera list + authed image loader; decoding + repository tests. Wired into `Aura.xcodeproj`.
 - **Slice 2 — Settings + camera grid.** Settings feature (connection config + theme; UserDefaults +

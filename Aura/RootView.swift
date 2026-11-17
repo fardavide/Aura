@@ -40,11 +40,16 @@ struct RootView: View {
                             // The live stream's Timeline button lands here. `Date()` is read as the
                             // push resolves, so the recordings open at the live edge — the moment
                             // the stream was showing.
-                            cameraTimeline: { camera in
+                            cameraTimeline: { camera, cameras in
                                 RecordingPlayerView(
                                     viewModel: composition.recordingPlayerViewModel(
                                         for: camera, at: Date(), server: server
                                     ),
+                                    cameras: cameras,
+                                    makeViewModel: {
+                                        composition.recordingPlayerViewModel(for: $0, at: $1, server: server, startMode: $2)
+                                    },
+                                    loadPreview: { await composition.recordingPreview(for: $0, at: $1, server: server) },
                                     onOpenExports: { selectedTab = .exports }
                                 )
                             }
@@ -60,8 +65,9 @@ struct RootView: View {
                             viewModel: composition.timelineScreenViewModel(for: server),
                             makeTileViewModel: { composition.previewTileViewModel(for: $0, server: server) },
                             makeRecordingPlayerViewModel: {
-                                composition.recordingPlayerViewModel(for: $0, at: $1, server: server)
+                                composition.recordingPlayerViewModel(for: $0, at: $1, server: server, startMode: $2)
                             },
+                            loadRecordingPreview: { await composition.recordingPreview(for: $0, at: $1, server: server) },
                             onOpenSettings: { showingSettings = true },
                             // A clip cut on the detail screen lands in the Exports tab, and the
                             // detail screen hides the tab bar — so the way across is this.

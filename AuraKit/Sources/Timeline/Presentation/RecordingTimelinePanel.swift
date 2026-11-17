@@ -9,7 +9,7 @@ import CommonDesign
 /// One set of parts in three arrangements — what changes between a phone, a phone on its side and a
 /// big window is the panel, not the controls it holds. The glass, rim and glow are the enclosing
 /// `auroraSheet` — this only lays out its content (tokens §4: one glass layer per surface).
-struct RecordingTimelinePanel: View {
+struct RecordingTimelinePanel<RailHeader: View>: View {
     enum Arrangement {
         /// A card across the bottom of a phone held upright.
         case stacked
@@ -23,16 +23,17 @@ struct RecordingTimelinePanel: View {
     let state: RecordingDetailState
     let actions: RecordingDetailActions
     let filmstrip: RecordingFilmstripStore
+    let railHeader: RailHeader
 
     @Environment(\.calendar) private var calendar
     /// The scrub track's release glide. Owned here — above the track, the day bar and the
     /// transport — so any of them taking the playhead can stop it first.
     @State private var flingTask: Task<Void, Never>?
 
-    private static let trackThickness: CGFloat = 72
-    private static let railTrackThickness: CGFloat = 50
-    private static let controlsWidth: CGFloat = 300
-    private static let splitPanelMaxWidth: CGFloat = 1_100
+    private static var trackThickness: CGFloat { 72 }
+    private static var railTrackThickness: CGFloat { 50 }
+    private static var controlsWidth: CGFloat { 300 }
+    private static var splitPanelMaxWidth: CGFloat { 1_100 }
 
     var body: some View {
         content
@@ -121,7 +122,10 @@ struct RecordingTimelinePanel: View {
             }
         case .rail:
             VStack(spacing: 10) {
-                clock
+                VStack(spacing: 0) {
+                    railHeader
+                    clock
+                }
                 if let export = state.export {
                     readout(export, isNarrow: true)
                 } else {

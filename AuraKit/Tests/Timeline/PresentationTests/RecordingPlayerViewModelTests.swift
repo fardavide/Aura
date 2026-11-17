@@ -116,6 +116,43 @@ struct RecordingPlayerViewModelTests {
         #expect(sut.hasFootage)
     }
 
+    @Test func `given a paused playhead near live when switching cameras then the same moment opens paused`() async {
+        // given
+        let playhead = at(7299.75)
+        let sut = makeViewModel(
+            repository: FakeCameraRecordingsRepository(.success(footage(from: 7200, to: 7300))),
+            startingAt: playhead,
+            liveSource: CameraStreamSource(url: URL(fileURLWithPath: "/unused-live-stream.m3u8"), headers: [:]),
+            startMode: .cameraSwitch(isPlaying: false)
+        )
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(isReady(sut.display))
+        #expect(sut.instant == playhead)
+        #expect(!sut.isPlaying)
+    }
+
+    @Test func `given a camera switch into a recording gap when the source was playing then the playhead stays in the gap`() async {
+        // given
+        let playhead = at(7250)
+        let sut = makeViewModel(
+            repository: FakeCameraRecordingsRepository(.success(footage(from: 7260, to: 7300))),
+            startingAt: playhead,
+            startMode: .cameraSwitch(isPlaying: true)
+        )
+
+        // when
+        await sut.loadIfNeeded()
+
+        // then
+        #expect(sut.state.slot == .noFootage)
+        #expect(sut.instant == playhead)
+        #expect(!sut.isPlaying)
+    }
+
     @Test func `given live playback when refreshing then the playhead follows the new live edge`() async {
         // given
         let clock = Clock(now)
@@ -2002,7 +2039,8 @@ private func makeViewModel(
     clock: Clock? = nil,
     liveSource: CameraStreamSource? = nil,
     previews: FakeCameraPreviewProvider = FakeCameraPreviewProvider(),
-    exports: FakeExportsRepository = FakeExportsRepository(.success([]))
+    exports: FakeExportsRepository = FakeExportsRepository(.success([])),
+    startMode: RecordingPlayerViewModel.StartMode = .automatic
 ) -> RecordingPlayerViewModel {
     let getPreviews = GetCameraPreviews(provider: previews)
     return RecordingPlayerViewModel(
@@ -2025,7 +2063,8 @@ private func makeViewModel(
         liveSource: liveSource,
         now: { clock?.instant ?? now },
         startingAt: instant,
-        days: 2
+        days: 2,
+        startMode: startMode
     )
 }
 

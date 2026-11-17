@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 import CamerasData
 import CamerasDomain
@@ -269,7 +270,8 @@ final class AppComposition {
     func recordingPlayerViewModel(
         for camera: Camera,
         at instant: Date,
-        server: ActiveServer
+        server: ActiveServer,
+        startMode: RecordingPlayerViewModel.StartMode = .automatic
     ) -> RecordingPlayerViewModel {
         let config = ServerConfig(server)
         let recordings = GetCameraRecordings(
@@ -308,8 +310,23 @@ final class AppComposition {
             ).streamSource(for: camera),
             now: { Date() },
             startingAt: instant,
-            days: timelineSpanDays
+            days: timelineSpanDays,
+            startMode: startMode
         )
+    }
+
+    func recordingPreview(for camera: Camera, at instant: Date, server: ActiveServer) async -> Image? {
+        let config = ServerConfig(server)
+        let filmstrip = RecordingFilmstripStore(
+            camera: camera.name,
+            previews: GetCameraPreviews(
+                provider: FrigatePreviewSourceProvider(config: config, httpClient: httpClient)
+            ),
+            imageLoader: FrigatePreviewImageLoader(config: config, httpClient: httpClient),
+            purpose: .cameraPicker
+        )
+        await filmstrip.update(slots: [instant], span: RecordingWindow.containing(instant))
+        return filmstrip.images[instant]
     }
 
     /// Keys the per-server singletons above, and the root's tab tree. It carries the resolved

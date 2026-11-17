@@ -16,6 +16,13 @@ import TimelineDomain
 @Observable
 @MainActor
 public final class RecordingFilmstripStore {
+    public enum Purpose: Equatable {
+        case timelineFilmstrip
+        case cameraPicker
+    }
+
+    private static let cameraPickerTolerance: TimeInterval = 2
+
     /// The loaded thumbnails by slot instant. A missing entry renders as a placeholder slot.
     public private(set) var images: [Date: Image] = [:]
 
@@ -24,6 +31,7 @@ public final class RecordingFilmstripStore {
     private let imageLoader: any PreviewImageLoading
     private let generator: any FilmstripThumbnailGenerating
     private let cacheLimit: Int
+    private let purpose: Purpose
     private var clips: [PreviewClip] = []
     private var frames: [PreviewFrame] = []
     /// The span the material was last fetched for. Scrubbing slides the slots inside a frozen
@@ -35,15 +43,21 @@ public final class RecordingFilmstripStore {
     public convenience init(
         camera: CameraName,
         previews: GetCameraPreviews,
-        imageLoader: any PreviewImageLoading
+        imageLoader: any PreviewImageLoading,
+        purpose: Purpose = .timelineFilmstrip
     ) {
+        let tolerance: TimeInterval = switch purpose {
+        case .timelineFilmstrip: 30
+        case .cameraPicker: Self.cameraPickerTolerance
+        }
         self.init(
             camera: camera,
             previews: previews,
             imageLoader: imageLoader,
-            generator: AssetFilmstripThumbnailGenerator(),
+            generator: AssetFilmstripThumbnailGenerator(timeTolerance: tolerance),
             // A day of slots — well past what one screen visit scrubs, ~20 MB of stills at most.
-            cacheLimit: 144
+            cacheLimit: 144,
+            purpose: purpose
         )
     }
 
@@ -52,13 +66,15 @@ public final class RecordingFilmstripStore {
         previews: GetCameraPreviews,
         imageLoader: any PreviewImageLoading,
         generator: any FilmstripThumbnailGenerating,
-        cacheLimit: Int
+        cacheLimit: Int,
+        purpose: Purpose = .timelineFilmstrip
     ) {
         self.camera = camera
         self.previews = previews
         self.imageLoader = imageLoader
         self.generator = generator
         self.cacheLimit = cacheLimit
+        self.purpose = purpose
     }
 
     /// Brings the given slots' thumbnails up to date against the span's material.
@@ -94,8 +110,11 @@ public final class RecordingFilmstripStore {
     /// frame the server lists is newer than such a slot, so none qualifies.
     private func material(at slot: Date) -> FilmstripMaterial? {
         if let clip = clips.first(where: { $0.contains(slot) }) { return .clip(clip) }
-        if let frame = frames.mostRecent(atOrBefore: slot) { return .frame(frame) }
-        return nil
+        guard let frame = frames.mostRecent(atOrBefore: slot) else { return nil }
+        // The picker shows a particular moment. An older still could suggest that the camera
+        // saw something at the chosen time when its latest preview actually came from earlier.
+        if purpose == .cameraPicker, slot.timeIntervalSince(frame.time) > Self.cameraPickerTolerance { return nil }
+        return .frame(frame)
     }
 
     /// Keeps the cache bounded: a week scrubbed at Hour zoom is ~1000 slots of bitmaps, far more

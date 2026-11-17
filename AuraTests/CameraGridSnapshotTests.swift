@@ -142,7 +142,7 @@ private func cameraGridScreen(
         onOpenSettings: {},
         // Unused: neither destination is built in a grid snapshot (no navigation happens).
         makeDetailViewModel: { CameraDetailViewModel(camera: $0, streamProvider: FakeCameraStreamProvider()) },
-        cameraTimeline: { _ in EmptyView() }
+        cameraTimeline: { _, _ in EmptyView() }
     )
 }
 
