@@ -17,6 +17,7 @@ import TimelinePresentation
 struct RootView: View {
     let composition: AppComposition
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var connection: ConnectionSettings?
     /// The address in use. `nil` only while the very first resolution is in flight — at most one
     /// short local probe, and not even that when there is no local address to try.
@@ -116,7 +117,7 @@ struct RootView: View {
                     viewModel: composition.settingsViewModel(for: nil),
                     makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                     makeCameraOrderViewModel: nil,
-                    makeAppIconViewModel: appIconViewModelFactory,
+                    appIconViewModel: composition.appIconViewModel,
                     onDone: reload
                 )
             } else {
@@ -131,7 +132,7 @@ struct RootView: View {
                 makeCameraOrderViewModel: server.map { server in
                     { composition.cameraOrderViewModel(for: server) }
                 },
-                makeAppIconViewModel: appIconViewModelFactory
+                appIconViewModel: composition.appIconViewModel
             ) {
                 showingSettings = false
             }
@@ -144,6 +145,13 @@ struct RootView: View {
         }
         .onAppear(perform: reload)
         .task(id: connection) { await followActiveServer() }
+        .task(id: scenePhase) {
+            if scenePhase == .active { await composition.appIconViewModel?.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            guard scenePhase == .active else { return }
+            Task { await composition.appIconViewModel?.refresh() }
+        }
     }
 
     /// Shown only while the first address is being chosen, which is a fraction of a second — but
@@ -157,11 +165,6 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .auroraBackground()
-    }
-
-    /// `nil` where the system cannot swap the icon, which is what hides the row on macOS.
-    private var appIconViewModelFactory: (() -> AppIconViewModel)? {
-        composition.supportsAppIconChoice ? { composition.appIconViewModel() } : nil
     }
 
     private func reload() {

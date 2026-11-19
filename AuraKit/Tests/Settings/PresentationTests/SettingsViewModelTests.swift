@@ -168,28 +168,6 @@ struct SettingsViewModelTests {
         // then
         #expect(scenario.settings.savedDynamicCameraOrder == false)
     }
-
-    @Test func `given the platform cannot switch icons when appearing then the app icon is absent`() {
-        // given
-        let scenario = Scenario()
-
-        // when
-        scenario.sut.onAppear()
-
-        // then
-        #expect(scenario.sut.appIcon == nil)
-    }
-
-    @Test func `given the signal icon is current when appearing then the app icon is signal`() {
-        // given
-        let scenario = Scenario(currentIcon: .signal)
-
-        // when
-        scenario.sut.onAppear()
-
-        // then
-        #expect(scenario.sut.appIcon == .signal)
-    }
 }
 
 private func camera(_ name: String) -> Camera {
@@ -217,8 +195,7 @@ private struct Scenario {
         theme: ThemePreference = .system,
         connection: ConnectionSettings? = nil,
         activeRoute: ServerRoute = .remote,
-        cameras: Result<[Camera], CamerasError>? = nil,
-        currentIcon: AppIconPreference? = nil
+        cameras: Result<[Camera], CamerasError>? = nil
     ) {
         settings = FakeSettingsRepository(connection: connection, theme: theme)
         self.cameras = cameras.map(FakeCamerasRepository.init)
@@ -234,8 +211,7 @@ private struct Scenario {
             },
             loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: settings),
             saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: settings),
-            getCameras: self.cameras.map(GetCameras.init),
-            loadAppIcon: currentIcon.map { LoadAppIcon(switcher: FakeAppIconSwitcher(current: $0)) }
+            getCameras: self.cameras.map(GetCameras.init)
         )
     }
 }

@@ -9,6 +9,19 @@ import TestDoubles
 
 struct DefaultSettingsRepositoryTests {
 
+    @Test func `given a chosen icon and seasonal icons off when opening settings again then both are restored`() {
+        // given
+        let scenario = Scenario()
+        let settings = AppIconSettings(selection: .daylight, usesSeasonalIcons: false)
+        scenario.sut.saveAppIconSettings(settings)
+
+        // when
+        let restored = DefaultSettingsRepository(defaults: scenario.defaults, keychain: FakeKeychainStore())
+
+        // then
+        #expect(restored.loadAppIconSettings() == settings)
+    }
+
     @Test func `given live ports on both routes when saving and loading then they round trip without extra hosts`() {
         // given
         let scenario = Scenario()

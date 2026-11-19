@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 import SettingsDomain
@@ -7,12 +8,9 @@ import TestDoubles
 @MainActor
 struct AppIconViewModelTests {
 
-    @Test func `given a chosen icon when appearing then it is prefilled`() {
-        // given
+    @Test func `given a chosen icon when opening the picker then it is prefilled`() {
+        // given - when
         let scenario = Scenario(current: .signal)
-
-        // when
-        scenario.sut.onAppear()
 
         // then
         #expect(scenario.sut.selection == .signal)
@@ -34,7 +32,6 @@ struct AppIconViewModelTests {
     @Test func `given the system rejects the change when selecting then the selection reverts and an error shows`() async {
         // given
         let scenario = Scenario(current: .halo, applyResult: .failure(.iconChangeFailed))
-        scenario.sut.onAppear()
 
         // when
         await scenario.sut.select(.thin)
@@ -47,7 +44,6 @@ struct AppIconViewModelTests {
     @Test func `given an icon is already showing when selecting it again then nothing is applied`() async {
         // given
         let scenario = Scenario(current: .heavy)
-        scenario.sut.onAppear()
 
         // when
         await scenario.sut.select(.heavy)
@@ -69,6 +65,27 @@ struct AppIconViewModelTests {
         #expect(scenario.sut.errorMessage == nil)
         #expect(scenario.sut.selection == .daylight)
     }
+
+    @Test func `given a seasonal icon is showing when choosing another icon then turning off seasonal icons restores the new choice`() async throws {
+        // given
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        let christmas = try #require(calendar.date(from: DateComponents(year: 2026, month: 12, day: 25)))
+        let scenario = Scenario(current: .signal, now: christmas)
+        await scenario.sut.refresh()
+        #expect(scenario.sut.usesSeasonalIcons)
+        #expect(scenario.sut.displayedIcon == .christmas)
+
+        // when
+        await scenario.sut.select(.aurora)
+        #expect(scenario.sut.displayedIcon == .christmas)
+        await scenario.sut.setSeasonalIcons(false)
+
+        // then
+        #expect(scenario.sut.displayedIcon == .aurora)
+        #expect(!scenario.sut.usesSeasonalIcons)
+        #expect(scenario.switcher.appliedIcons == [.christmas, .aurora])
+    }
 }
 
 @MainActor
@@ -78,12 +95,16 @@ private struct Scenario {
 
     init(
         current: AppIconPreference = .halo,
-        applyResult: Result<Void, SettingsError> = .success(())
+        applyResult: Result<Void, SettingsError> = .success(()),
+        now: Date = Date(timeIntervalSince1970: 14 * 86_400)
     ) {
         switcher = FakeAppIconSwitcher(current: current, applyResult: applyResult)
+        let repository = FakeSettingsRepository()
         sut = AppIconViewModel(
-            loadAppIcon: LoadAppIcon(switcher: switcher),
-            changeAppIcon: ChangeAppIcon(switcher: switcher)
+            loadAppIcon: LoadAppIcon(repository: repository, switcher: switcher),
+            changeAppIcon: ChangeAppIcon(repository: repository, switcher: switcher),
+            now: { now },
+            timeZone: { .gmt }
         )
     }
 }

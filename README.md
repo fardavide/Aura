@@ -45,6 +45,9 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.9.1 — 2026-11-19
+- **Seasonal icons on iPhone and iPad.** Choose Christmas any time, or let Aura switch automatically from December 7 through January 7. Your usual icon returns when the season ends or you turn Seasonal Icons off.
+
 ### 0.9.0 — 2026-11-16
 - **Switch cameras from either detail screen.** Tap the camera name to choose from previews. Timeline opens the new camera at the same time.
 

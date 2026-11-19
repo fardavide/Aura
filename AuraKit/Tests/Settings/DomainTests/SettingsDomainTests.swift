@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 import CamerasEntities
@@ -235,7 +236,8 @@ struct AppIconUseCaseTests {
         let switcher = FakeAppIconSwitcher(current: .signal)
 
         // when - then
-        #expect(LoadAppIcon(switcher: switcher).execute() == .signal)
+        let state = LoadAppIcon(repository: FakeSettingsRepository(), switcher: switcher).execute()
+        #expect(state.displayed == .signal)
     }
 
     @Test func `when changing the icon then the system applies it`() async throws {
@@ -243,7 +245,8 @@ struct AppIconUseCaseTests {
         let switcher = FakeAppIconSwitcher()
 
         // when
-        try await ChangeAppIcon(switcher: switcher).execute(.aurora)
+        try await ChangeAppIcon(repository: FakeSettingsRepository(), switcher: switcher)
+            .execute(.select(.aurora), at: Date(timeIntervalSince1970: 14 * 86_400), in: .gmt)
 
         // then
         #expect(switcher.appliedIcons == [.aurora])
@@ -256,7 +259,8 @@ struct AppIconUseCaseTests {
 
         // when - then
         await #expect(throws: SettingsError.iconChangeFailed) {
-            try await ChangeAppIcon(switcher: switcher).execute(.heavy)
+            try await ChangeAppIcon(repository: FakeSettingsRepository(), switcher: switcher)
+                .execute(.select(.heavy), at: Date(timeIntervalSince1970: 14 * 86_400), in: .gmt)
         }
         #expect(switcher.current() == .halo)
     }

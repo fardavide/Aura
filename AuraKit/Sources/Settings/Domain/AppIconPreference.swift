@@ -8,4 +8,5 @@ public enum AppIconPreference: String, Sendable, CaseIterable {
     case aurora
     case signal
     case daylight
+    case christmas
 }

@@ -49,6 +49,20 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
         defaults.set(theme.rawValue, forKey: Keys.theme)
     }
 
+    public func loadAppIconSettings() -> AppIconSettings? {
+        guard let selection = defaults.string(forKey: Keys.appIconSelection) else { return nil }
+        return AppIconSettings(
+            selection: AppIconPreference(rawValue: selection) ?? .halo,
+            usesSeasonalIcons: defaults.object(forKey: Keys.usesSeasonalIcons) == nil
+                || defaults.bool(forKey: Keys.usesSeasonalIcons)
+        )
+    }
+
+    public func saveAppIconSettings(_ settings: AppIconSettings) {
+        defaults.set(settings.selection.rawValue, forKey: Keys.appIconSelection)
+        defaults.set(settings.usesSeasonalIcons, forKey: Keys.usesSeasonalIcons)
+    }
+
     public func loadCameraOrder() -> [CameraName] {
         defaults.stringArray(forKey: Keys.cameraOrder)?.map(CameraName.init) ?? []
     }
@@ -198,6 +212,8 @@ private enum Keys {
     static let username = "connection.username"
     static let password = "connection.password"
     static let theme = "theme"
+    static let appIconSelection = "appIcon.selection"
+    static let usesSeasonalIcons = "appIcon.usesSeasonalIcons"
     static let cameraOrder = "cameraOrder"
     static let dynamicCameraOrder = "dynamicCameraOrder"
 }

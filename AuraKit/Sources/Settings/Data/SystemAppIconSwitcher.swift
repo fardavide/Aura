@@ -4,8 +4,7 @@ import UIKit
 
 import SettingsDomain
 
-/// Switches the Home Screen icon through the system, which owns the choice and remembers it
-/// across launches — so `current` reads back from it rather than from any stored copy.
+/// Reads and switches the icon displayed on the Home Screen through the system.
 ///
 /// Alternate icons are a UIKit capability with no macOS equivalent. There the composition root
 /// leaves the picker out entirely, so the unsupported path below is a backstop, not a screen

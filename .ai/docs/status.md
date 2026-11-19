@@ -265,6 +265,9 @@ not snapshot-tested — they center on video players that can't render in a snap
   Daylight), all treatments of the same ring. The system owns the current choice; nothing is stored
   beside it. iOS-only: the row is absent on macOS, via an optional factory rather than `#if os`.
   **Verified in the simulator — picker switches the icon and the Home Screen follows.**
+- **Seasonal app icons.** The iOS icon picker adds Christmas and a default-on Seasonal Icons
+  switch. From December 7 through January 7 Aura can show Christmas while retaining the user's
+  usual icon. The picker marks the saved choice and shows the name of any active override.
 - **App shell + Settings: Aurora restyle (0.6.0).** The Settings sheet is now flush to the bottom
   (r30 top corners, grabber, gradient rim), painted on the `CommonDesign` sheet colour with its own
   head washes and glow; the menu's rows gained live summaries — Server shows `host:port` (or "Not

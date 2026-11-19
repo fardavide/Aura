@@ -31,9 +31,6 @@ public final class SettingsViewModel {
     }
     public private(set) var serverSummary: ServerSummary = .notConfigured
     public private(set) var cameraCount: CameraCount = .unknown
-    /// `nil` where the platform has no swappable app icon — the row is absent, matching
-    /// `loadAppIcon == nil`.
-    public private(set) var appIcon: AppIconPreference?
 
     /// `nil` while the count is unknown — the Camera Order row omits its trailing value rather
     /// than showing a placeholder.
@@ -54,8 +51,6 @@ public final class SettingsViewModel {
     /// `nil` before a connection is configured — the menu has no Camera Order row and nothing
     /// to count.
     private let getCameras: GetCameras?
-    /// `nil` where the platform cannot switch icons — mirrors `makeAppIconViewModel == nil`.
-    private let loadAppIcon: LoadAppIcon?
 
     public init(
         loadTheme: LoadTheme,
@@ -64,8 +59,7 @@ public final class SettingsViewModel {
         activeServer: ActiveServer?,
         loadDynamicCameraOrder: LoadDynamicCameraOrder,
         saveDynamicCameraOrder: SaveDynamicCameraOrder,
-        getCameras: GetCameras?,
-        loadAppIcon: LoadAppIcon?
+        getCameras: GetCameras?
     ) {
         self.loadTheme = loadTheme
         self.saveTheme = saveTheme
@@ -74,7 +68,6 @@ public final class SettingsViewModel {
         self.loadDynamicCameraOrder = loadDynamicCameraOrder
         self.saveDynamicCameraOrder = saveDynamicCameraOrder
         self.getCameras = getCameras
-        self.loadAppIcon = loadAppIcon
     }
 
     public func onAppear() {
@@ -88,7 +81,6 @@ public final class SettingsViewModel {
         } else {
             .notConfigured
         }
-        appIcon = loadAppIcon?.execute()
     }
 
     public func load() async {
