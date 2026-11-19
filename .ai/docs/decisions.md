@@ -1248,7 +1248,7 @@ On the first refresh after an upgrade, the displayed icon becomes the saved choi
 automatic change. iOS remains the source for the currently displayed icon.
 
 Seasonal Icons is enabled by default. The calendar uses Gregorian dates and the device's time zone.
-Christmas is active from December 7 through January 7 inclusive. The app checks when it becomes
+Christmas is active from December 1 through January 7 inclusive. The app checks when it becomes
 active and when the local calendar day changes while it is open. Outside that window or with the
 switch off, the Home Screen displays the saved choice. A choice made during the season is saved for
 later, and Christmas can also be chosen manually year-round. iOS shows its icon change alert when
