@@ -10,20 +10,20 @@ public struct SettingsView: View {
     /// needs a server to list cameras from, so its row is hidden until then.
     private let makeCameraOrderViewModel: (() -> CameraOrderViewModel)?
     /// `nil` where the platform has no swappable app icon, which hides the row on macOS.
-    private let makeAppIconViewModel: (() -> AppIconViewModel)?
+    private let appIconViewModel: AppIconViewModel?
     private let onDone: () -> Void
 
     public init(
         viewModel: SettingsViewModel,
         makeServerSettingsViewModel: @escaping () -> ServerSettingsViewModel,
         makeCameraOrderViewModel: (() -> CameraOrderViewModel)?,
-        makeAppIconViewModel: (() -> AppIconViewModel)?,
+        appIconViewModel: AppIconViewModel?,
         onDone: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: viewModel)
         self.makeServerSettingsViewModel = makeServerSettingsViewModel
         self.makeCameraOrderViewModel = makeCameraOrderViewModel
-        self.makeAppIconViewModel = makeAppIconViewModel
+        self.appIconViewModel = appIconViewModel
         self.onDone = onDone
     }
 
@@ -90,17 +90,16 @@ public struct SettingsView: View {
                     } label: {
                         Text("Theme").auroraText(.headline).foregroundStyle(.auroraTextPrimary)
                     }
-                    if let makeAppIconViewModel {
+                    if let appIconViewModel {
+                        let icon = appIconViewModel.displayedIcon
                         NavigationLink {
-                            AppIconView(viewModel: makeAppIconViewModel())
+                            AppIconView(viewModel: appIconViewModel)
                         } label: {
-                            SettingsMenuRow(title: "App Icon", value: viewModel.appIcon?.rawValue.capitalized) {
-                                if let appIcon = viewModel.appIcon {
-                                    Image(decorative: "AppIconPreview-\(appIcon.rawValue)")
-                                        .resizable()
-                                        .frame(width: 30, height: 30)
-                                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                                }
+                            SettingsMenuRow(title: "App Icon", value: icon.rawValue.capitalized) {
+                                Image(decorative: "AppIconPreview-\(icon.rawValue)")
+                                    .resizable()
+                                    .frame(width: 30, height: 30)
+                                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                             }
                         }
                     }

@@ -16,6 +16,7 @@ enum AppIconAsset {
         case .aurora: "AppIcon-Aurora"
         case .signal: "AppIcon-Signal"
         case .daylight: "AppIcon-Daylight"
+        case .christmas: "AppIcon-Christmas"
         }
     }
 

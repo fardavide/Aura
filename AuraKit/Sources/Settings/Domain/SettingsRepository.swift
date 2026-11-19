@@ -7,6 +7,8 @@ public protocol SettingsRepository: Sendable {
     func saveConnection(_ settings: ConnectionSettings)
     func loadTheme() -> ThemePreference
     func saveTheme(_ theme: ThemePreference)
+    func loadAppIconSettings() -> AppIconSettings?
+    func saveAppIconSettings(_ settings: AppIconSettings)
     func loadCameraOrder() -> [CameraName]
     func saveCameraOrder(_ order: [CameraName])
     func observeCameraOrder() -> AsyncStream<[CameraName]>

@@ -1215,7 +1215,7 @@ Four decisions worth keeping:
   into `UserDefaults` beside it. The platform already remembers the choice across launches and
   reinstalls, and a second copy could only ever drift from it — so the switcher reads through, and
   the settings repository is untouched by this feature. This is the one preference in the app that
-  is *not* stored by us, which is why it hangs off its own boundary instead of `SettingsRepository`.
+  is *not* stored by us until the seasonal icon change below.
 - **The dark appearance keeps the hue.** An early idea was to put the amber variant in the dark
   slot. That slot is not a second icon: it fires on the system appearance setting, which has
   nothing to do with the app, so a hue change there reads as a different app every time the phone
@@ -1240,6 +1240,19 @@ a deliberate choice rather than a toggle.
 Icon artwork is generated from SVG rather than hand-drawn per size: full-bleed square and opaque
 (the system applies the mask; baking the squircle would double it), with the small macOS sizes drawn
 from a simplified body — the echo rings turn to mush below 32pt — instead of downsampled.
+
+### Seasonal icons temporarily take precedence over the chosen icon
+
+The picker saves the user's chosen icon and the Seasonal Icons switch in per-device Settings.
+On the first refresh after an upgrade, the displayed icon becomes the saved choice before any
+automatic change. iOS remains the source for the currently displayed icon.
+
+Seasonal Icons is enabled by default. The calendar uses Gregorian dates and the device's time zone.
+Christmas is active from December 7 through January 7 inclusive. The app checks when it becomes
+active and when the local calendar day changes while it is open. Outside that window or with the
+switch off, the Home Screen displays the saved choice. A choice made during the season is saved for
+later, and Christmas can also be chosen manually year-round. iOS shows its icon change alert when
+the displayed icon changes. The icon picker is available on iPhone and iPad.
 
 ## Timeline tab: Aurora restyle keeps the scrolling strip and adds a hero tile (0.6.0)
 

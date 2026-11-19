@@ -75,11 +75,14 @@ struct SettingsSnapshotTests {
         assertScreenSnapshot(view, named: "menu-count-unknown")
     }
 
-    @Test func `given a chosen alternate when the icon picker is shown then it matches the reference`() {
+    @Test func `given a chosen alternate when the icon picker is shown then it matches the reference`() async throws {
         // given — the preview artwork comes from the app bundle, so this also proves the
         // asset names in the picker match the catalog
-        let viewModel = appIconViewModel(FakeAppIconSwitcher(current: .signal))
-        viewModel.onAppear()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        let christmas = try #require(calendar.date(from: DateComponents(year: 2026, month: 12, day: 25)))
+        let viewModel = appIconViewModel(FakeAppIconSwitcher(current: .signal), now: christmas)
+        await viewModel.refresh()
 
         // then
         assertScreenSnapshot(NavigationStack { AppIconView(viewModel: viewModel) }, named: "app-icon")
@@ -238,8 +241,7 @@ private func settingsMenu(
         },
         loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: repository),
         saveDynamicCameraOrder: SaveDynamicCameraOrder(repository: repository),
-        getCameras: cameras.map { GetCameras(repository: FakeCamerasRepository($0)) },
-        loadAppIcon: LoadAppIcon(switcher: appIcon)
+        getCameras: cameras.map { GetCameras(repository: FakeCamerasRepository($0)) }
     )
     viewModel.onAppear()
     await viewModel.load()
@@ -257,7 +259,7 @@ private func settingsMenu(
                 )
             }
         },
-        makeAppIconViewModel: { appIconViewModel(appIcon) },
+        appIconViewModel: appIconViewModel(appIcon),
         onDone: {}
     )
 }
@@ -275,10 +277,16 @@ private func cameraOrder(_ cameras: [Camera]) async -> some View {
 }
 
 @MainActor
-private func appIconViewModel(_ switcher: FakeAppIconSwitcher) -> AppIconViewModel {
-    AppIconViewModel(
-        loadAppIcon: LoadAppIcon(switcher: switcher),
-        changeAppIcon: ChangeAppIcon(switcher: switcher)
+private func appIconViewModel(
+    _ switcher: FakeAppIconSwitcher,
+    now: Date = Date(timeIntervalSince1970: 14 * 86_400)
+) -> AppIconViewModel {
+    let repository = FakeSettingsRepository()
+    return AppIconViewModel(
+        loadAppIcon: LoadAppIcon(repository: repository, switcher: switcher),
+        changeAppIcon: ChangeAppIcon(repository: repository, switcher: switcher),
+        now: { now },
+        timeZone: { .gmt }
     )
 }
 

@@ -6,6 +6,7 @@ import SettingsDomain
 public final class FakeSettingsRepository: SettingsRepository, @unchecked Sendable {
     public var savedConnection: ConnectionSettings?
     public var savedTheme: ThemePreference
+    public var savedAppIconSettings: AppIconSettings?
     public var savedCameraOrder: [CameraName] = []
     public var savedDynamicCameraOrder = true
     private var orderContinuations: [AsyncStream<[CameraName]>.Continuation] = []
@@ -20,6 +21,8 @@ public final class FakeSettingsRepository: SettingsRepository, @unchecked Sendab
     public func saveConnection(_ settings: ConnectionSettings) { savedConnection = settings }
     public func loadTheme() -> ThemePreference { savedTheme }
     public func saveTheme(_ theme: ThemePreference) { savedTheme = theme }
+    public func loadAppIconSettings() -> AppIconSettings? { savedAppIconSettings }
+    public func saveAppIconSettings(_ settings: AppIconSettings) { savedAppIconSettings = settings }
     public func loadCameraOrder() -> [CameraName] { savedCameraOrder }
 
     public func saveCameraOrder(_ order: [CameraName]) {

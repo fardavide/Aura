@@ -28,7 +28,7 @@ final class AppComposition {
     private let settingsRepository: any SettingsRepository
     private let httpClient: any HttpClient
     private let downloadClient: any HttpDownloadClient
-    private let appIconSwitcher = SystemAppIconSwitcher()
+    let appIconViewModel: AppIconViewModel?
     private let networkPaths: any NetworkPathObserving = SystemNetworkPathObserver()
     /// One per connection, held here rather than built in `RootView.body`: a transfer must survive
     /// leaving the Exports tab, and a view model rebuilt on every body pass would lose it.
@@ -45,11 +45,19 @@ final class AppComposition {
     private let localProbeTimeout = Duration.milliseconds(600)
 
     init() {
-        settingsRepository = DefaultSettingsRepository(
+        let settingsRepository = DefaultSettingsRepository(
             keychain: SystemKeychain(service: "fardavide.Aura")
         )
+        self.settingsRepository = settingsRepository
         httpClient = UrlSessionHttpClient()
         downloadClient = UrlSessionHttpDownloadClient()
+        let appIconSwitcher = SystemAppIconSwitcher()
+        appIconViewModel = appIconSwitcher.isSupported ? AppIconViewModel(
+            loadAppIcon: LoadAppIcon(repository: settingsRepository, switcher: appIconSwitcher),
+            changeAppIcon: ChangeAppIcon(repository: settingsRepository, switcher: appIconSwitcher),
+            now: { Date() },
+            timeZone: { .current }
+        ) : nil
     }
 
     func currentConnection() -> ConnectionSettings? {
@@ -85,21 +93,7 @@ final class AppComposition {
                         configProvider: configProvider(config: ServerConfig(server))
                     )
                 )
-            },
-            loadAppIcon: appIconSwitcher.isSupported ? LoadAppIcon(switcher: appIconSwitcher) : nil
-        )
-    }
-
-    /// `false` where the system has no alternate icon to switch to, so Settings omits the row
-    /// rather than offering a picker that fails on every tap.
-    var supportsAppIconChoice: Bool {
-        appIconSwitcher.isSupported
-    }
-
-    func appIconViewModel() -> AppIconViewModel {
-        AppIconViewModel(
-            loadAppIcon: LoadAppIcon(switcher: appIconSwitcher),
-            changeAppIcon: ChangeAppIcon(switcher: appIconSwitcher)
+            }
         )
     }
 

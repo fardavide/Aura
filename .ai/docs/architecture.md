@@ -70,6 +70,7 @@ new recordings cannot be hidden by an early cached result.
 `UserDefaults` for non-secret connection config — two API addresses plus optional per-route live
 scheme/port settings, with the remote API under the original single-address keys so older installs keep their
 server and historical live proxy — + per-device preferences (theme,
-camera order); Keychain for the password. No SwiftData/CloudKit/sync — Frigate is the source of truth;
+camera order, chosen app icon and seasonal icons); Keychain for the password. iOS reports which icon is
+actually displayed. No SwiftData/CloudKit/sync — Frigate is the source of truth;
 cameras/events are fetched fresh. Preferences consumed outside the Settings editor are **observed**
 (the repository exposes a stream: current value, then changes), never re-read on appear.
