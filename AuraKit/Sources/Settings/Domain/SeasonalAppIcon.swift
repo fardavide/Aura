@@ -7,7 +7,7 @@ enum SeasonalAppIcon {
         let month = calendar.component(.month, from: date)
         let day = calendar.component(.day, from: date)
         return switch (month, day) {
-        case (12, 7...31), (1, 1...7): .christmas
+        case (12, _), (1, 1...7): .christmas
         default: nil
         }
     }

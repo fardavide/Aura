@@ -24,8 +24,8 @@ struct ChangeAppIconTests {
     }
 
     @Test(arguments: [
-        (2026, 12, 6, AppIconPreference.signal),
-        (2026, 12, 7, .christmas),
+        (2026, 11, 30, AppIconPreference.signal),
+        (2026, 12, 1, .christmas),
         (2026, 12, 31, .christmas),
         (2027, 1, 1, .christmas),
         (2027, 1, 7, .christmas),
