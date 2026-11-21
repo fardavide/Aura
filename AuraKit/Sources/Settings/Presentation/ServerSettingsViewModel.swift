@@ -6,14 +6,8 @@ import SettingsDomain
 @Observable
 @MainActor
 public final class ServerSettingsViewModel {
-    public var remoteScheme: ServerAddress.Scheme = .http
-    public var remoteHost: String = ""
-    public var remotePort: String = "5000"
-    /// An empty host is how the form says "no local address" — the fields stay on screen so
-    /// adding one later is typing, not a hunt for a hidden control.
-    public var localScheme: ServerAddress.Scheme = .http
-    public var localHost: String = ""
-    public var localPort: String = "5000"
+    public var localAddress = ""
+    public var remoteAddress = ""
     public var remoteLiveScheme: ServerAddress.Scheme = .http
     public var remoteLivePort: String = "1984"
     public var localLiveScheme: ServerAddress.Scheme = .http
@@ -21,7 +15,8 @@ public final class ServerSettingsViewModel {
     public var username: String = ""
     public var password: String = ""
 
-    public private(set) var errorMessage: String?
+    private(set) var saveError: SettingsError?
+    public var errorMessage: String? { saveError.map(message(for:)) }
     public private(set) var didSave = false
 
     private let loadConnection: LoadConnection
@@ -34,52 +29,28 @@ public final class ServerSettingsViewModel {
 
     public func onAppear() {
         guard let connection = loadConnection.execute() else { return }
-        remoteScheme = connection.remote.scheme
-        remoteHost = connection.remote.host
-        remotePort = String(connection.remote.port)
-        if let local = connection.local {
-            localScheme = local.scheme
-            localHost = local.host
-            localPort = String(local.port)
-        }
-        if let remoteLive = connection.remoteLive {
-            remoteLiveScheme = remoteLive.scheme
-            remoteLivePort = String(remoteLive.port)
-        } else {
-            remoteLivePort = ""
-        }
-        if let localLive = connection.localLive {
-            localLiveScheme = localLive.scheme
-            localLivePort = String(localLive.port)
-        } else if connection.local != nil {
-            localLivePort = ""
-        }
+        localAddress = addressText(connection.local)
+        remoteAddress = addressText(connection.remote)
+        localLiveScheme = connection.localLive?.scheme ?? .http
+        remoteLiveScheme = connection.remoteLive?.scheme ?? .http
+        localLivePort = connection.localLive.map { String($0.port) } ?? (connection.local == nil ? "1984" : "")
+        remoteLivePort = connection.remoteLive.map { String($0.port) } ?? (connection.remote == nil ? "1984" : "")
         username = connection.username ?? ""
         password = connection.password ?? ""
     }
 
     public func save() {
-        errorMessage = nil
+        saveError = nil
         didSave = false
-        guard let remotePortValue = Int(remotePort) else {
-            errorMessage = message(for: .invalidPort(.remote))
-            return
-        }
-        let local: ServerAddress?
-        if localHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            local = nil
-        } else {
-            guard let localPortValue = Int(localPort) else {
-                errorMessage = message(for: .invalidPort(.local))
-                return
+        do throws(SettingsError) {
+            let local = try parseAddress(localAddress, route: .local)
+            let remote = try parseAddress(remoteAddress, route: .remote)
+            guard let addresses = ConnectionSettings.Addresses(local: local, remote: remote) else {
+                throw .missingAddress
             }
-            local = ServerAddress(scheme: localScheme, host: localHost, port: localPortValue)
-        }
-        do {
             let settings = ConnectionSettings(
-                remote: ServerAddress(scheme: remoteScheme, host: remoteHost, port: remotePortValue),
-                local: local,
-                remoteLive: try liveSettings(
+                addresses: addresses,
+                remoteLive: remote == nil ? nil : try liveSettings(
                     scheme: remoteLiveScheme, port: remoteLivePort, route: .remote
                 ),
                 localLive: local == nil ? nil : try liveSettings(
@@ -91,8 +62,32 @@ public final class ServerSettingsViewModel {
             try saveConnection.execute(settings)
             didSave = true
         } catch {
-            errorMessage = message(for: error)
+            saveError = error
         }
+    }
+
+    private func addressText(_ address: ServerAddress?) -> String {
+        guard let address else { return "" }
+        return "\(address.scheme.rawValue)://\(address.host):\(address.port)"
+    }
+
+    private func parseAddress(_ input: String, route: ServerRoute) throws(SettingsError) -> ServerAddress? {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let hasScheme = text.contains("://")
+        guard
+            let components = URLComponents(string: hasScheme ? text : "http://\(text)"),
+            let schemeName = components.scheme?.lowercased(),
+            let scheme = ServerAddress.Scheme(rawValue: schemeName),
+            let host = components.host, !host.isEmpty,
+            components.user == nil, components.password == nil,
+            components.path.isEmpty || components.path == "/",
+            components.query == nil, components.fragment == nil,
+            components.url != nil
+        else { throw .invalidHost(route) }
+        // Bare hosts keep the original setup port. An explicit URL uses its scheme's default.
+        let defaultPort = if !hasScheme { 5000 } else { scheme == .https ? 443 : 80 }
+        return ServerAddress(scheme: scheme, host: host, port: components.port ?? defaultPort)
     }
 
     private func liveSettings(
@@ -108,13 +103,15 @@ public final class ServerSettingsViewModel {
 
     private func message(for error: SettingsError) -> String {
         switch error {
-        case .invalidHost(.remote): "Enter a valid remote host."
-        case .invalidHost(.local): "Enter a valid local host, or clear it to always use the remote address."
+        case .missingAddress: "Enter a local or remote address."
+        case .invalidHost(.remote): "Enter a valid remote address."
+        case .invalidHost(.local): "Enter a valid local address."
         case .invalidPort(.remote): "The remote port must be a number between 1 and 65535."
         case .invalidPort(.local): "The local port must be a number between 1 and 65535."
         case .invalidLivePort(.remote): "The remote live stream port must be a number between 1 and 65535."
         case .invalidLivePort(.local): "The local live stream port must be a number between 1 and 65535."
         case .localLiveRequiresLocalAddress: "Enter a local server address before adding a local live port."
+        case .remoteLiveRequiresRemoteAddress: "Enter a remote server address before adding a remote live port."
         // Saving a connection cannot fail this way; the icon picker reports its own failures.
         case .iconChangeFailed: "Something went wrong. Try again."
         }

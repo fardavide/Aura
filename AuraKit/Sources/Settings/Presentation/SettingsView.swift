@@ -11,6 +11,7 @@ public struct SettingsView: View {
     private let makeCameraOrderViewModel: (() -> CameraOrderViewModel)?
     /// `nil` where the platform has no swappable app icon, which hides the row on macOS.
     private let appIconViewModel: AppIconViewModel?
+    private let isFirstSetup: Bool
     private let onDone: () -> Void
 
     public init(
@@ -18,12 +19,14 @@ public struct SettingsView: View {
         makeServerSettingsViewModel: @escaping () -> ServerSettingsViewModel,
         makeCameraOrderViewModel: (() -> CameraOrderViewModel)?,
         appIconViewModel: AppIconViewModel?,
+        isFirstSetup: Bool = false,
         onDone: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: viewModel)
         self.makeServerSettingsViewModel = makeServerSettingsViewModel
         self.makeCameraOrderViewModel = makeCameraOrderViewModel
         self.appIconViewModel = appIconViewModel
+        self.isFirstSetup = isFirstSetup
         self.onDone = onDone
     }
 
@@ -32,7 +35,10 @@ public struct SettingsView: View {
             Form {
                 Section {
                     NavigationLink {
-                        ServerSettingsView(viewModel: makeServerSettingsViewModel())
+                        ServerSettingsView(
+                            viewModel: makeServerSettingsViewModel(),
+                            completion: isFirstSetup ? .connect(onDone) : .save(viewModel.refreshServerSummary)
+                        )
                     } label: {
                         SettingsMenuRow(title: "Server", value: serverValue) {
                             // Names the address in use right now, and only when there are two to
@@ -136,13 +142,15 @@ public struct SettingsView: View {
                 ToolbarItem(placement: .principal) {
                     Text("Settings").auroraText(.headline)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        onDone()
-                    } label: {
-                        Text("Done").auroraText(.headline)
+                if !isFirstSetup {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            onDone()
+                        } label: {
+                            Text("Done").auroraText(.headline)
+                        }
+                        .disabled(viewModel.serverSummary == .notConfigured)
                     }
-                    .disabled(viewModel.serverSummary == .notConfigured)
                 }
             }
             .onAppear { viewModel.onAppear() }

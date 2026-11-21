@@ -42,9 +42,7 @@ public final class SettingsViewModel {
     private let loadTheme: LoadTheme
     private let saveTheme: SaveTheme
     private let loadConnection: LoadConnection
-    /// The address the app is actually talking to, resolved by the root — `nil` before a server is
-    /// configured. The row reports *this* rather than the saved remote address, so the local/remote
-    /// choice is something the user can see rather than infer.
+    /// The address resolved by the root, if it has opened a connection yet.
     private let activeServer: ActiveServer?
     private let loadDynamicCameraOrder: LoadDynamicCameraOrder
     private let saveDynamicCameraOrder: SaveDynamicCameraOrder
@@ -73,14 +71,27 @@ public final class SettingsViewModel {
     public func onAppear() {
         theme = loadTheme.execute()
         usesDynamicCameraOrder = loadDynamicCameraOrder.execute()
-        serverSummary = if let connection = loadConnection.execute(), let activeServer {
-            .configured(
-                hostPort: "\(activeServer.address.host):\(activeServer.address.port)",
-                route: connection.local == nil ? nil : activeServer.route
-            )
-        } else {
-            .notConfigured
+        refreshServerSummary()
+    }
+
+    func refreshServerSummary() {
+        guard let connection = loadConnection.execute() else {
+            serverSummary = .notConfigured
+            return
         }
+
+        let currentServer: ActiveServer? = if let activeServer,
+            activeServer == connection.remoteServer || activeServer == connection.localServer {
+            activeServer
+        } else {
+            nil
+        }
+        let address = currentServer?.address ?? connection.fallbackServer.address
+        let route: ServerRoute? = if case .both = connection.addresses { currentServer?.route } else { nil }
+        serverSummary = .configured(
+            hostPort: "\(address.host):\(address.port)",
+            route: route
+        )
     }
 
     public func load() async {

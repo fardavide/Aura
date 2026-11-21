@@ -21,12 +21,13 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
     /// The remote address keeps the original single-address keys, so an install that predates the
     /// local address keeps its server and simply reports no local one.
     public func loadConnection() -> ConnectionSettings? {
-        guard let remote = address(at: Keys.remote) else { return nil }
+        let local = address(at: Keys.local)
+        let remote = address(at: Keys.remote)
+        guard let addresses = ConnectionSettings.Addresses(local: local, remote: remote) else { return nil }
         return ConnectionSettings(
-            remote: remote,
-            local: address(at: Keys.local),
-            remoteLive: liveSettings(at: Keys.remoteLive),
-            localLive: liveSettings(at: Keys.localLive),
+            addresses: addresses,
+            remoteLive: remote == nil ? nil : liveSettings(at: Keys.remoteLive),
+            localLive: local == nil ? nil : liveSettings(at: Keys.localLive),
             username: defaults.string(forKey: Keys.username),
             password: keychain.string(for: Keys.password)
         )
@@ -111,8 +112,7 @@ public struct DefaultSettingsRepository: SettingsRepository, @unchecked Sendable
         return ServerAddress(scheme: scheme, host: host, port: defaults.integer(forKey: keys.port))
     }
 
-    /// A `nil` address clears all three keys, so removing the local address can't leave a stale
-    /// host behind for the next load to resurrect.
+    /// A `nil` address clears all three keys so a removed route stays removed after reloading.
     private func write(_ address: ServerAddress?, to keys: Keys.Address) {
         guard let address else {
             for key in [keys.scheme, keys.host, keys.port] { defaults.removeObject(forKey: key) }

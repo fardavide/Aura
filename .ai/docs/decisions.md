@@ -441,10 +441,28 @@ saved order, so the committed Timeline baselines are unchanged.
 Once Settings held more than the connection form (camera order, appearance), the main screen became
 a menu: a **Server** row pushing the connection form (its own Save button — validation errors live
 there — popping back on success), the Camera Order row, and the inline theme picker. The theme now
-**saves on change** (no Save step on the menu); the toolbar button is **Done**, which closes the
-sheet and triggers the root reload (theme + connection identity), same as before. First run (no
-connection) shows the same menu — the user opens Server to configure. `SettingsViewModel` slimmed
-to theme; the connection form logic moved to a dedicated view model for the sub-screen.
+**saves on change** (no Save step on the menu); **Done** closes the Settings sheet and reloads the
+theme and connection. The editor uses the standard toolbar confirmation for **Save**. On first
+run the menu offers Server setup, and **Save** starts the connection as soon as validation and
+saving succeed. The app then opens Cameras with the saved settings. Validation errors stay in
+the editor.
+
+The editor always shows the local and remote address fields and accepts either address on its own.
+Both fields can take a host or an HTTP(S) URL. A bare host keeps the setup default of HTTP on port
+5000. A full URL uses its explicit port or the scheme's default. Live streaming and authentication
+are editable sections below the addresses in the same scrolling form. A single saved address is
+used directly. A two-address setup prefers local and falls back to remote. Existing installations
+keep their saved keys.
+
+Saving an edit immediately refreshes the Server row. The menu can show the saved address before
+it has an active connection. A route badge requires an active connection that matches the saved
+configuration.
+
+On a fresh install, the first local request may fail while iOS is still showing the Local Network
+permission alert. The session for reads of the server configuration waits for connectivity, with a
+30-second limit on the request including the wait. Granting access within that window lets the camera
+load continue. The route-selection probe keeps its short deadline so a separate remote address can
+still take over quickly. [Apple's Local Network guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
 
 ## CI topology: snapshot gate on GitHub Actions only; Xcode Cloud tests via a package scheme; main is PR-gated
 Xcode Cloud's test action cannot run the screenshot suite: its tests execute on simulator VMs that

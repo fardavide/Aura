@@ -11,9 +11,11 @@ public struct UrlSessionHttpClient: HttpClient {
     /// Internal (not private) so a test can pin the bounded configuration.
     let session: URLSession
 
-    public init() {
+    public init(waitsForConnectivity: Bool = false) {
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForResource = Self.resourceTimeout
+        configuration.waitsForConnectivity = waitsForConnectivity
+        configuration.timeoutIntervalForResource = waitsForConnectivity
+            ? Self.connectivityResourceTimeout : Self.resourceTimeout
         session = URLSession(configuration: configuration)
     }
 
@@ -31,4 +33,7 @@ public struct UrlSessionHttpClient: HttpClient {
     /// transfer on this session, a full event clip downloaded for playback over a slow remote
     /// link (VOD/HLS playback rides AVFoundation's own sessions, not this one).
     private static let resourceTimeout: TimeInterval = 600
+
+    /// Includes time waiting for connectivity, such as during the Local Network permission prompt.
+    private static let connectivityResourceTimeout: TimeInterval = 30
 }

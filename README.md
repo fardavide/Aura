@@ -45,6 +45,9 @@ CI builds both platforms and runs the tests on every push/PR to `main`.
 
 ## Changelog
 
+### 0.9.3 — 2026-11-21
+- **Set up your server with either address.** Enter a local address, a remote address, or both. Live streaming and authentication are on the same screen, and **Save** starts the first connection.
+
 ### 0.9.2 — 2026-11-19
 - **The Christmas icon starts December 1.** With Seasonal Icons on, Aura uses the Christmas icon through January 7, then restores your chosen icon.
 
