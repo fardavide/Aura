@@ -94,13 +94,12 @@ struct SettingsSnapshotTests {
         viewModel.onAppear()
 
         // then
-        assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-first-run")
+        assertScreenSnapshot(
+            NavigationStack { ServerSettingsView(viewModel: viewModel, completion: .connect({})) },
+            named: "server-first-run"
+        )
     }
 
-    // The password SecureField renders BLANK in the reference on purpose: iOS excludes
-    // isSecureTextEntry content from window-hierarchy captures (the drawHierarchyInKeyWindow
-    // path this suite needs for Liquid Glass). Verified against a plain layer-rendering probe,
-    // which shows the seven bullets.
     @Test func `given a saved connection when the server form is shown then it matches the reference`() {
         // given
         let viewModel = serverSettingsViewModel(
@@ -125,13 +124,16 @@ struct SettingsSnapshotTests {
         viewModel.save()
 
         // then
-        assertScreenSnapshot(NavigationStack { ServerSettingsView(viewModel: viewModel) }, named: "server-invalid-host")
+        assertScreenSnapshot(
+            NavigationStack { ServerSettingsView(viewModel: viewModel, completion: .connect({})) },
+            named: "server-invalid-host"
+        )
     }
 
     @Test func `given an invalid remote live port when saving then the error is visible`() {
         // given
         let viewModel = serverSettingsViewModel(FakeSettingsRepository())
-        viewModel.remoteHost = "frigate.tail9c2f1.ts.net"
+        viewModel.remoteAddress = "frigate.tail9c2f1.ts.net"
         viewModel.remoteLivePort = "invalid"
 
         // when
@@ -235,8 +237,8 @@ private func settingsMenu(
         loadConnection: LoadConnection(repository: repository),
         activeServer: connection.map { connection in
             switch activeRoute {
-            case .local: connection.localServer ?? connection.remoteServer
-            case .remote: connection.remoteServer
+            case .local: connection.localServer ?? connection.fallbackServer
+            case .remote: connection.fallbackServer
             }
         },
         loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: repository),
@@ -260,6 +262,7 @@ private func settingsMenu(
             }
         },
         appIconViewModel: appIconViewModel(appIcon),
+        isFirstSetup: connection == nil,
         onDone: {}
     )
 }

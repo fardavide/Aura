@@ -101,7 +101,22 @@ struct DefaultSettingsRepositoryTests {
 
         // when - then
         #expect(scenario.sut.loadConnection()?.local == nil)
-        #expect(scenario.sut.loadConnection()?.remote.host == "frigate.ts.net")
+        #expect(scenario.sut.loadConnection()?.remote?.host == "frigate.ts.net")
+    }
+
+    @Test func `given only a local address in preferences when loading then the connection is restored`() {
+        // given
+        let scenario = Scenario()
+        let local = ServerAddress(scheme: .http, host: "192.168.1.50", port: 5000)
+        scenario.sut.saveConnection(connection(local: local))
+        scenario.defaults.removeObject(forKey: "connection.host")
+
+        // when
+        let restored = scenario.sut.loadConnection()
+
+        // then
+        #expect(restored?.local == local)
+        #expect(restored?.remote == nil)
     }
 
     @Test func `given a saved local address when it is removed then it does not come back`() {

@@ -449,6 +449,12 @@ not snapshot-tested — they center on video players that can't render in a snap
   local/remote transitions remain unverified for this change.
 
 ## Next
+- **Verify first setup on a fresh iPhone install.** **Save** starts the first camera load, which can
+  wait for Local Network approval. Check that allowing the prompt loads the camera wall with only
+  the LAN address entered.
+- **Server setup design review.** The single form always shows both address fields and says that one
+  address is enough. Saving an empty form asks for a local or remote address. When both addresses
+  are supplied, prefer local when it answers and fall back to remote.
 - **Verify the two-address switching on the real network (0.7.2).** Every path is unit-tested
   against fakes, but no probe has ever been sent to a live Frigate. Confirm on the running
   deployment: at home on Wi-Fi the Settings row tags **LOCAL** and the grid loads over the LAN

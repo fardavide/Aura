@@ -27,6 +27,7 @@ import TimelinePresentation
 final class AppComposition {
     private let settingsRepository: any SettingsRepository
     private let httpClient: any HttpClient
+    private let configHttpClient = UrlSessionHttpClient(waitsForConnectivity: true)
     private let downloadClient: any HttpDownloadClient
     let appIconViewModel: AppIconViewModel?
     private let networkPaths: any NetworkPathObserving = SystemNetworkPathObserver()
@@ -344,7 +345,8 @@ final class AppComposition {
     private func configProvider(config: ServerConfig) -> FrigateConfigProvider {
         FrigateConfigProvider(
             config: config,
-            httpClient: httpClient,
+            // The camera list's first read can be what prompts for Local Network access.
+            httpClient: configHttpClient,
             refreshInterval: .seconds(120)
         )
     }

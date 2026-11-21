@@ -13,17 +13,18 @@ public struct SaveConnection: Sendable {
         guard settings.local != nil || settings.localLive == nil else {
             throw .localLiveRequiresLocalAddress
         }
-        let remote = try validated(settings.remote, on: .remote)
-        let local: ServerAddress?
-        if let configured = settings.local {
-            local = try validated(configured, on: .local)
-        } else {
-            local = nil
+        guard settings.remote != nil || settings.remoteLive == nil else {
+            throw .remoteLiveRequiresRemoteAddress
+        }
+        let addresses: ConnectionSettings.Addresses = switch settings.addresses {
+        case .local(let local): .local(try validated(local, on: .local))
+        case .remote(let remote): .remote(try validated(remote, on: .remote))
+        case .both(let local, let remote):
+            .both(local: try validated(local, on: .local), remote: try validated(remote, on: .remote))
         }
         repository.saveConnection(
             ConnectionSettings(
-                remote: remote,
-                local: local,
+                addresses: addresses,
                 remoteLive: try validatedLive(settings.remoteLive, on: .remote),
                 localLive: try validatedLive(settings.localLive, on: .local),
                 username: settings.username,

@@ -42,6 +42,26 @@ struct SettingsViewModelTests {
         #expect(scenario.sut.serverSummary == .notConfigured)
     }
 
+    @Test func `given first setup when returning after saving then Settings shows the saved server`() {
+        // given
+        let scenario = Scenario()
+        scenario.sut.onAppear()
+        let editor = ServerSettingsViewModel(
+            loadConnection: LoadConnection(repository: scenario.settings),
+            saveConnection: SaveConnection(repository: scenario.settings)
+        )
+        editor.remoteAddress = "192.168.1.50"
+        editor.localAddress = "192.168.1.50"
+
+        // when
+        editor.save()
+        scenario.sut.onAppear()
+
+        // then
+        #expect(editor.didSave)
+        #expect(scenario.sut.serverSummary == .configured(hostPort: "192.168.1.50:5000", route: nil))
+    }
+
     @Test func `given one address when appearing then the server summary reports no route`() {
         // given — nothing was chosen, so naming a route would read as a setting rather than a fact
         let scenario = Scenario(connection: connection(local: nil))
@@ -205,8 +225,8 @@ private struct Scenario {
             loadConnection: LoadConnection(repository: settings),
             activeServer: connection.map { connection in
                 switch activeRoute {
-                case .local: connection.localServer ?? connection.remoteServer
-                case .remote: connection.remoteServer
+                case .local: connection.localServer ?? connection.fallbackServer
+                case .remote: connection.fallbackServer
                 }
             },
             loadDynamicCameraOrder: LoadDynamicCameraOrder(repository: settings),

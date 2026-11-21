@@ -2,7 +2,7 @@
 /// one whenever the device's network changes under it.
 ///
 /// The rule is *prefer local, fall back to remote*, and it is deliberately cheap:
-/// - no local address configured → remote, no probe, no wait;
+/// - one address configured → use it without a probe;
 /// - no Wi-Fi or wired interface (cellular, or offline) → remote, no probe, no wait — a private
 ///   address cannot work there, so asking would only burn the timeout;
 /// - otherwise → one short probe of the local address, and remote the moment it doesn't answer.
@@ -33,15 +33,19 @@ public struct ObserveActiveServer: Sendable {
             // No second address means no choice, so the answer is known before anything is
             // observed — which also keeps every install that predates the local address off the
             // path monitor entirely, rather than making its first paint wait on a callback.
-            guard connection.local != nil else {
-                continuation.yield(connection.remoteServer)
+            guard let local = connection.localServer, let remote = connection.remoteServer else {
+                continuation.yield(connection.fallbackServer)
                 continuation.finish()
                 return
             }
             let task = Task {
                 var emitted: ActiveServer?
                 for await hasLocalNetwork in networkPaths.localNetworkAvailability() {
-                    let resolved = await resolve(connection, hasLocalNetwork: hasLocalNetwork)
+                    let resolved = if hasLocalNetwork, await probe.canReach(local, within: localProbeTimeout) {
+                        local
+                    } else {
+                        remote
+                    }
                     guard resolved != emitted else { continue }
                     emitted = resolved
                     continuation.yield(resolved)
@@ -50,10 +54,5 @@ public struct ObserveActiveServer: Sendable {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
-    }
-
-    private func resolve(_ connection: ConnectionSettings, hasLocalNetwork: Bool) async -> ActiveServer {
-        guard hasLocalNetwork, let local = connection.localServer else { return connection.remoteServer }
-        return await probe.canReach(local, within: localProbeTimeout) ? local : connection.remoteServer
     }
 }

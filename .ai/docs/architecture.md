@@ -67,7 +67,7 @@ new recordings cannot be hidden by an early cached result.
 
 ## Storage
 
-`UserDefaults` for non-secret connection config — two API addresses plus optional per-route live
+`UserDefaults` for non-secret connection config — one or two API addresses plus optional per-route live
 scheme/port settings, with the remote API under the original single-address keys so older installs keep their
 server and historical live proxy — + per-device preferences (theme,
 camera order, chosen app icon and seasonal icons); Keychain for the password. iOS reports which icon is

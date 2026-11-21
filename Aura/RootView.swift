@@ -118,6 +118,7 @@ struct RootView: View {
                     makeServerSettingsViewModel: { composition.serverSettingsViewModel() },
                     makeCameraOrderViewModel: nil,
                     appIconViewModel: composition.appIconViewModel,
+                    isFirstSetup: true,
                     onDone: reload
                 )
             } else {

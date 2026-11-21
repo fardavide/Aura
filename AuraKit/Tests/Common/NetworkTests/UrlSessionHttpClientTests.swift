@@ -10,6 +10,16 @@ struct UrlSessionHttpClientTests {
         let sut = UrlSessionHttpClient()
 
         // then
+        #expect(!sut.session.configuration.waitsForConnectivity)
         #expect(sut.session.configuration.timeoutIntervalForResource == 600)
+    }
+
+    @Test func `when building the config client then it waits for connectivity for at most thirty seconds`() {
+        // given - when
+        let sut = UrlSessionHttpClient(waitsForConnectivity: true)
+
+        // then
+        #expect(sut.session.configuration.waitsForConnectivity)
+        #expect(sut.session.configuration.timeoutIntervalForResource == 30)
     }
 }
